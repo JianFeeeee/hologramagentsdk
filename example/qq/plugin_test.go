@@ -27,7 +27,7 @@ func toolCallContext(name string, args map[string]interface{}) *sdk.StageContext
 
 func TestOwnerBypassesQQPermissionBoundary(t *testing.T) {
 	p := newPermissionTestPlugin(t)
-	p.auth = qqAuthContext{active: true, owner: true, userID: 2198972886}
+	p.auth = qqAuthContext{Active: true, Owner: true, UserID: 2198972886}
 	ctx := toolCallContext("calendar_list", nil)
 	if err := p.beforeToolcall(ctx); err != nil {
 		t.Fatal(err)
@@ -40,7 +40,7 @@ func TestOwnerBypassesQQPermissionBoundary(t *testing.T) {
 func TestPrivateResourceCannotBeAllowlisted(t *testing.T) {
 	p := newPermissionTestPlugin(t)
 	p.privateToolAllowlist = append(p.privateToolAllowlist, "calendar_*")
-	p.auth = qqAuthContext{active: true, userID: 10001}
+	p.auth = qqAuthContext{Active: true, UserID: 10001}
 	ctx := toolCallContext("calendar_list", nil)
 	if err := p.beforeToolcall(ctx); err != nil {
 		t.Fatal(err)
@@ -52,7 +52,7 @@ func TestPrivateResourceCannotBeAllowlisted(t *testing.T) {
 
 func TestNonOwnerQQHistoryIsScopedToCurrentGroup(t *testing.T) {
 	p := newPermissionTestPlugin(t)
-	p.auth = qqAuthContext{active: true, messageID: 88, userID: 10001, groupID: 20002, isGroup: true}
+	p.auth = qqAuthContext{Active: true, MessageID: 88, UserID: 10001, GroupID: 20002, IsGroup: true}
 
 	ctx := toolCallContext("qq_get_history", map[string]interface{}{"group_id": int64(20003)})
 	if err := p.beforeToolcall(ctx); err != nil {
@@ -73,7 +73,7 @@ func TestNonOwnerQQHistoryIsScopedToCurrentGroup(t *testing.T) {
 
 func TestUnmatchedQQInputIsDowngraded(t *testing.T) {
 	p := newPermissionTestPlugin(t)
-	p.auth = qqAuthContext{active: true, owner: true, userID: 2198972886}
+	p.auth = qqAuthContext{Active: true, Owner: true, UserID: 2198972886}
 	ctx := &sdk.StageContext{
 		RawMessage: "来自未知事件(message_id=404)",
 		Extra:      map[string]interface{}{"input_source": "qq"},
@@ -81,7 +81,7 @@ func TestUnmatchedQQInputIsDowngraded(t *testing.T) {
 	if err := p.onInputAuthContext(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if !p.auth.active || p.auth.owner || p.auth.userID != 0 {
+	if !p.auth.Active || p.auth.Owner || p.auth.UserID != 0 {
 		t.Fatalf("unmatched input reused prior privilege: %+v", p.auth)
 	}
 }
@@ -89,7 +89,7 @@ func TestUnmatchedQQInputIsDowngraded(t *testing.T) {
 func TestDuplicateQQOutputIsStopped(t *testing.T) {
 	p := newPermissionTestPlugin(t)
 	p.maxDuplicateSend = 1
-	p.auth = qqAuthContext{active: true, owner: true, userID: 2198972886}
+	p.auth = qqAuthContext{Active: true, Owner: true, UserID: 2198972886}
 	args := map[string]interface{}{"payload": "same", "type": "text", "meta": `{"user_id":123}`}
 
 	ctx := toolCallContext("output_send__qq", args)
@@ -151,7 +151,7 @@ func TestGroupAndUserRouteAddsLeadingMention(t *testing.T) {
 // 现在只拦参数完全相同的重复调用。
 func TestDistinctQQOutputsAreNotTreatedAsDuplicates(t *testing.T) {
 	p := newPermissionTestPlugin(t)
-	p.auth = qqAuthContext{active: true, owner: true, userID: 2198972886}
+	p.auth = qqAuthContext{Active: true, Owner: true, UserID: 2198972886}
 	// maxDuplicateSend 默认 1：同一条消息重复才会被拦，不同消息必须全部放行。
 	for i := 0; i < 5; i++ {
 		ctx := toolCallContext("output_send__qq", map[string]interface{}{
@@ -170,7 +170,7 @@ func TestDistinctQQOutputsAreNotTreatedAsDuplicates(t *testing.T) {
 
 func TestDistinctNecessaryToolCallsAreNotBlocked(t *testing.T) {
 	p := newPermissionTestPlugin(t)
-	p.auth = qqAuthContext{active: true, owner: true, userID: 2198972886}
+	p.auth = qqAuthContext{Active: true, Owner: true, UserID: 2198972886}
 	// 旧实现 maxQQToolCalls=32 会在第 33 个不同参数的必需调用处误拦。
 	for i := 0; i < 50; i++ {
 		ctx := toolCallContext("cmd_run", map[string]interface{}{"command": fmt.Sprintf("cmd-%d", i)})
@@ -188,7 +188,7 @@ func TestZeroLimitsMeanUnlimited(t *testing.T) {
 	p.maxQQOutputCalls = 0
 	p.maxDuplicateSend = 0
 	p.maxQQToolCalls = 0
-	p.auth = qqAuthContext{active: true, owner: true, userID: 2198972886}
+	p.auth = qqAuthContext{Active: true, Owner: true, UserID: 2198972886}
 	for i := 0; i < 30; i++ {
 		ctx := toolCallContext("output_send__qq", map[string]interface{}{
 			"payload": "same-content",
@@ -204,7 +204,7 @@ func TestZeroLimitsMeanUnlimited(t *testing.T) {
 	}
 }
 
-// 降权（本轮无法精确匹配可信 OneBot 事件 ⇒ auth={active:true}、无 peer、非 owner）时，
+// 降权（本轮无法精确匹配可信 OneBot 事件 ⇒ auth={Active:true}、无 peer、非 owner）时，
 // **输出仍必须放行**：发到哪个会话由 agent 自己给的 meta 决定，
 // 不该被「当前会话身份」挡住。现场：被子的中断唤醒的一轮里，父带齐 meta 也发不出去
 // （报「可信 QQ 会话身份不完整」）。
@@ -212,7 +212,7 @@ func TestZeroLimitsMeanUnlimited(t *testing.T) {
 // 反之，**读取类**工具在降权时仍受当前会话限制 —— 那才是真的不能跨会话读。
 func TestDowngradedAuthStillAllowsQQOutput(t *testing.T) {
 	p := newPermissionTestPlugin(t)
-	p.auth = qqAuthContext{active: true}
+	p.auth = qqAuthContext{Active: true}
 	p.privateToolAllowlist = []string{"output_send__qq", "qq_get_history"}
 	p.groupToolAllowlists = map[int64][]string{0: {"output_send__qq", "qq_get_history"}}
 
@@ -342,18 +342,18 @@ func TestAuthSurvivesInterruptPreemptionOfAnotherTurn(t *testing.T) {
 
 	// 中断轮（Bot 所有者）跑完：afterOutput 会清掉插件全局身份。
 	inner := &sdk.StageContext{Extra: map[string]interface{}{
-		qqAuthExtraKey: qqAuthContext{active: true, owner: true, userID: 2198972886},
+		qqAuthExtraKey: qqAuthContext{Active: true, Owner: true, UserID: 2198972886},
 	}}
 	if err := p.afterOutputAuthContext(inner); err != nil {
 		t.Fatal(err)
 	}
-	if p.auth.active {
+	if p.auth.Active {
 		t.Fatal("收尾后插件全局身份应为空（复现恢复前状态）")
 	}
 
 	// 外层轮（非所有者群成员）恢复后继续调工具：仍须按非所有者拦下私人资源工具。
 	frame := &sdk.StageContext{
-		Extra:     map[string]interface{}{qqAuthExtraKey: qqAuthContext{active: true, userID: 10001, groupID: 20002, isGroup: true}},
+		Extra:     map[string]interface{}{qqAuthExtraKey: qqAuthContext{Active: true, UserID: 10001, GroupID: 20002, IsGroup: true}},
 		ToolCalls: []sdk.ToolCall{{Name: "calendar_list"}},
 	}
 	if err := p.beforeToolcall(frame); err != nil {
@@ -369,12 +369,12 @@ func TestMidTurnMessageDoesNotChangeRunningTurnAuth(t *testing.T) {
 	p := newPermissionTestPlugin(t)
 
 	frame := &sdk.StageContext{
-		Extra:     map[string]interface{}{qqAuthExtraKey: qqAuthContext{active: true, owner: true, userID: 2198972886}},
+		Extra:     map[string]interface{}{qqAuthExtraKey: qqAuthContext{Active: true, Owner: true, UserID: 2198972886}},
 		ToolCalls: []sdk.ToolCall{{Name: "calendar_list"}},
 	}
 	// 路人的群消息在所有者轮运行中到达。
 	p.activateAuthContext(4242, 10001, 20002, true)
-	if p.auth.owner {
+	if p.auth.Owner {
 		t.Fatal("到达事件应改写全局身份（复现场景）")
 	}
 
@@ -390,8 +390,8 @@ func TestMidTurnMessageDoesNotChangeRunningTurnAuth(t *testing.T) {
 func TestBatchInterruptConsumesAllMessageIDs(t *testing.T) {
 	p := newPermissionTestPlugin(t)
 	p.authByMessageID = map[int64]qqAuthContext{
-		100: {active: true, owner: true, userID: 2198972886},
-		101: {active: true, owner: true, userID: 2198972886},
+		100: {Active: true, Owner: true, UserID: 2198972886},
+		101: {Active: true, Owner: true, UserID: 2198972886},
 	}
 	ctx := &sdk.StageContext{
 		RawMessage: "来自「老板」的私聊短时间内连续发来 2 条消息(message_id=100,101, user_id=2198972886)。",
@@ -400,13 +400,13 @@ func TestBatchInterruptConsumesAllMessageIDs(t *testing.T) {
 	if err := p.onInputAuthContext(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if !p.auth.owner {
+	if !p.auth.Owner {
 		t.Fatalf("合并中断未恢复所有者身份: %+v", p.auth)
 	}
 	if len(p.authByMessageID) != 0 {
 		t.Fatalf("同批 message_id 未全部清理: %v", p.authByMessageID)
 	}
-	if auth, ok := authOnFrame(ctx); !ok || !auth.owner {
+	if auth, ok := authOnFrame(ctx); !ok || !auth.Owner {
 		t.Fatalf("身份未绑定到帧上: %+v ok=%v", auth, ok)
 	}
 }
@@ -414,7 +414,7 @@ func TestBatchInterruptConsumesAllMessageIDs(t *testing.T) {
 // 非 QQ 来源（webui/timer 等）的帧上绑空身份：权限门对这些轮整体关闭。
 func TestNonQQFrameBindsInactiveAuth(t *testing.T) {
 	p := newPermissionTestPlugin(t)
-	p.auth = qqAuthContext{active: true, owner: true, userID: 2198972886}
+	p.auth = qqAuthContext{Active: true, Owner: true, UserID: 2198972886}
 
 	ctx := &sdk.StageContext{
 		RawMessage: "webui 里的提问",
@@ -429,5 +429,115 @@ func TestNonQQFrameBindsInactiveAuth(t *testing.T) {
 	}
 	if ctx.Response != nil {
 		t.Fatalf("非 QQ 轮不应被 QQ 权限门拦: %s", *ctx.Response)
+	}
+}
+
+// ===== 绑帧跨 proc 桥的判据（2026-10-12 shm v2 fExtraBag）=====
+//
+// 背景：内核 shm 桥 v2 之前只透传 4 个具名 Extra 键，插件自建键（qq_auth）
+// 在 stage 之间静默丢失 → before_toolcall 永远回落可变全局身份 → 绑帧失效。
+// v2 起自建键装 fExtraBag 以 JSON 往返；本组判据锁定插件侧解码契约：
+// 数字统一 float64、解不出完整身份按未绑定处理（宁回落全局也不猜）。
+
+// 判据 1：身份 struct → JSON → map（模拟 proc 桥往返）→ authOnFrame 重建无损。
+func TestAuthOnFrameMapRoundTripFullFidelity(t *testing.T) {
+	src := qqAuthContext{
+		Active: true, Owner: true, MessageID: 1125391573, UserID: 2198972886,
+		GroupID: 0, IsGroup: false, Generation: 42,
+	}
+	raw, err := json.Marshal(src)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var m map[string]interface{}
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	ctx := &sdk.StageContext{Extra: map[string]interface{}{qqAuthExtraKey: m}}
+	got, ok := authOnFrame(ctx)
+	if !ok {
+		t.Fatal("map 形态身份应能重建（proc 桥语义），got !ok")
+	}
+	if got != src {
+		t.Fatalf("往返失真:\n got %+v\nwant %+v", got, src)
+	}
+}
+
+// 判据 2：降权身份往返后必须保持降权（防“往返即提权”）。
+func TestAuthOnFrameMapRoundTripPreservesDemotion(t *testing.T) {
+	src := qqAuthContext{Active: true, Owner: false, UserID: 3162251442, IsGroup: true, GroupID: 258962824}
+	raw, _ := json.Marshal(src)
+	var m map[string]interface{}
+	_ = json.Unmarshal(raw, &m)
+	ctx := &sdk.StageContext{Extra: map[string]interface{}{qqAuthExtraKey: m}}
+	got, ok := authOnFrame(ctx)
+	if !ok {
+		t.Fatal("降权身份应能重建")
+	}
+	if got.Owner {
+		t.Fatal("owner=false 经往返绝不能变 true（提权=安全漏洞）")
+	}
+	if !got.IsGroup || got.GroupID != 258962824 {
+		t.Fatalf("群身份字段失真: %+v", got)
+	}
+}
+
+// 判据 3：半截身份（缺键）按未绑定处理 —— 宁回落全局也不猜。
+// 每个必填键都单独缺失一次：任何一个被放过，降权/身份锚定就有一条缝。
+func TestAuthOnFramePartialMapIsRejected(t *testing.T) {
+	full := map[string]interface{}{
+		"active": true, "owner": true, "message_id": float64(1),
+		"user_id": float64(1), "group_id": float64(0), "is_group": false,
+	}
+	for _, missing := range []string{"active", "owner", "message_id", "user_id", "group_id", "is_group"} {
+		m := map[string]interface{}{}
+		for k, v := range full {
+			if k != missing {
+				m[k] = v
+			}
+		}
+		ctx := &sdk.StageContext{Extra: map[string]interface{}{qqAuthExtraKey: m}}
+		if _, ok := authOnFrame(ctx); ok {
+			t.Fatalf("缺 %s: 半截身份应按未绑定处理（回落全局），却解析成功", missing)
+		}
+	}
+	// 类型错同样拒绝（float64 约定被破坏 = 旧桥/脏数据）。
+	bad := map[string]interface{}{
+		"active": true, "owner": true, "message_id": float64(1),
+		"user_id": "10001", "group_id": float64(0), "is_group": false,
+	}
+	ctx := &sdk.StageContext{Extra: map[string]interface{}{qqAuthExtraKey: bad}}
+	if _, ok := authOnFrame(ctx); ok {
+		t.Fatal("user_id 类型错应拒绝")
+	}
+}
+
+// 判据 4：帧上身份优先于全局身份 —— 绑帧存在时全局只作兜底。
+func TestFrameIdentityBeatsGlobalIdentity(t *testing.T) {
+	p := newPermissionTestPlugin(t)
+	p.auth = qqAuthContext{Active: true, Owner: true, UserID: 2198972886}
+	ctx := &sdk.StageContext{
+		Extra: map[string]interface{}{
+			qqAuthExtraKey: qqAuthContext{Active: true, Owner: false, UserID: 3162251442, IsGroup: true, GroupID: 258962824},
+		},
+		ToolCalls: []sdk.ToolCall{{Name: "memory_commit"}},
+	}
+	p.beforeToolcall(ctx)
+	if ctx.Response == nil || !strings.Contains(*ctx.Response, "拒绝") {
+		t.Fatalf("帧上非 owner 调硬私工具应被拒（全局 owner 不得放行）: %v", ctx.Response)
+	}
+
+	// 反向：全局非 owner，帧上 owner → 放行（owner 被误拒的原始故障）。
+	p2 := newPermissionTestPlugin(t)
+	p2.auth = qqAuthContext{Active: true, Owner: false, UserID: 3162251442}
+	ctx2 := &sdk.StageContext{
+		Extra: map[string]interface{}{
+			qqAuthExtraKey: qqAuthContext{Active: true, Owner: true, UserID: 2198972886},
+		},
+		ToolCalls: []sdk.ToolCall{{Name: "memory_commit"}},
+	}
+	p2.beforeToolcall(ctx2)
+	if ctx2.Response != nil {
+		t.Fatalf("帧上 owner 调硬私工具应放行（2026-10-12 owner 被误拒的故障场景）: %s", *ctx2.Response)
 	}
 }

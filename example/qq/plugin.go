@@ -85,14 +85,58 @@ type DownloadTask struct {
 	CreatedAt string `json:"created_at"`
 }
 
+// qqAuthContext 是绑帧身份。字段导出 + json tag：proc 插件下身份要经
+// 共享段 JSON 往返（内核 shm 桥 v2 的 fExtraBag），非导出字段会在
+// marshal 时静默丢失 —— 那正是 2026-10-12 权限门失效的根因链一环。
 type qqAuthContext struct {
-	active     bool
-	owner      bool
-	messageID  int64
-	userID     int64
-	groupID    int64
-	isGroup    bool
-	generation uint64
+	Active     bool   `json:"active"`
+	Owner      bool   `json:"owner"`
+	MessageID  int64  `json:"message_id"`
+	UserID     int64  `json:"user_id"`
+	GroupID    int64  `json:"group_id"`
+	IsGroup    bool   `json:"is_group"`
+	Generation uint64 `json:"generation"`
+}
+
+// authFromMap 按 JSON 往返约定重建身份（数字统一 float64）。
+// 解不出完整身份（键缺失/类型错）返回 false —— 宁回落全局也不猜：
+// 半截的身份比没有更危险（owner 误判即提权）。
+func authFromMap(m map[string]interface{}) (qqAuthContext, bool) {
+	var a qqAuthContext
+	getBool := func(k string) (bool, bool) {
+		v, ok := m[k].(bool)
+		return v, ok
+	}
+	getInt := func(k string) (int64, bool) {
+		f, ok := m[k].(float64)
+		if !ok {
+			return 0, false
+		}
+		return int64(f), true
+	}
+	var ok bool
+	if a.Active, ok = getBool("active"); !ok {
+		return a, false
+	}
+	if a.Owner, ok = getBool("owner"); !ok {
+		return a, false
+	}
+	if a.MessageID, ok = getInt("message_id"); !ok {
+		return a, false
+	}
+	if a.UserID, ok = getInt("user_id"); !ok {
+		return a, false
+	}
+	if a.GroupID, ok = getInt("group_id"); !ok {
+		return a, false
+	}
+	if a.IsGroup, ok = getBool("is_group"); !ok {
+		return a, false
+	}
+	if g, present := m["generation"].(float64); present {
+		a.Generation = uint64(g)
+	}
+	return a, true
 }
 
 var qqMessageIDRe = regexp.MustCompile(`message_id=(-?\d+)`)
@@ -982,7 +1026,7 @@ func argInt64(args map[string]interface{}, key string) (int64, bool) {
 }
 
 func (p *Plugin) sessionToolArgsAllowed(name string, args map[string]interface{}, auth qqAuthContext) (bool, string) {
-	if !auth.active || auth.owner {
+	if !auth.Active || auth.Owner {
 		return true, ""
 	}
 	// 输出工具**不受"当前会话"身份限制**（先于身份判据返回）。
@@ -998,9 +1042,9 @@ func (p *Plugin) sessionToolArgsAllowed(name string, args map[string]interface{}
 		return true, ""
 	}
 
-	currentPeer := auth.userID
-	if auth.isGroup {
-		currentPeer = auth.groupID
+	currentPeer := auth.UserID
+	if auth.IsGroup {
+		currentPeer = auth.GroupID
 	}
 	if currentPeer == 0 {
 		return false, "可信 QQ 会话身份不完整"
@@ -1008,10 +1052,10 @@ func (p *Plugin) sessionToolArgsAllowed(name string, args map[string]interface{}
 	matchCurrentPeer := func() bool {
 		groupID, hasGroup := argInt64(args, "group_id")
 		userID, hasUser := argInt64(args, "user_id")
-		if auth.isGroup {
-			return hasGroup && groupID == auth.groupID && !hasUser
+		if auth.IsGroup {
+			return hasGroup && groupID == auth.GroupID && !hasUser
 		}
-		return hasUser && userID == auth.userID && !hasGroup
+		return hasUser && userID == auth.UserID && !hasGroup
 	}
 
 	switch name {
@@ -1024,16 +1068,16 @@ func (p *Plugin) sessionToolArgsAllowed(name string, args map[string]interface{}
 		if !ok {
 			return false, "缺少有效 message_id"
 		}
-		if messageID == auth.messageID {
+		if messageID == auth.MessageID {
 			return true, ""
 		}
 		peerID, isGroup, _, found := p.lookupMsgRef(messageID)
-		if !found || isGroup != auth.isGroup || peerID != currentPeer {
+		if !found || isGroup != auth.IsGroup || peerID != currentPeer {
 			return false, "message_id 不属于当前 QQ 会话"
 		}
 	case p.name + "_get_group_member_info", p.name + "_get_group_files":
 		groupID, ok := argInt64(args, "group_id")
-		if !auth.isGroup || !ok || groupID != auth.groupID {
+		if !auth.IsGroup || !ok || groupID != auth.GroupID {
 			return false, "只能访问当前 QQ 群的数据"
 		}
 	}
@@ -1046,7 +1090,7 @@ func (p *Plugin) sessionToolArgsAllowed(name string, args map[string]interface{}
 //   - 中断会抢占当前轮并把现场压栈（scheduler 的 suspendStack），中断轮收尾时
 //     afterOutput 把插件全局身份清空；随后外层被恢复（resumeTask 复用同一帧、
 //     不重跑 StageOnInput），若身份只存全局，恢复后的外层就是"无身份"——
-//     beforeToolcall 会在 !auth.active 处直接返回，权限门整体失效。
+//     beforeToolcall 会在 !auth.Active 处直接返回，权限门整体失效。
 //   - 运行中到达的新消息会调 activateAuthContext 改写全局身份，把**正在跑的那一轮**
 //     换成另一方的身份（换高=越权，换低=误拒）。
 //
@@ -1054,13 +1098,22 @@ func (p *Plugin) sessionToolArgsAllowed(name string, args map[string]interface{}
 const qqAuthExtraKey = "qq_auth"
 
 // authOnFrame 读取本帧绑定的身份；ok=false 表示本帧未绑定过 QQ 身份。
-// 调用方需持有 ctx 的读（或写）锁。
+//
+// 双形态兼容（proc 桥 JSON 往返约定）：
+//   - 值形态（进程内 stage / 单测）：类型断言直接命中；
+//   - map 形态（proc 插件：身份经共享段 JSON 往返）：按 json tag 重建。
 func authOnFrame(ctx *sdk.StageContext) (qqAuthContext, bool) {
 	if ctx == nil || ctx.Extra == nil {
 		return qqAuthContext{}, false
 	}
-	auth, ok := ctx.Extra[qqAuthExtraKey].(qqAuthContext)
-	return auth, ok
+	switch v := ctx.Extra[qqAuthExtraKey].(type) {
+	case qqAuthContext:
+		return v, true
+	case map[string]interface{}:
+		return authFromMap(v)
+	default:
+		return qqAuthContext{}, false
+	}
 }
 
 // bindAuthOnFrame 把身份绑到本帧上。调用方需持有 ctx 的写锁。
@@ -1085,43 +1138,43 @@ func (p *Plugin) activateAuthContext(messageID, userID, groupID int64, isGroup b
 	}
 	p.authGeneration++
 	next := qqAuthContext{
-		active: true, owner: p.isOwner(userID), messageID: messageID, userID: userID,
-		groupID: groupID, isGroup: isGroup, generation: p.authGeneration,
+		Active: true, Owner: p.isOwner(userID), MessageID: messageID, UserID: userID,
+		GroupID: groupID, IsGroup: isGroup, Generation: p.authGeneration,
 	}
 	if messageID != 0 {
 		p.authByMessageID[messageID] = next
 		if len(p.authByMessageID) > 2048 {
 			cutoff := p.authGeneration - 1024
 			for id, auth := range p.authByMessageID {
-				if auth.generation < cutoff {
+				if auth.Generation < cutoff {
 					delete(p.authByMessageID, id)
 				}
 			}
 		}
 	}
-	if !p.auth.active {
+	if !p.auth.Active {
 		p.auth = next
 		return
 	}
-	if p.auth.userID == userID && p.auth.groupID == groupID && p.auth.isGroup == isGroup {
-		p.auth.owner = p.auth.owner && next.owner
-		p.auth.messageID = next.messageID
-		p.auth.generation = next.generation
+	if p.auth.UserID == userID && p.auth.GroupID == groupID && p.auth.IsGroup == isGroup {
+		p.auth.Owner = p.auth.Owner && next.Owner
+		p.auth.MessageID = next.MessageID
+		p.auth.Generation = next.Generation
 		return
 	}
 	// 不同可信来源被内核合并到同一推理时，只在双方都是所有者时保留完整权限。
-	bothOwners := p.auth.owner && next.owner
-	sameGroup := p.auth.isGroup && next.isGroup && p.auth.groupID == groupID
-	p.auth.owner = bothOwners
-	p.auth.messageID = 0
-	p.auth.userID = 0
-	p.auth.isGroup = sameGroup
+	bothOwners := p.auth.Owner && next.Owner
+	sameGroup := p.auth.IsGroup && next.IsGroup && p.auth.GroupID == groupID
+	p.auth.Owner = bothOwners
+	p.auth.MessageID = 0
+	p.auth.UserID = 0
+	p.auth.IsGroup = sameGroup
 	if sameGroup {
-		p.auth.groupID = groupID
+		p.auth.GroupID = groupID
 	} else {
-		p.auth.groupID = 0
+		p.auth.GroupID = 0
 	}
-	p.auth.generation = next.generation
+	p.auth.Generation = next.Generation
 }
 
 var qqMessageIDsRe = regexp.MustCompile(`message_id=(-?\d+(?:,-?\d+)*)`)
@@ -1156,7 +1209,7 @@ func (p *Plugin) onInputAuthContext(ctx *sdk.StageContext) error {
 
 	p.authMu.Lock()
 	// 默认降权：QQ 来源却对不上可信事件时绝不复用上一条消息的身份。
-	next := qqAuthContext{active: source == p.name}
+	next := qqAuthContext{Active: source == p.name}
 	ids := messageIDsFromInput(raw)
 	if source == p.name && len(ids) > 0 {
 		if auth, ok := p.authByMessageID[ids[0]]; ok {
@@ -1201,9 +1254,9 @@ func (p *Plugin) currentToolAllowed(ctx *sdk.StageContext, name string) (bool, q
 		auth = p.auth
 	}
 	var patterns []string
-	if auth.active && !auth.owner {
-		if auth.isGroup {
-			patterns, _ = p.groupToolAllowlists[auth.groupID]
+	if auth.Active && !auth.Owner {
+		if auth.IsGroup {
+			patterns, _ = p.groupToolAllowlists[auth.GroupID]
 			if patterns == nil {
 				patterns = p.groupToolAllowlists[0]
 			}
@@ -1212,7 +1265,7 @@ func (p *Plugin) currentToolAllowed(ctx *sdk.StageContext, name string) (bool, q
 		}
 	}
 	p.authMu.RUnlock()
-	if !auth.active || auth.owner {
+	if !auth.Active || auth.Owner {
 		return true, auth
 	}
 	return matchesToolAllowlist(name, patterns), auth
@@ -1309,7 +1362,7 @@ func (p *Plugin) beforeToolcall(ctx *sdk.StageContext) error {
 	}
 	tc := &ctx.ToolCalls[0]
 	allowed, auth := p.currentToolAllowed(ctx, tc.Name)
-	if !auth.active {
+	if !auth.Active {
 		return nil
 	}
 
@@ -1352,7 +1405,7 @@ func (p *Plugin) beforeToolcall(ctx *sdk.StageContext) error {
 		p.setDenial(ctx, msg)
 		return nil
 	}
-	if !auth.owner && isHardPrivateTool(tc.Name) {
+	if !auth.Owner && isHardPrivateTool(tc.Name) {
 		p.authMu.Lock()
 		p.denialLocked = true
 		p.authMu.Unlock()
@@ -1362,8 +1415,8 @@ func (p *Plugin) beforeToolcall(ctx *sdk.StageContext) error {
 	}
 	if !allowed {
 		scope := "非所有者私聊"
-		if auth.isGroup {
-			scope = fmt.Sprintf("群聊 %d", auth.groupID)
+		if auth.IsGroup {
+			scope = fmt.Sprintf("群聊 %d", auth.GroupID)
 		}
 		msg := fmt.Sprintf("QQ 权限策略拒绝工具 %s：%s 的工具白名单未包含该工具；请不要重试，改为直接说明权限限制", tc.Name, scope)
 		p.setDenial(ctx, msg)

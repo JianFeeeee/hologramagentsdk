@@ -56,7 +56,7 @@ const (
 // ---- StageContext 段内部布局（与内核 internal/plugin/proc/shm.go 一致）----
 
 const (
-	shmStageFieldCount = 18
+	shmStageFieldCount = 19
 	shmSliceSize       = 8
 
 	shmOffMagic     = 0
@@ -68,7 +68,7 @@ const (
 	shmOffSeq       = 24
 
 	shmMagic   = 0x48415348
-	shmVersion = 1
+	shmVersion = 2
 )
 
 // 字段索引（顺序须与内核 stageField 枚举一致）
@@ -91,7 +91,34 @@ const (
 	fExtraMediaType
 	fExtraInputSource
 	fExtraOutputChannel
+	// fExtraBag：Extra 里具名 4 键之外的全部插件自建键（整体 JSON）。
+	// 插件可写：绑定帧态（如 qq_auth）就存这里；跨 stage 经内核回读存活。
+	fExtraBag
 )
+
+// shmNamedExtraKeys 是被提升为具名字段的 Extra 键；bag 打平时必须排除，
+// 否则同一键会被具名字段与 bag 各带一份。
+var shmNamedExtraKeys = map[string]bool{
+	"media_blocks": true, "media_type": true, "input_source": true, "output_channel": true,
+}
+
+// shmBagFromExtra 收集 Extra 里非具名键；无额外键返回 nil。
+func shmBagFromExtra(extra map[string]interface{}) map[string]interface{} {
+	if len(extra) == 0 {
+		return nil
+	}
+	var bag map[string]interface{}
+	for k, v := range extra {
+		if shmNamedExtraKeys[k] {
+			continue
+		}
+		if bag == nil {
+			bag = make(map[string]interface{})
+		}
+		bag[k] = v
+	}
+	return bag
+}
 
 const (
 	flagNoMemory    = 0
@@ -518,6 +545,15 @@ func readStageContext() (*sdk.StageContext, error) {
 	}
 
 	extra := map[string]interface{}{}
+	// bag 先打平，具名键随后覆盖 → 具名键永远赢（与内核 ReadInto 同构；
+	// 防御 bag 里混入具名键时用陈旧值顶掉具名字段）。
+	var bag map[string]interface{}
+	if err := unmarshalField(fExtraBag, &bag); err != nil {
+		return nil, err
+	}
+	for k, v := range bag {
+		extra[k] = v
+	}
 	for _, pair := range []struct {
 		field int
 		key   string
@@ -580,6 +616,8 @@ func takeStageSnapshot(sc *sdk.StageContext) *stageSnapshot {
 	sn.jsons[fMemory] = marshal(sc.Memory, len(sc.Memory))
 	sn.jsons[fTokenUsage] = marshal(sc.TokenUsage, len(sc.TokenUsage))
 	sn.jsons[fErrors] = marshal(sc.Errors, len(sc.Errors))
+	bag := shmBagFromExtra(sc.Extra)
+	sn.jsons[fExtraBag] = marshal(bag, len(bag))
 
 	if sc.Response != nil {
 		sn.response = *sc.Response
