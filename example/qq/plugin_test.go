@@ -2,10 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -539,5 +542,172 @@ func TestFrameIdentityBeatsGlobalIdentity(t *testing.T) {
 	p2.beforeToolcall(ctx2)
 	if ctx2.Response != nil {
 		t.Fatalf("帧上 owner 调硬私工具应放行（2026-10-12 owner 被误拒的故障场景）: %s", *ctx2.Response)
+	}
+}
+
+// ── napcat 响应判定与超时语义（2026-10-13 真实故障的判据）────────────
+
+// 真实故障：QQ 发送经 NapCat 的 NodeIKernelMsgService 慢时响应头 30s 回不来，
+// 旧实现共用 30s 客户端 ⇒ 消息**已发出**（NapCat 已返回 message_id、用户真收到）
+// 却报 "context deadline exceeded"，模型据此重试。
+//
+// 判据（不变量，不是"函数被调过"）：
+//  1. OneBot 失败响应（retcode!=0 / status=failed）必须报错
+//  2. OneBot 成功响应（retcode=0,status=ok）必须放行
+//     旧实现不校验 retcode ⇒ NapCat 明确报失败（data:null + sendMsg Timeout）
+//     也会被当成发送成功
+//  3. 发送类端点必须走 sendClient（更长超时），查询类走 httpClient
+//  4. 超时错误必须带"可能已送达，不要盲目重发"的提示
+//     （只说"失败"会诱发模型重发 → 重复消息）
+
+func TestOneBotError_FailedResponses(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		want bool // 期望判为失败
+	}{
+		{"retcode 非0", `{"status":"failed","retcode":100,"message":"bad","wording":""}`, true},
+		{"retcode 非0 带 wording", `{"status":"failed","retcode":1400,"wording":"群号不存在","data":null}`, true},
+		{"status failed 无 retcode", `{"status":"failed","message":"oops"}`, true},
+		{"status error", `{"status":"error","message":"boom"}`, true},
+		{"成功 retcode0", `{"status":"ok","retcode":0,"data":{"message_id":713138214},"wording":""}`, false},
+		{"非对象（数组）", `[{"a":1}]`, false},
+		{"无成败字段", `{"data":{"message_id":1}}`, false},
+	}
+	for _, c := range cases {
+		err := oneBotError(json.RawMessage(c.body))
+		if c.want && err == nil {
+			t.Errorf("%s：应判失败却放行 → NapCat 报失败会被当成发送成功", c.name)
+		}
+		if !c.want && err != nil {
+			t.Errorf("%s：应放行却报错（%v）→ 会把正常结果误报失败，诱发重复发送", c.name, err)
+		}
+	}
+}
+
+// 发送类端点必须真的走 sendClient（更长超时），而不是查询类的 httpClient。
+//
+// ★ 为何要真的验证路由（变异测试实测发现）：只断言两个客户端的 Timeout
+//
+//	字段值，把 napcat() 里的路由分支删掉判据照样全绿——判据必须观测
+//	"哪个客户端实际发了请求"，否则"接线断了"测不出来。
+func TestNapcatSendUsesSendClient(t *testing.T) {
+	var sendHits, otherHits atomic.Int64
+	sendSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sendHits.Add(1)
+		_, _ = w.Write([]byte(`{"status":"ok","retcode":0,"data":{"message_id":1}}`))
+	}))
+	defer sendSrv.Close()
+	otherSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		otherHits.Add(1)
+		_, _ = w.Write([]byte(`{"status":"ok","retcode":0}`))
+	}))
+	defer otherSrv.Close()
+
+	p := newPermissionTestPlugin(t)
+	p.napcatURL = otherSrv.URL      // 查询类客户端指向这里
+	p.sendClient = sendSrv.Client() // 发送类客户端指向 sendSrv
+	p.sendClient.Timeout = 120 * time.Second
+	// 让 sendClient 的请求打到 sendSrv：直接改 napcatURL 不可行（两者共用），
+	// 所以用 Transport 层重写 host —— 只有 sendClient 带这个 Transport。
+	p.sendClient.Transport = rewriteHostTransport(sendSrv.URL)
+	p.httpClient = otherSrv.Client()
+	p.httpClient.Timeout = 30 * time.Second
+
+	if _, err := p.napcat("send_private_msg", map[string]interface{}{"user_id": 1, "message": "x"}); err != nil {
+		t.Fatalf("send_private_msg 应成功: %v", err)
+	}
+	if sendHits.Load() != 1 {
+		t.Errorf("发送类端点未走 sendClient（sendHits=%d）—— 30s 客户端会把已发出的消息报成超时失败", sendHits.Load())
+	}
+	if otherHits.Load() != 0 {
+		t.Errorf("发送类端点误用了 httpClient（otherHits=%d）", otherHits.Load())
+	}
+}
+
+// rewriteHostTransport 返回一个把所有请求重定向到 baseURL 的 Transport。
+// 仅测试用：让"哪个 client 发的"可观测。
+func rewriteHostTransport(baseURL string) http.RoundTripper {
+	target, _ := url.Parse(baseURL)
+	return roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		req.URL.Scheme = target.Scheme
+		req.URL.Host = target.Host
+		return http.DefaultTransport.RoundTrip(req)
+	})
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+// 超时错误必须写明「可能已送达，不要盲目重发」。
+func TestNapcatTimeoutErrorIsActionable(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(300 * time.Millisecond) // 故意超过客户端超时
+		_, _ = w.Write([]byte(`{"status":"ok","retcode":0}`))
+	}))
+	defer srv.Close()
+
+	p := newPermissionTestPlugin(t)
+	p.napcatURL = srv.URL
+	p.httpClient = &http.Client{Timeout: 50 * time.Millisecond}
+	p.sendClient = &http.Client{Timeout: 50 * time.Millisecond}
+
+	_, err := p.napcat("send_private_msg", map[string]interface{}{"user_id": 1, "message": "x"})
+	if err == nil {
+		t.Fatal("超时应报错")
+	}
+	if !errors.Is(err, errNapcatTimeout) {
+		t.Errorf("超时应包装 errNapcatTimeout，实为 %v", err)
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "不要盲目重发") {
+		t.Errorf("超时错误必须提示不要盲目重发（否则模型会重发→重复消息），实为: %s", msg)
+	}
+	if !strings.Contains(msg, "可能已送达") {
+		t.Errorf("超时错误必须说明可能已送达，实为: %s", msg)
+	}
+}
+
+// napcat() 端到端必须把 OneBot 失败响应转成 error。
+//
+// ★ 为何单测 oneBotError 不够（变异测试实测发现）：把 napcat() 里的
+//
+//	oneBotError 调用删掉，只测 oneBotError 的判据照样全绿——判据必须
+//	穿过真实调用链，否则"接线断了"测不出来（正是本仓踩过的同款坑：
+//	单测全绿而生产链路断开）。
+func TestNapcatConvertsOneBotFailureToError(t *testing.T) {
+	for _, body := range []string{
+		`{"status":"failed","retcode":100,"wording":"群号不存在"}`,
+		`{"status":"failed","retcode":1400,"message":"send failed"}`,
+		`{"data":null,"echo":null,"message":"Timeout: NTEvent serviceAndMethod:NodeIKernelMsgService/sendMsg timed out","retcode":-1,"status":"failed"}`,
+	} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(body))
+		}))
+		p := newPermissionTestPlugin(t)
+		p.napcatURL = srv.URL
+		p.httpClient = srv.Client()
+		p.sendClient = srv.Client()
+
+		_, err := p.napcat("send_private_msg", map[string]interface{}{"user_id": 1, "message": "x"})
+		srv.Close()
+		if err == nil {
+			t.Errorf("OneBot 失败响应必须转成 error，否则「发送失败」会被当成成功: %s", body)
+		}
+	}
+
+	// 对照：成功响应必须放行（否则正常发送被误报失败 → 模型重发）
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"status":"ok","retcode":0,"data":{"message_id":713138214},"wording":""}`))
+	}))
+	defer srv.Close()
+	p := newPermissionTestPlugin(t)
+	p.napcatURL = srv.URL
+	p.httpClient = srv.Client()
+	p.sendClient = srv.Client()
+	if _, err := p.napcat("send_private_msg", map[string]interface{}{"user_id": 1, "message": "x"}); err != nil {
+		t.Errorf("正常成功响应被误报失败（会诱发重复发送）: %v", err)
 	}
 }

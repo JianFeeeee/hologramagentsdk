@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -171,6 +172,23 @@ type Plugin struct {
 	dmPolicy       string
 	groupPolicy    string
 	httpClient     *http.Client
+	// sendClient 专用于**发送类**端点（send_private_msg / send_group_msg）。
+	//
+	// ★ 为何与查询类分开（2026-10-13 实测）：QQ 发送要经过 NapCat 的
+	//   NodeIKernelMsgService/sendMsg，慢时响应头 30s 都回不来。旧实现
+	//   查询与发送共用 30s 客户端，于是：
+	//     消息**已经发出**（NapCat 返回 {"retcode":0,"data":{"message_id":...}}，
+	//     用户也真收到了），但 Go 报 "context deadline exceeded"
+	//   ⇒ 工具结果被报成「发送失败」，模型据此重试。
+	//   实测日志（memory/context.json）：
+	//     napcat send_private_msg: Post ".../send_private_msg":
+	//       context deadline exceeded (Client.Timeout exceeded while awaiting headers)
+	//   同一内容重试后用户只收到一份（qq 循环保险拦住了重复），但那属于**侥幸**，
+	//   不是正确行为：模型会反复重试、白白耗尽轮数，且每次都是假失败。
+	//
+	//   发送超时给足 120s（与插件内 TTS/下载同量级）；查询类保持 30s
+	//   （它们是幂等的，超时就是真超时，快速失败更有利于排查）。
+	sendClient *http.Client
 	allowFrom      map[int64]struct{}
 	groupAllowFrom map[int64]struct{}
 	srv            *http.Server
@@ -428,6 +446,19 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	os.MkdirAll(p.remoteDir, 0755)
 
 	p.httpClient = &http.Client{Timeout: 30 * time.Second}
+
+	// ★ Transport 显式配置：默认 Transport 的 idle 连接无上限等待，
+	//   复用对端已单向关闭的 keep-alive 连接时，请求可能已写入 socket
+	//   （对端已处理）而本地读响应时拿到 EOF —— 又一种「已发送却报失败」。
+	//   IdleConnTimeout 主动淘汰空闲连接，避免复用濒死连接。
+	sendTransport := &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		MaxIdleConns:          16,
+		MaxIdleConnsPerHost:   8,
+		IdleConnTimeout:       30 * time.Second,
+		ResponseHeaderTimeout: 120 * time.Second,
+	}
+	p.sendClient = &http.Client{Timeout: 120 * time.Second, Transport: sendTransport}
 
 	// msg_id → peer 映射 + 会话状态（不缓存正文）
 	p.msgMap = make(map[int64]msgRef)
@@ -3343,12 +3374,41 @@ func messageWithMention(userID int64, content interface{}) []interface{} {
 	}
 }
 
+// napcatSendActions 是「会在 QQ 协议层真实发出消息」的端点。
+//
+// 这些调用必须用 sendClient（更长的超时），因为 NapCat 内部要等
+// NodeIKernelMsgService 的回执；用查询类的 30s 会把已发出的消息报成失败。
+var napcatSendActions = map[string]bool{
+	"send_private_msg": true,
+	"send_group_msg":   true,
+	"send_msg":         true,
+}
+
+// errNapcatTimeout 标记「发送超时」——语义特殊：请求可能已送达并已发出。
+//
+// 单独一个哨兵是为了让上层能把这条跟「真·发送失败」区分开：
+// 真失败可以重试，超时则**不可盲目重试**（盲重试=重复发消息）。
+var errNapcatTimeout = errors.New("napcat 请求超时")
+
 func (p *Plugin) napcat(action string, params map[string]interface{}) (interface{}, error) {
 	data, _ := json.Marshal(params)
 	url := fmt.Sprintf("%s/%s", p.napcatURL, action)
 
-	resp, err := p.httpClient.Post(url, "application/json", bytes.NewReader(data))
+	// 发送类端点到专属客户端：QQ 发送慢时 30s 不够，而超时会被误读成失败。
+	client := p.httpClient
+	if napcatSendActions[action] && p.sendClient != nil {
+		client = p.sendClient
+	}
+
+	resp, err := client.Post(url, "application/json", bytes.NewReader(data))
 	if err != nil {
+		// 超时必须如实报「可能已发出」：只说"失败"会让模型重发→重复消息。
+		if errors.Is(err, context.DeadlineExceeded) ||
+			strings.Contains(err.Error(), "Client.Timeout") ||
+			strings.Contains(err.Error(), "Timeout exceeded") {
+			return nil, fmt.Errorf("napcat %s: %w（请求可能已送达并已发出，**不要盲目重发**；"+
+				"若确认对方没收到再重试）: %v", action, errNapcatTimeout, err)
+		}
 		return nil, fmt.Errorf("napcat %s: %w", action, err)
 	}
 	defer resp.Body.Close()
@@ -3357,7 +3417,54 @@ func (p *Plugin) napcat(action string, params map[string]interface{}) (interface
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
 		return nil, fmt.Errorf("napcat decode %s: %w", action, err)
 	}
+
+	// ★ OneBot v11 的成败在**响应体**里，不在 HTTP 状态码：
+	//     成功 {"status":"ok","retcode":0,"data":{...}}
+	//     失败 {"status":"failed","retcode":100,"message":"..."}
+	// 不校验就只能靠"HTTP 通不通"当成败判据，于是 NapCat 明确报失败
+	// （如 data:null + "Timeout: NTEvent serviceAndMethod:...sendMsg"）
+	// 也会被当成发送成功。
+	if err := oneBotError(raw); err != nil {
+		return nil, fmt.Errorf("napcat %s: %w", action, err)
+	}
 	return raw, nil
+}
+
+// oneBotError 解析 OneBot 响应里的成败字段，成功返回 nil。
+//
+// 判据以 retcode 为主、status 为辅：
+//   - retcode 存在且 != 0 ⇒ 失败
+//   - retcode 缺失但 status 显式为 failed/error ⇒ 失败
+//   - 两者都缺失，或非对象响应（数组等）⇒ 无法判定，按**成功**处理
+//     （与内核 isToolError 的保守口径一致：宁可少报失败，也不要把
+//     正常结果报成失败——误报失败会诱发模型重复发送）
+func oneBotError(raw json.RawMessage) error {
+	var probe struct {
+		Status  string          `json:"status"`
+		Retcode *int            `json:"retcode"`
+		Message json.RawMessage `json:"message"`
+		Wording string          `json:"wording"`
+	}
+	if err := json.Unmarshal(raw, &probe); err != nil {
+		return nil // 非对象（数组等）：无成败语义
+	}
+	reason := func() string {
+		if probe.Wording != "" {
+			return probe.Wording
+		}
+		if s := strings.TrimSpace(strings.Trim(string(probe.Message), `"`)); s != "" {
+			return s
+		}
+		return "未提供原因"
+	}
+	if probe.Retcode != nil && *probe.Retcode != 0 {
+		return fmt.Errorf("retcode=%d: %s", *probe.Retcode, reason())
+	}
+	switch strings.ToLower(probe.Status) {
+	case "failed", "error":
+		return fmt.Errorf("status=%s: %s", probe.Status, reason())
+	}
+	return nil
 }
 
 func (p *Plugin) setInputStatus(userID int64, eventType int) (interface{}, error) {
