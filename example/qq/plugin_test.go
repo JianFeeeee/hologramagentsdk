@@ -711,3 +711,108 @@ func TestNapcatConvertsOneBotFailureToError(t *testing.T) {
 		t.Errorf("正常成功响应被误报失败（会诱发重复发送）: %v", err)
 	}
 }
+
+// ★ NapCat 侧发送超时必须提示「不要盲目重发」（2026-10-13 生产事故）。
+//
+// 实况：一次回复共发出 4 条相同消息。日志里 3 次 output_send__qq 的
+// 调用 id **各不相同** —— 是模型看到「发送失败」后自己决定重试的。
+//
+// 根因：NapCat 把发送交给 QQ 内核后等 onMsgInfoListUpdate 事件，
+// 超时（napcat.mjs 的 callNormalEventV2，1e4ms 起步）即抛
+// "Timeout: NTEvent serviceAndMethod:NodeIKernelMsgService/sendMsg"，
+// 经 OneBot 适配层变成**非零 retcode**（实测 200）。
+//
+// 与我修过的 HTTP 客户端超时是**两条不同路径**：
+//   - HTTP 超时：client.Post 返回 err（已有告警）
+//   - NapCat 超时：HTTP 200 + 响应体里带 NTEvent 字样（本次才补）
+// 只报警「失败」而不说「可能已送出」，模型必重发。
+//
+// 判据必须穿过 napcat() 真实调用链（单测 isNapcatSendUnconfirmed 测不出
+// 接线是否接上，那是本仓踩过的同款坑）。
+func TestNapcatSendTimeoutWarnsAgainstBlindResend(t *testing.T) {
+	// 生产实测原文（retcode=200，非 0 ⇒ 会被判为失败）
+	const body = `{"status":"failed","retcode":200,"message":"Timeout: NTEvent serviceAndMethod:NodeIKernelMsgService/sendMsg ListenerName:NodeIKernelMsgListener/onMsgInfoListUpdate EventRet:\n{}\n"}`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	p := newPermissionTestPlugin(t)
+	p.napcatURL = srv.URL
+	p.httpClient = srv.Client()
+	p.sendClient = srv.Client()
+
+	_, err := p.napcat("send_private_msg", map[string]interface{}{"user_id": 1, "message": "x"})
+	if err == nil {
+		t.Fatal("NapCat 发送超时应报错")
+	}
+	if !errors.Is(err, errNapcatTimeout) {
+		t.Errorf("应包装 errNapcatTimeout（以便与「真·失败」区分），实为 %v", err)
+	}
+	for _, want := range []string{"不要盲目重发", "很可能已送出"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("发送超时错误必须含 %q（否则模型会重发→重复消息），实为: %s", want, err.Error())
+		}
+	}
+}
+
+// 对照：**查询类**端点的 NTEvent 超时不得被当成发送超时。
+//
+// 查询超时会产生没有消息的风险，归入普通失败（可安全重试）即可；
+// 若也回「不要盲目重发」，模型会不敢重试本应重试的查询。
+func TestNapcatQueryTimeoutIsNotSendTimeout(t *testing.T) {
+	const body = `{"status":"failed","retcode":200,"message":"Timeout: NTEvent serviceAndMethod:NodeIKernelMsgService/getMsg ListenerName:NodeIKernelMsgListener/onMsgInfoListUpdate EventRet:\n{}\n"}`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	p := newPermissionTestPlugin(t)
+	p.napcatURL = srv.URL
+	p.httpClient = srv.Client()
+	p.sendClient = srv.Client()
+
+	_, err := p.napcat("get_msg", map[string]interface{}{"message_id": 1})
+	if err == nil {
+		t.Fatal("查询失败应报错")
+	}
+	if errors.Is(err, errNapcatTimeout) {
+		t.Errorf("查询类端点的 NTEvent 超时不应套用发送超时语义（会阻止本应重试的查询），实为 %v", err)
+	}
+}
+
+// ★ 发送动作的 NTEvent 超时，**不以 serviceAndMethod == sendMsg 为条件**。
+//
+// 为何单独钉（2026-10-13 变异测试发现）：最初实现额外要求消息里含
+// "sendMsg"，结果把 sendMsg 限定去掉、测试仍全绿 —— 说明那条限定
+// 没被覆盖。它既没有生产证据支持，又会在 serviceAndMethod 与预期不符时
+// 把同一类「可能已送达」的超时退回普通失败，重新诱发模型重发。
+// 注意：本用例的 body 是**构造的**（生产未观测到非 sendMsg 的发送超时），
+// 目的是把「不要靠 serviceAndMethod 收紧」这一决定固定住。
+func TestNapcatSendActionTimeoutRegardlessOfServiceName(t *testing.T) {
+	const body = `{"status":"failed","retcode":200,"message":"Timeout: NTEvent serviceAndMethod:NodeIKernelMsgService/getMsg ListenerName:X EventRet:\n{}\n"}`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	p := newPermissionTestPlugin(t)
+	p.napcatURL = srv.URL
+	p.httpClient = srv.Client()
+	p.sendClient = srv.Client()
+
+	// 发送动作：只要 NapCat 报 NTEvent 超时，就必须提示不要盲目重发
+	_, err := p.napcat("send_private_msg", map[string]interface{}{"user_id": 1, "message": "x"})
+	if err == nil {
+		t.Fatal("应报错")
+	}
+	if !errors.Is(err, errNapcatTimeout) {
+		t.Errorf("服务名不是 sendMsg 的 NTEvent 超时也要套用发送超时语义，实为 %v", err)
+	}
+}

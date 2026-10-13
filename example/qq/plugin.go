@@ -3425,9 +3425,47 @@ func (p *Plugin) napcat(action string, params map[string]interface{}) (interface
 	// （如 data:null + "Timeout: NTEvent serviceAndMethod:...sendMsg"）
 	// 也会被当成发送成功。
 	if err := oneBotError(raw); err != nil {
+		// ★ NapCat 侧超时（2026-10-13 生产实测：一次回复发了 4 条）。
+		//
+		// 与上面的 HTTP 超时**同属「可能已送达」**，但走的是另一条路径：
+		// NapCat 把发送交给 QQ 内核后等 onMsgInfoListUpdate 事件，
+		// 超时（默认 10s+）即抛 "Timeout: NTEvent ...sendMsg"，
+		// 映射成非零 retcode（本次实测 retcode=200）。
+		//
+		// 若只报「发送失败」，模型会当成真失败而重发 —— 实测中
+		// 模型连发 3 次（调用 id 各不相同，是模型自己的重试决策）。
+		// 所以必须与 HTTP 超时给同样的「不要盲目重发」告警。
+		if napcatSendActions[action] && isNapcatSendUnconfirmed(err) {
+			return nil, fmt.Errorf("napcat %s: %w（NapCat 未等到 QQ 的发送确认，"+
+				"但消息**很可能已送出**，**不要盲目重发**；若确认对方没收到再重试）: %v",
+				action, errNapcatTimeout, err)
+		}
 		return nil, fmt.Errorf("napcat %s: %w", action, err)
 	}
 	return raw, nil
+}
+
+// isNapcatSendUnconfirmed 报告 OneBot 错误是否为「NapCat 未等到内核确认」。
+//
+// 为何按消息文本而不是 retcode 判定：这条超时来自 NapCat 内部的
+// callNormalEventV2（napcat.mjs）——它把等待监听事件的超时包成普通 Error，
+// 再经 OneBot 适配层转成非零 retcode，所以 **retcode 本身不携带"超时"语义**
+// （实测为 200，而非某个专门的超时码）。可辨识的特征只有消息里的
+// NTEvent + Timeout 字样。
+//
+// ★ 为何**不**限定 serviceAndMethod 必须是 sendMsg：
+// 调用方已经用 napcatSendActions 限定了"这是发送动作"，这里再卡 sendMsg
+// 是多余的。生产实测到的超时原文里服务名确实是 sendMsg，因此该限定在现有
+// 证据下**既无必要、也无观测依据**；留着一个未被任何证据支持的收紧条件，
+// 只会把同样「可能已送达」的情形误判回普通失败，而普通失败会诱发模型重发。
+// 变异验证：加上/去掉该限定，对「发送动作 + 非 sendMsg 超时」用例结果不同，
+// 说明这行代码是活的（而非冗余），故保持宽松版本。
+func isNapcatSendUnconfirmed(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return strings.Contains(s, "NTEvent") && strings.Contains(s, "Timeout")
 }
 
 // oneBotError 解析 OneBot 响应里的成败字段，成功返回 nil。
