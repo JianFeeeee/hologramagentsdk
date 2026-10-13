@@ -52,7 +52,7 @@ has been withdrawn — any SDK tag with a non-zero patch position is wrong.)
 **Upgrading a 1.0.x plugin to 1.1.x: no code changes, no rebuild.** Everything added in 1.1.0 is
 in the "plugin calls, kernel implements" direction, so not calling it means not being affected
 (verified with an old `plugin.bin` built against SDK 0.9.2: it handshakes fine on the new kernel,
-because the handshake validates `ProtocolVersion`, not the SDK version). Rebuild only when you want
+because the handshake validates the **major** version, not the exact SDK version). Rebuild only when you want
 the new fields.
 
 **Upgrading a 1.1.x plugin to 1.2.x: the interface is purely additive, but a rebuild is required.**
@@ -526,8 +526,8 @@ Internal plugins (platform built-in) have full SDK access including SocialAPI wr
 
 **Prebuilt example artifacts ship with every release**: besides the 5-platform `hmapdev`, an SDK
 release contains the example plugins' `.hmap` files plus `SHA256SUMS`/`MANIFEST.txt`. The reason is
-that plugin binaries are **protocol-bound** to the kernel (`ProtocolVersion` + the shared-memory
-magic), so shipping the toolchain without matching artifacts invites installing an old artifact —
+that plugin binaries are **layout-bound** to the kernel (major version + unified-region magic +
+`field_count`), so shipping the toolchain without matching artifacts invites installing an old artifact —
 which fails the handshake and looks like "the plugin is broken" rather than "the versions don't
 match".
 

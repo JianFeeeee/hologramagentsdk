@@ -26,6 +26,21 @@ func loadProcTemplate(t *testing.T) string {
 	return string(data)
 }
 
+// extractShmFlagsOff 取出模板里 shmFlagsOff 函数的函数体，供断言其取值来源。
+func extractShmFlagsOff(t *testing.T, src string) string {
+	t.Helper()
+	const sig = "func shmFlagsOff() uint32 {"
+	i := strings.Index(src, sig)
+	if i < 0 {
+		t.Fatal("模板缺少 shmFlagsOff()")
+	}
+	rest := src[i+len(sig):]
+	if j := strings.Index(rest, "\n}"); j >= 0 {
+		return rest[:j]
+	}
+	return rest
+}
+
 // stripComments 去掉源码中的注释（用空白填充以保持偏移），只留可执行代码。
 func stripComments(t *testing.T, src string) string {
 	t.Helper()
@@ -218,17 +233,18 @@ func TestProcTemplate_ShmLayoutMatchesKernel(t *testing.T) {
 
 	// 与内核 shm.go 的 offXxx 常量对齐（值比较，不依赖 gofmt 的对齐空白）
 	layout := map[string]string{
-		"shmOffMagic":     "0",
-		"shmOffVersion":   "4",
-		"shmOffArenaBase": "8",
-		"shmOffArenaCap":  "12",
-		"shmOffArenaUsed": "16",
-		"shmOffCtxBase":   "20",
-		"shmOffSeq":       "24",
-		// 与内核 stageFieldCount / sliceSize 对齐
-		"shmStageFieldCount": "18",
+		"shmOffMagic":      "0",
+		"shmOffFieldCount": "4",
+		"shmOffArenaBase":  "8",
+		"shmOffArenaCap":   "12",
+		"shmOffArenaUsed":  "16",
+		"shmOffCtxBase":    "20",
+		"shmOffSeq":        "24",
+		// 与内核 stageFieldCount / sliceSize 对齐。
+		// 注意：这里不校验人工版本号 —— 它已被删除，布局一致性
+		// 改由描述符个数这种派生事实校验（见下方全局规约断言）。
+		"shmStageFieldCount": "19",
 		"shmSliceSize":       "8",
-		"shmVersion":         "1",
 	}
 	constRe := func(name, want string) bool {
 		// gofmt 会对齐常量块，故容许 name 与 = 之间有任意空白
@@ -238,6 +254,26 @@ func TestProcTemplate_ShmLayoutMatchesKernel(t *testing.T) {
 	for name, want := range layout {
 		if !constRe(name, want) {
 			t.Errorf("共享段常量 %s 应为 %s（须与内核 internal/plugin/proc/shm.go 一致）", name, want)
+		}
+	}
+
+	// 布局必须自描述：标志位基址由内核下发的描述符个数推出，
+	// 不能用本插件的编译期常量。否则内核加字段时会静默错位。
+	if !strings.Contains(src, "func shmFieldCount()") {
+		t.Error("模板缺少 shmFieldCount()：标志位基址必须从 header 读取，不能自行推算")
+	}
+	flagsOff := extractShmFlagsOff(t, src)
+	if strings.Contains(flagsOff, "shmStageFieldCount") {
+		t.Errorf("shmFlagsOff 不得使用编译期常量 shmStageFieldCount（应经 shmFieldCount() 从 header 读取）:\n%s", flagsOff)
+	}
+	if !strings.Contains(flagsOff, "shmFieldCount()") {
+		t.Errorf("shmFlagsOff 应基于 shmFieldCount():\n%s", flagsOff)
+	}
+
+	// 不得再出现人工版本号（内核与模板都不应有）。
+	for _, banned := range []string{"shmVersion", "shmOffVersion"} {
+		if strings.Contains(src, banned) {
+			t.Errorf("模板不得再有 %s：布局一致性由描述符个数校验，不靠人工版本号", banned)
 		}
 	}
 
@@ -343,13 +379,22 @@ func TestProcTemplate_DispatchesRequestsConcurrently(t *testing.T) {
 	}
 }
 
-// 协议与共享内存区域版本/魔数不匹配必须拒绝，不得半兼容运行。
-func TestProcTemplate_RejectsVersionMismatch(t *testing.T) {
+// 主版本与共享内存区域结构不匹配必须拒绝，不得半兼容运行。
+//
+// 注意：这里不再检查任何「协议版本」/「共享段版本」自定号 ——
+// 它们已废除。兼容性只认双方版本号的**主版本段**（跨主版本即破坏性变更），
+// 布局一致性由描述符个数把关。
+func TestProcTemplate_RejectsIncompatiblePeer(t *testing.T) {
 	src := loadProcTemplate(t)
-	// §13.1 起共享段合并为单一「统一区域」，魔数校验文案随之更新。
-	for _, want := range []string{"协议版本不匹配", "共享段版本不匹配", "统一区域魔数不匹配"} {
+	for _, want := range []string{"主版本不匹配", "字段数不匹配", "统一区域魔数不匹配"} {
 		if !strings.Contains(src, want) {
 			t.Errorf("握手应校验并拒绝 %q", want)
+		}
+	}
+	// 自定版本号必须已彻底移除，否则会出现「谁负责升这个号」的腐烂面。
+	for _, banned := range []string{"procProtocolVersion", "shmVersion", "unifiedVersion"} {
+		if strings.Contains(src, banned) {
+			t.Errorf("模板不得再有自定版本号 %s", banned)
 		}
 	}
 }

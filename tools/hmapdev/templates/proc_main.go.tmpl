@@ -18,30 +18,38 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"sync"
 
 	sdk "github.com/JianFeeeee/homeagentsdk/sdk"
 )
 
-// ---- 协议常量（须与内核 internal/plugin/proc/protocol.go 一致）----
+// majorVersion 取版本号的主版本段（"1.4.0" → "1"）。
+// 兼容性只认主版本：1.x 内的中版本跃迁都是纯追加，不调新面就不受影响；
+// 主版本跃迁才是破坏性变更（如 1.0.0 从 C ABI 改子进程）。
+func majorVersion(v string) string {
+	v = strings.TrimPrefix(strings.TrimSpace(v), "v")
+	if i := strings.IndexByte(v, '.'); i >= 0 {
+		return v[:i]
+	}
+	return v
+}
 
-// procProtocolVersion 必须与内核的 proc.ProtocolVersion 完全一致。
+// ---- 协议常量（须与内核 internal/plugin/proc/protocol.go 一致）----
 //
-// v2：内核→插件的 payload 改用调用帧（tool/cleaner/output），媒体块改走
-// blocks_ref。v1 插件只读内联 args，遇上 v2 内核会拿到空参数；反过来 v2
-// 插件发 blocks_ref，v1 内核也会静默忽略。两边错配都不报错、只是静默失效，
-// 所以靠这个常量在握手上显式拦下。
-const procProtocolVersion = 2
+// 不自定协议号：兼容性由双方版本号的**主版本**表态（内核 meta.Version、
+// 插件 sdk.SDKVersion）。主版本相同即兼容（1.x 内全是纯追加），
+// 跨主版本则拒绝建链（主版本跃迁正是破坏性变更的定义）。
+// 布局一致性另由 field_count（描述符个数）把关。
 
 // ---- 统一共享内存区域布局（与内核 internal/plugin/proc/unified.go 一致）----
 
 const (
-	unifiedMagic   = 0x554D5352 // "UMSR" — Unified Memory Shared Region
-	unifiedVersion = 1
+	unifiedMagic = 0x554D5352 // "UMSR" — Unified Memory Shared Region
 	superBlockSize = 64
 
 	sbOffMagic      = 0
-	sbOffVersion    = 4
+	sbOffReserved0  = 4 // 保留（原 version 槽位，布局不变以免动其余偏移）
 	sbOffGeneration = 8
 	sbOffCapacity   = 16
 	sbOffCtxOff     = 20
@@ -59,16 +67,15 @@ const (
 	shmStageFieldCount = 19
 	shmSliceSize       = 8
 
-	shmOffMagic     = 0
-	shmOffVersion   = 4
-	shmOffArenaBase = 8
-	shmOffArenaCap  = 12
-	shmOffArenaUsed = 16
-	shmOffCtxBase   = 20
-	shmOffSeq       = 24
+	shmOffMagic      = 0
+	shmOffFieldCount = 4 // 描述符个数，插件据此定位标志位（不再用自身常量推算）
+	shmOffArenaBase  = 8
+	shmOffArenaCap   = 12
+	shmOffArenaUsed  = 16
+	shmOffCtxBase    = 20
+	shmOffSeq        = 24
 
-	shmMagic   = 0x48415348
-	shmVersion = 2
+	shmMagic = 0x48415348
 )
 
 // 字段索引（顺序须与内核 stageField 枚举一致）
@@ -430,6 +437,13 @@ func shmArenaBase() uint32  { return shmU32(shmOffArenaBase) }
 func shmArenaCap() uint32   { return shmU32(shmOffArenaCap) }
 func shmCtxBase() uint32    { return shmU32(shmOffCtxBase) }
 
+// shmFieldCount 返回内核写入的描述符个数。
+//
+// 标志位紧跟在描述符数组之后，其偏移**必须**由内核下发的个数推出，
+// 不能用本插件的编译期常量：内核加字段时两者会不一致，
+// 自行推算会静默错位（而握手时已按此值做过一致性检查）。
+func shmFieldCount() uint32 { return shmU32(shmOffFieldCount) }
+
 func shmDescOff(field int) uint32 {
 	return shmCtxBase() + uint32(field*shmSliceSize)
 }
@@ -446,7 +460,7 @@ func shmSetDesc(field int, off, ln uint32) {
 }
 
 func shmFlagsOff() uint32 {
-	return shmCtxBase() + uint32(shmStageFieldCount*shmSliceSize)
+	return shmCtxBase() + shmFieldCount()*shmSliceSize
 }
 
 func shmGetFlag(bit int) bool { return shm[shmFlagsOff()+uint32(bit)] != 0 }
@@ -1511,21 +1525,24 @@ func handleKernelRequest(req *rpcRequest) {
 
 func handleHandshake(req *rpcRequest) {
 	var p struct {
-		Protocol    int    `json:"protocol"`
-		ShmVersion  uint32 `json:"shm_version"`
+		CoreVersion string `json:"core_version"`
+		FieldCount  uint32 `json:"field_count"`
 		ShmSize     int    `json:"shm_size"`
 		PluginName  string `json:"plugin_name"`
 		EvtRingSize int    `json:"evt_ring_size,omitempty"`
 	}
 	json.Unmarshal(req.Params, &p)
 
-	if p.Protocol != procProtocolVersion {
-		respondErr(req.ID, fmt.Errorf("协议版本不匹配（内核 %d，插件 %d）——请用配套 plugindev 重编",
-			p.Protocol, procProtocolVersion))
+	// 主版本号是唯一兼容判据：跨主版本必是被破坏性变更分开的两端。
+	if mine, theirs := majorVersion(sdk.SDKVersion), majorVersion(p.CoreVersion); mine != theirs {
+		respondErr(req.ID, fmt.Errorf("主版本不匹配（内核 %s，插件 SDK %s）——请用配套 hmapdev 重编",
+			p.CoreVersion, sdk.SDKVersion))
 		return
 	}
-	if p.ShmVersion != shmVersion {
-		respondErr(req.ID, fmt.Errorf("共享段版本不匹配（内核 %d，插件 %d）", p.ShmVersion, shmVersion))
+	// 字段个数必须与编译期一致：它决定标志位基址，不一致会静默错位。
+	if p.FieldCount != shmStageFieldCount {
+		respondErr(req.ID, fmt.Errorf("StageContext 字段数不匹配（内核 %d，插件 %d）——请用配套 hmapdev 重编",
+			p.FieldCount, shmStageFieldCount))
 		return
 	}
 	if p.PluginName != "" {
@@ -1573,7 +1590,6 @@ func handleHandshake(req *rpcRequest) {
 	}
 
 	respond(req.ID, map[string]interface{}{
-		"protocol":    procProtocolVersion,
 		"sdk_version": sdk.SDKVersion,
 		"plugin_name": pluginName,
 		"pid":         os.Getpid(),

@@ -32,14 +32,14 @@ HomeAgent 插件开发 SDK，用于构建与 HomeAgent 平台交互的智能插�
 
 **1.0.x 插件升到 1.1.x：不需要改代码，也不需要重编。** 1.1.0 的新增全部是
 「插件调用、内核实现」方向，不调就不受影响（已用 SDK 0.9.2 编的旧 `plugin.bin`
-实测验证：在新内核上直接建链通过，因为握手校验的是 `ProtocolVersion`、不是 SDK 版本）。
+实测验证：在新内核上直接建链通过，因为握手校验的是主版本号、不是 SDK 全等版本）。
 想用新字段时重编即可。
 
-**1.1.x 插件升到 1.2.x：接口纯追加，但必须重编。** 公开接口没有签名变更（新增
-`InjectOptions` 与六个 `*Opts` 变体、`ChannelDef.ContextPolicy`），不调新能力就不受影响；
-但内核的**插件运行协议升到了 2**（统一共享内存区的 fd3 布局改变，**不支持滚动升级**），
-所以 `plugin.bin` 必须用配套的 `hmapdev` 重编后与内核**同批**安装——否则握手时协议版本
-不匹配会被拒绝（错误信息会明确提示用配套 hmapdev 重编，不会静默降级）。
+**1.1.x 插件升到 1.2.x：接口纯追加；若内核共享区布局改了则需重编。** 公开接口没有签名变更
+（新增 `InjectOptions` 与六个 `*Opts` 变体、`ChannelDef.ContextPolicy`），不调新能力就不受影响。
+1.2.0 同时把 fd3 换成了统一共享区（SuperBlock + StageContext + EvtRing），
+这类**布局**变化由握手时的结构判据拦下（统一区魔数、`field_count` 描述符个数），
+而不是靠某个版本号——它们都是二进制里的派生事实，不会「忘同步」。
 
 ## 1.3.0 新增：注入优先级与动态输出通道
 
@@ -624,9 +624,9 @@ cd tools/vscode-hmapdev && npm install && npm run compile   # 然后在 VSCode �
 | [sanitizer](example/sanitizer) | Go | 内容清洗/安全过滤 |
 
 **发版时附带预编译示例产物**：SDK 的 release 除 5 平台 `hmapdev` 外，还包含各示例插件的
-`.hmap` 与 `SHA256SUMS`/`MANIFEST.txt`。原因是插件二进制与内核**协议绑定**（`ProtocolVersion`
-+ 共享内存区魔数），只发工具链不发示例产物，很容易拿旧产物去装而握手失败——那看起来像
-「插件坏了」而不是「版本不配套」。
+`.hmap` 与 `SHA256SUMS`/`MANIFEST.txt`。原因是插件二进制与内核在**布局上绑定**（主版本号
++ 统一共享区魔数 + `field_count`），只发工具链不发示例产物，很容易拿旧产物去装而握手失败
+——那看起来像「插件坏了」而不是「版本不配套」。
 
 ## Remote Device SDK
 
