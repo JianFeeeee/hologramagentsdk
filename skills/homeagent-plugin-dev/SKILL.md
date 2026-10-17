@@ -8,6 +8,37 @@ description: 开发、安装、调试 HomeAgent 插件。涉及 hmapdev 工具�
 > 本机（192.168.2.60）HomeAgent 的插件工具链手册。**所有命令都实测过**，
 > 不是从文档抄的。改了本机环境后请回来更正。
 
+## ★ 协议通道纪律：插件**绝不能**往 stdout 打印（高频踩坑）
+
+子进程插件的 **stdout 是 JSON-RPC 协议通道**，**stderr 才是日志通道**
+（SDK 侧已 `log.SetOutput(os.Stderr)`）。
+
+```go
+// ❌ 错误：写进 stdout ⇒ 内核收到裸文本 ⇒ 报「非法 JSON 帧」并**丢弃这行日志**
+fmt.Printf("[%s] started\n", p.name)
+
+// ✅ 正确：log 默认走 stderr，且会被内核收进插件日志
+log.Printf("[%s] started", p.name)
+```
+
+**症状**（很容易误判成内核/协议故障）：
+
+```
+[proc] myplugin 收到非法 JSON 帧（19 字节）: invalid character 'm' looking for beginning of value
+        ↑ 内容摘要: [myplugin] started
+        可能原因：插件往 **stdout** 打印了日志，而 stdout 是JSON-RPC **协议通道**（stderr 才是日志通道）。
+        修法：把插件里的 fmt.Printf/fmt.Println 改成 log.Printf（脚手架模板 1.4.0 起已修正）。
+```
+
+看到这条就说明**是你自己 printf 了** —— 日志本身丢了，还多一条看起来像协议故障的报错。
+
+**实测代价**：生产环境累计 **1038 条**这种报错（weather 113 / rss 103 /
+calendar 102 / 第三方 720），定位真因花了一整轮排查。
+
+**例外**：**进程内插件**（`plugin.RegisterFactory`，编译进内核）的
+`fmt.Println` 写的是内核真实终端，**不是**缺陷。判别方法：
+插件源码是不是 `package main`（子进程）还是普通的库包（进程内）。
+
 ## 0. 先搞清三件事，别猜
 
 ```bash
@@ -84,15 +115,20 @@ hmapdev debug .                   # 不想装就能先跑一遍
 
 ### 注册工具的形状（照 example 写，别自创）
 
+**★ `sdk.ToolDef` 里没有 `Handler` 字段** —— handler 是 `RegisterTool` 的**第三个参数**，
+不是结构体成员。把 `Handler:` 写进结构体会**编译失败**（`unknown field Handler`）。
+
 ```go
 s.RegisterTool(tp+"mytool", sdk.ToolDef{
     Name:        tp + "mytool",     // ← Name 必填，且要放在结构体**首位**
     Description: "……",
     Parameters:  map[string]interface{}{"type": "object", "properties": map[string]interface{}{}},
-    Handler:     h.mytool,
     NoMemory:    true,               // 声明字段一律放**末尾**，仿 NoMemory 的写法
-}, s)
+}, h.mytool)                         // ← handler 在这里，不在结构体内
 ```
+
+（`ToolDef` 的全部字段：`Name` / `Plugin` / `Description` / `Parameters` / `NoMemory` /
+`Cleaner` / `ContextPolicy` / `RecallPolicy` / `ParallelSafe` / `Serial`。）
 
 **并发声明**（同轮多个 tool_call 时）：
 
@@ -202,4 +238,39 @@ curl -s -H "X-API-Key: $K" http://127.0.0.1:8080/api/v1/status | grep -oE '"comm
 - **不要手改生成的文档**：`docs/api/*.md` 由 `tools/apidoc/gensite` 生成，
   首行写着「请勿手改」；要改就去改 `sdk/*.go` 的注释再重新生成。
 - **不要在插件里硬编码 token / 密钥**：走 `Settings()` 或宿主注入。
+
+### 7.1 敏感配置的落盘加密（用 `SetSecret` / `GetSecret`）
+
+`SettingsAPI` 提供两个方法让插件**无需自己实现加密**（主密钥由内核统一管理）：
+
+```go
+// 强制加密落盘（不看键名）—— 返回 error 表示内核没装主密钥，
+// 此时**拒绝写入**而不是静默存明文；不要吞掉这个 error。
+if err := s.Settings().SetSecret("blob", token); err != nil {
+    return err
+}
+// 读回（透明解密）
+token, _ := s.Settings().GetSecret("blob")
+```
+
+**两条自动加密规则**（不写 `SetSecret` 也会加密）：
+
+1. `ConfigDef{Secret: true}` —— 推荐，意图最明确
+2. `ConfigDef{Type: "password"}` —— 旧写法，兼容保留
+3. 键名含 `password` / `secret` / `token` / `api_key` 等词段 —— 兜底
+
+⚠️ 什么时候**必须**用 `SetSecret`：键名是中性的（如 `blob`、`conn`、`payload`），
+键名模式猜不到 —— 那就显式声明。
+
+⚠️ 不要自己实现加密：主密钥由内核统一管理（`<dataDir>/security.key` 或
+`HOMED_SECURITY_KEY`），插件各自持钥会让密钥散落、无法轮换。
+
+**注意**：`Secret` 字段在旧版本里就已存在但**从未生效**（内核侧的转换漏了它，
+见内核仓 `docs/zh/kernel-secret-firewall-design.md` §5.1）。若你的插件声明了
+`Secret: true` 却看到明文落盘，说明内核侧还没接通 —— 升级内核，或改用
+`SetSecret`（若该方法不存在，就是内核版本过旧）。
+
+⚠️ **升级须知**：`SetSecret`/`GetSecret` 是**接口新增方法**。它们只增不减，
+所以插件**消费**侧不受影响；但如果你自己实现了 `SettingsAPI`（如自测替身），
+需要补上这两个方法。
 - **不要为了让插件生效去改 `homed` 的源码** —— 先确认它是不是内置插件。

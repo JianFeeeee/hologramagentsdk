@@ -725,6 +725,7 @@ func TestNapcatConvertsOneBotFailureToError(t *testing.T) {
 // 与我修过的 HTTP 客户端超时是**两条不同路径**：
 //   - HTTP 超时：client.Post 返回 err（已有告警）
 //   - NapCat 超时：HTTP 200 + 响应体里带 NTEvent 字样（本次才补）
+//
 // 只报警「失败」而不说「可能已送出」，模型必重发。
 //
 // 判据必须穿过 napcat() 真实调用链（单测 isNapcatSendUnconfirmed 测不出
@@ -814,5 +815,153 @@ func TestNapcatSendActionTimeoutRegardlessOfServiceName(t *testing.T) {
 	}
 	if !errors.Is(err, errNapcatTimeout) {
 		t.Errorf("服务名不是 sendMsg 的 NTEvent 超时也要套用发送超时语义，实为 %v", err)
+	}
+}
+
+// ===========================================================================
+// 「来源标识」（comefrom）与用户权限门的关系（2026-10-16）
+//
+// 现场故障：驻留子 `dev-br-jianf-NextAgent-fix_abs-path` 自报 running 但
+// **零产出** —— 它那一轮 8 个工具（cmd_run / files_ls / notify_parent /
+// output_send__commondev_* / inputch_note …）**全部**被本插件的
+// before_toolcall 拦下。它自己的处理表原文：
+//
+//	本轮所有需要的工具都被权限策略挡下了，实测被拒的有：
+//	- cmd_run —— 无法进入工作目录、无法看 git 状态
+//
+// 日志实证（09:21:25~09:21:40，每个工具调用前都紧跟）：
+//
+//	[agent] executing tool: cmd_run (plugin=cmd)
+//	[proc] qq stage before_toolcall 改写了 1 个字段   ← 写入了拒绝响应
+//
+// 而同一时段父 main 的工具调用**有 result**、驻留子的**零 result**。
+//
+// 根因：驻留子的输入继承自父（转投刻意保留原事件），`input_source` 仍是
+// "qq"，于是本门把“父的内部委派”误当成“那位 QQ 用户新提的请求”，
+// 按用户白名单判定 ⇒ 开发工具一条都不在白名单里 ⇒ 全拒。
+// ===========================================================================
+
+// ★★★ **核心回归判据**：内部委派的工具调用**不得**被用户权限门拦。
+//
+// 这条直接覆盖现场故障：用同一份身份（非 owner）、同一个被拒工具（cmd_run），
+// 只改 comefrom 一个键 —— internal 必须放行、user 必须拦。
+func TestInternalToolCallBypassesUserPermissionGate(t *testing.T) {
+	// 基准：非 owner 私聊 ⇒ cmd_run 不在白名单 ⇒ 必须被拦
+	base := func() *sdk.StageContext {
+		ctx := toolCallContext("cmd_run", nil)
+		ctx.Extra = map[string]interface{}{}
+		return ctx
+	}
+	p := newPermissionTestPlugin(t)
+	p.auth = qqAuthContext{Active: true, UserID: 2198972886}
+	ctxUser := base()
+	if err := p.beforeToolcall(ctxUser); err != nil {
+		t.Fatal(err)
+	}
+	if ctxUser.Response == nil {
+		t.Fatal("前置条件错：非 owner 调 cmd_run 本应被拦（判据基线不成立）")
+	}
+
+	// ① comefrom=internal（驻留子）⇒ 必须放行
+	p2 := newPermissionTestPlugin(t)
+	p2.auth = qqAuthContext{Active: true, UserID: 2198972886}
+	ctxInternal := base()
+	ctxInternal.Extra[extraKeyComeFrom] = "internal"
+	if err := p2.beforeToolcall(ctxInternal); err != nil {
+		t.Fatal(err)
+	}
+	if ctxInternal.Response != nil {
+		t.Fatalf("★ 内部委派的 cmd_run 仍被用户权限门拦住（缺陷回归）: %s", *ctxInternal.Response)
+	}
+
+	// ② 硬私有工具同样放行（驻留子是父的内部执行体，父本就有完整权限）
+	p3 := newPermissionTestPlugin(t)
+	p3.auth = qqAuthContext{Active: true, UserID: 2198972886}
+	ctxHard := toolCallContext("memory_recall", nil)
+	ctxHard.Extra = map[string]interface{}{extraKeyComeFrom: "internal"}
+	if err := p3.beforeToolcall(ctxHard); err != nil {
+		t.Fatal(err)
+	}
+	if ctxHard.Response != nil {
+		t.Fatalf("★ 内部委派的硬私有工具被拦: %s", *ctxHard.Response)
+	}
+}
+
+// ★★★ 判据：**只有**明确 "internal" 才放行 —— 其余一律按用户处理。
+//
+// 这个方向绝不能反：把用户请求误判成 internal = 权限门整体失效，
+// 比"多拦一次内部调用"严重得多。
+func TestComeFromOnlyInternalIsTrusted(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		setup   func(m map[string]interface{})
+		trusted bool
+	}{
+		{"internal", func(m map[string]interface{}) { m[extraKeyComeFrom] = "internal" }, true},
+		{"user", func(m map[string]interface{}) { m[extraKeyComeFrom] = "user" }, false},
+		{"缺失（旧内核）", func(m map[string]interface{}) {}, false},
+		{"空串", func(m map[string]interface{}) { m[extraKeyComeFrom] = "" }, false},
+		{"未知取值", func(m map[string]interface{}) { m[extraKeyComeFrom] = "internal-ish" }, false},
+		{"大小写不同", func(m map[string]interface{}) { m[extraKeyComeFrom] = "INTERNAL" }, false},
+		{"类型错（bool）", func(m map[string]interface{}) { m[extraKeyComeFrom] = true }, false},
+		{"类型错（数字）", func(m map[string]interface{}) { m[extraKeyComeFrom] = 1.0 }, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := newPermissionTestPlugin(t)
+			p.auth = qqAuthContext{Active: true, UserID: 2198972886}
+			ctx := toolCallContext("cmd_run", nil)
+			ctx.Extra = map[string]interface{}{}
+			tc.setup(ctx.Extra)
+			if err := p.beforeToolcall(ctx); err != nil {
+				t.Fatal(err)
+			}
+			blocked := ctx.Response != nil
+			if tc.trusted && blocked {
+				t.Errorf("★ 应放行却拦了: %s", *ctx.Response)
+			}
+			if !tc.trusted && !blocked {
+				t.Error("★ 应拦却放行了（权限门失效）")
+			}
+		})
+	}
+}
+
+// ★★★ 判据：**owner 的请求行为不变**（comefrom=user 时不得因为改动而放宽）。
+//
+// 防的是"为了让驻留子通过，把门整体放松"这类错误修法。
+func TestComeFromUserKeepsOwnerAndNonOwnerSemantics(t *testing.T) {
+	// owner + comefrom=user ⇒ 完整放行（含硬私有）
+	p := newPermissionTestPlugin(t)
+	p.auth = qqAuthContext{Active: true, Owner: true, UserID: 2198972886}
+	ctx := toolCallContext("calendar_list", nil)
+	ctx.Extra = map[string]interface{}{extraKeyComeFrom: "user"}
+	if err := p.beforeToolcall(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if ctx.Response != nil {
+		t.Fatalf("★ owner 的请求被拦（权限门被收紧了）: %s", *ctx.Response)
+	}
+
+	// 非 owner + comefrom=user + 硬私有 ⇒ 仍必须拒
+	p2 := newPermissionTestPlugin(t)
+	p2.auth = qqAuthContext{Active: true, UserID: 10001}
+	ctx2 := toolCallContext("calendar_list", nil)
+	ctx2.Extra = map[string]interface{}{extraKeyComeFrom: "user"}
+	if err := p2.beforeToolcall(ctx2); err != nil {
+		t.Fatal(err)
+	}
+	if ctx2.Response == nil {
+		t.Fatal("★ 非 owner 的硬私有调用应仍被拒（改动把门放松了）")
+	}
+
+	// 无身份（auth.Active=false）+ 有 comefrom=user ⇒ 本门不介入（旧行为）
+	p3 := newPermissionTestPlugin(t)
+	ctx3 := toolCallContext("cmd_run", nil)
+	ctx3.Extra = map[string]interface{}{extraKeyComeFrom: "user"}
+	if err := p3.beforeToolcall(ctx3); err != nil {
+		t.Fatal(err)
+	}
+	if ctx3.Response != nil {
+		t.Fatalf("非本插件来源不该被本门拦: %s", *ctx3.Response)
 	}
 }

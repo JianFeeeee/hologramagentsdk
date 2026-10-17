@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -95,7 +96,7 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 		ctx.Lock()
 		defer ctx.Unlock()
 		if len(ctx.ToolResults) > 0 {
-			fmt.Printf("[%s] stage after_toolcall(own): %s\n", p.name, ctx.ToolResults[0].Name)
+			log.Printf("[%s] stage after_toolcall(own): %s", p.name, ctx.ToolResults[0].Name)
 		}
 		return nil
 	}, sdk.StageScopeOwnTools)
@@ -115,25 +116,25 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 		return err
 	}
 
-	fmt.Printf("[%s] started\n", p.name)
+	log.Printf("[%s] started", p.name)
 	return nil
 }
 
 func (p *Plugin) Stop() error {
-	fmt.Printf("[%s] stopped\n", p.name)
+	log.Printf("[%s] stopped", p.name)
 	return nil
 }
 
 type wttrResp struct {
 	CurrentCondition []struct {
-		TempC           string `json:"temp_C"`
-		FeelsLikeC      string `json:"FeelsLikeC"`
-		Humidity        string `json:"humidity"`
-		WindspeedKmph   string `json:"windspeedKmph"`
-		Winddir16Point  string `json:"winddir16Point"`
-		Pressure        string `json:"pressure"`
-		Visibility      string `json:"visibility"`
-		WeatherDesc     []struct {
+		TempC          string `json:"temp_C"`
+		FeelsLikeC     string `json:"FeelsLikeC"`
+		Humidity       string `json:"humidity"`
+		WindspeedKmph  string `json:"windspeedKmph"`
+		Winddir16Point string `json:"winddir16Point"`
+		Pressure       string `json:"pressure"`
+		Visibility     string `json:"visibility"`
+		WeatherDesc    []struct {
 			Value string `json:"value"`
 		} `json:"weatherDesc"`
 		LocalObsDateTime string `json:"localObsDateTime"`
@@ -153,7 +154,7 @@ type wttrResp struct {
 }
 
 type wttrDay struct {
-	Date     string `json:"date"`
+	Date      string `json:"date"`
 	Astronomy []struct {
 		Sunrise string `json:"sunrise"`
 		Sunset  string `json:"sunset"`
@@ -161,8 +162,8 @@ type wttrDay struct {
 	MaxtempC string `json:"maxtempC"`
 	MintempC string `json:"mintempC"`
 	Hourly   []struct {
-		TempC          string `json:"tempC"`
-		WeatherDesc    []struct {
+		TempC       string `json:"tempC"`
+		WeatherDesc []struct {
 			Value string `json:"value"`
 		} `json:"weatherDesc"`
 		WindspeedKmph  string `json:"windspeedKmph"`

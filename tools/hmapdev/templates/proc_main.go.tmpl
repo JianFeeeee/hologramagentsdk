@@ -13,11 +13,14 @@ package main
 
 import (
 	"bufio"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -740,6 +743,8 @@ func buildPluginSDK(name string) *sdk.PluginSDK {
 	base.SetKnowledgeAPI(procKnowledge{})
 	base.SetLLMAPI(procLLM{})
 	base.SetSocialAPI(procSocial{})
+	base.SetSecretsAPI(procSecrets{})
+	base.SetRawFilesAPI(procRawFiles{})
 	base.SetTextMemoryAPI(procTextMemory{})
 	base.SetPluginMgrAPI(procPluginMgr{})
 	base.SetInputChannelRegistrar(func(chName string, def sdk.ChannelDef) error {
@@ -1160,6 +1165,234 @@ func (procPluginMgr) IsPluginDisabled(name string) bool {
 	return r.Disabled
 }
 
+// ---- 运行态启停（设计 docs/zh/kernel-modularization-design.md §2.6.7）----
+//
+// ★ 注意 method 名是 `plugin.mgrStop/mgrStart/mgrIsRuntimeStopped`，
+// **不是** `plugin.stop/plugin.start` —— 后两个是内核→插件的生命周期消息
+// （MethodPluginStart/Stop，见 protocol.go），语义完全不同。用错名会撞车。
+func (procPluginMgr) StopPlugin(name string) error {
+	return callCoreVoid("plugin.mgrStop", map[string]string{"name": name})
+}
+func (procPluginMgr) StartPlugin(name string) error {
+	return callCoreVoid("plugin.mgrStart", map[string]string{"name": name})
+}
+func (procPluginMgr) IsPluginRuntimeStopped(name string) bool {
+	raw, err := callCore("plugin.mgrIsRuntimeStopped", map[string]string{"name": name})
+	if err != nil {
+		return false
+	}
+	var r struct {
+		RuntimeStopped bool `json:"runtime_stopped"`
+	}
+	json.Unmarshal(raw, &r)
+	return r.RuntimeStopped
+}
+
+// procRawFiles 是 rawfile 资源的插件侧实现。
+//
+// ★ 它**不走 RPC**：资源就在插件进程自己的目录下（`<插件目录>/rawfile/`），
+// 直接读本地文件即可。走 RPC 是错的 —— 随包资源可能有几十上百兆
+// （如内置的 node 二进制），把它们搬过进程边界毫无意义。
+//
+// 路径来源：内核在 spawn 时注入 HA_PLUGIN_RAWFILE_DIR / HA_PLUGIN_WORK_DIR。
+// 不用 cwd 推断（插件可能自己 chdir），也不读内核的 PluginDir()（那个不给插件）。
+type procRawFiles struct{}
+
+func (procRawFiles) root() string {
+	if v := os.Getenv("HA_PLUGIN_RAWFILE_DIR"); v != "" {
+		return v
+	}
+	// 回退：cwd 就是插件目录（内核 spawn 时设的 Dir）
+	wd, _ := os.Getwd()
+	return filepath.Join(wd, "rawfile")
+}
+
+func (r procRawFiles) workRoot() string {
+	if v := os.Getenv("HA_PLUGIN_WORK_DIR"); v != "" {
+		return v
+	}
+	wd, _ := os.Getwd()
+	return filepath.Join(wd, "work")
+}
+
+// resolve 解析相对路径并拒绝穿越（与内核侧 rawFilesImpl 同一套规则）。
+func (r procRawFiles) resolve(rel string) (string, error) {
+	rel = strings.TrimSpace(rel)
+	if rel == "" {
+		return "", fmt.Errorf("rawfile 路径不能为空")
+	}
+	if filepath.IsAbs(rel) {
+		return "", fmt.Errorf("rawfile 路径必须是相对路径: %q", rel)
+	}
+	root := r.root()
+	clean := filepath.Clean(filepath.Join(root, rel))
+	if clean != root && !strings.HasPrefix(clean, root+string(os.PathSeparator)) {
+		return "", fmt.Errorf("rawfile 路径逃出资源目录: %q", rel)
+	}
+	return clean, nil
+}
+
+func (r procRawFiles) Read(rel string) ([]byte, error) {
+	p, err := r.resolve(rel)
+	if err != nil {
+		return nil, err
+	}
+	b, err := os.ReadFile(p)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("rawfile 不存在: %s（打包时是否漏了 rawfile/ 或 plg.json 的 rawfiles？）", rel)
+		}
+		return nil, err
+	}
+	return b, nil
+}
+
+func (r procRawFiles) List(rel string) ([]string, error) {
+	p, err := r.resolve(rel)
+	if err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(p)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(entries))
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() {
+			name += "/"
+		}
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+func (r procRawFiles) Exists(rel string) bool {
+	p, err := r.resolve(rel)
+	if err != nil {
+		return false
+	}
+	st, err := os.Stat(p)
+	return err == nil && !st.IsDir()
+}
+
+func (r procRawFiles) Dir() string { return r.root() }
+
+func (r procRawFiles) WorkDir() string {
+	d := r.workRoot()
+	_ = os.MkdirAll(d, 0o755)
+	return d
+}
+
+var _ sdk.RawFilesAPI = procRawFiles{}
+
+// procSecrets 是变量库 API 的插件侧一半：全部经 RPC 打回内核。
+//
+// ★ 它**不是**插件自己的存储 —— 内核的变量库是进程级单例，
+// 主/子/驻留子 agent 与全部插件共用同一套别名。所以这里只做转发，
+// 不在插件侧留任何副本（留了就会出现"两库互不可见"的经典问题：
+// 内核拦截登记的变量插件看不到）。
+type procSecrets struct{}
+
+// Available 用**专门的**可用性查询，不靠 List 推断。
+//
+// ★ 实测教训：初版用 `secrets.list` 成功与否判断 —— 而未启用时
+// List 返回空列表（不报错），于是 Available() 误判为 true，
+// 接着 Store 才失败。错误信息于是变成"存储失败"而非"能力不可用"，
+// 排查方向完全错。
+func (procSecrets) Available() bool {
+	raw, err := callCore("secrets.available", nil)
+	if err != nil {
+		return false
+	}
+	var r struct {
+		Available bool `json:"available"`
+	}
+	if err := json.Unmarshal(raw, &r); err != nil {
+		return false
+	}
+	return r.Available
+}
+
+func (procSecrets) Store(value, note string) (string, error) {
+	raw, err := callCore("secrets.store", map[string]interface{}{"value": value, "note": note})
+	if err != nil {
+		return "", err
+	}
+	var r struct {
+		Alias string `json:"alias"`
+	}
+	if err := json.Unmarshal(raw, &r); err != nil {
+		return "", err
+	}
+	return r.Alias, nil
+}
+
+func (procSecrets) List() []sdk.SecretInfo {
+	raw, err := callCore("secrets.list", nil)
+	if err != nil {
+		return nil
+	}
+	var r struct {
+		Infos []sdk.SecretInfo `json:"infos"`
+	}
+	if err := json.Unmarshal(raw, &r); err != nil {
+		return nil
+	}
+	return r.Infos
+}
+
+func (procSecrets) Forget(alias string) error {
+	return callCoreVoid("secrets.forget", map[string]string{"alias": alias})
+}
+
+func (procSecrets) Fill(text string) (string, int, []string) {
+	raw, err := callCore("secrets.fill", map[string]string{"text": text})
+	if err != nil {
+		return text, 0, nil
+	}
+	var r struct {
+		Text     string   `json:"text"`
+		Replaced int      `json:"replaced"`
+		Aliases  []string `json:"aliases"`
+	}
+	if err := json.Unmarshal(raw, &r); err != nil {
+		return text, 0, nil
+	}
+	return r.Text, r.Replaced, r.Aliases
+}
+
+func (procSecrets) Encrypt(plain []byte) (string, error) {
+	raw, err := callCore("secrets.encrypt", map[string]string{
+		"plain_b64": base64.StdEncoding.EncodeToString(plain),
+	})
+	if err != nil {
+		return "", err
+	}
+	var r struct {
+		Encrypted string `json:"encrypted"`
+	}
+	if err := json.Unmarshal(raw, &r); err != nil {
+		return "", err
+	}
+	return r.Encrypted, nil
+}
+
+func (procSecrets) Decrypt(stored string) ([]byte, error) {
+	raw, err := callCore("secrets.decrypt", map[string]string{"stored": stored})
+	if err != nil {
+		return nil, err
+	}
+	var r struct {
+		PlainB64 string `json:"plain_b64"`
+	}
+	if err := json.Unmarshal(raw, &r); err != nil {
+		return nil, err
+	}
+	return base64.StdEncoding.DecodeString(r.PlainB64)
+}
+
 type procSettings struct{}
 
 func (procSettings) Get(key string) (interface{}, error) {
@@ -1167,6 +1400,26 @@ func (procSettings) Get(key string) (interface{}, error) {
 }
 func (procSettings) Set(key string, v interface{}) error {
 	return callCoreVoid("settings.set", map[string]interface{}{"key": key, "value": v})
+}
+
+// SetSecret 强制加密落盘（不看键名）。内核侧拒绝在无密钥时写明文。
+func (procSettings) SetSecret(key string, v interface{}) error {
+	return callCoreVoid("settings.setSecret", map[string]interface{}{"key": key, "value": v})
+}
+
+// GetSecret 读取 SetSecret 写入的值。
+func (procSettings) GetSecret(key string) (string, error) {
+	raw, err := callCore("settings.getSecret", map[string]string{"key": key})
+	if err != nil {
+		return "", err
+	}
+	var r struct {
+		Value string `json:"value"`
+	}
+	if err := json.Unmarshal(raw, &r); err != nil {
+		return "", err
+	}
+	return r.Value, nil
 }
 func (procSettings) List(prefix string) ([]string, error) {
 	return settingsKeys("settings.list", map[string]string{"prefix": prefix})

@@ -1,15 +1,23 @@
 {
   "name": "editdoc",
-  "name_zh": "文档编辑",
+  "name_zh": "全能办公",
   "name_en": "Document Editor",
-  "version": "1.0.0",
-  "description": "办公文档编辑工具（.docx），基于 Python python-docx 库实现。支持文本替换、表格操作、内容插入等。",
+  "version": "2.0.0",
+  "description": "全能办公插件：新建/读取/编辑/转换 docx·xlsx·pptx·md·csv·txt（基于 python-docx / openpyxl / python-pptx / soffice / pandoc）",
   "author": "HomeAgent",
-  "entry": "plugin.so",
-  "tags": ["editdoc", "office", "document"],
+  "entry": "plugin.bin",
+  "tags": [
+    "editdoc",
+    "office",
+    "document",
+    "excel",
+    "word",
+    "powerpoint"
+  ],
   "targets": "linux/amd64",
   "outdir": "dist",
   "bundle": true,
   "replaces": {},
-  "source_dirs": []
+  "source_dirs": [],
+  "sdk": "1.4.0"
 }

@@ -113,9 +113,40 @@ type PlgConfig struct {
 	// 字段语义见 SDK 的 sdk.ProxyDef（工具链与内核共用同一套校验规则）。
 	Proxies []ProxyConfig `json:"proxies,omitempty"`
 
+	// RawFiles 声明要一并打包的**非代码资源**（见 rawfiles.go）。
+	//
+	// 工程根的 `rawfile/` 目录**默认全收**，不需要在这里声明；
+	// 本数组用于**额外**的外部路径。解包后统一落在 <插件目录>/rawfile/ 下。
+	RawFiles []RawFileDecl `json:"rawfiles,omitempty"`
+
 	// ResolvedSDK 是本次构建实际选中的 SDK 版本（build 按 SDK 声明解析后回填），
 	// 只写进产物里的 plugin.json，便于事后追溯「这个 .hmap 是哪版 SDK 编的」。
 	ResolvedSDK string `json:"-"`
+
+	// RequiresFacilities 声明本插件需要**内核哪些设施就绪**后才能启动。
+	//
+	// 取值见 sdk.KnownFacilities()（如 FacilityConfig / FacilityLLM / FacilityStageHost）。
+	// **不声明** ⇒ 等内核完全初始化（默认；与旧行为一致）。
+	//
+	// ★ 为什么必须在 PlgConfig 里声明、且必须写进产物 plugin.json：
+	// 内核靠读 plugin.json 的该字段决定**何时拉起插件**。工具链若不透传，
+	// 插件作者在 plg.json 里写了也**不会进包** —— 而且是**静默丢失**
+	// （插件照常装上、照常运行，只是启动时机与作者预期不符，无任何提示）。
+	// 同理见 proxies 字段的注释（同一类"漏透传"坑）。
+	//
+	// ★ 打包期校验：值必须是 sdk.KnownFacilities() 里的名字。
+	// 拼错在**打包时就报错**，比运行期发现早得多（运行期发现意味着用户
+	// 已经装上了那个**永不启动**的插件）。
+	RequiresFacilities []string `json:"requires_facilities,omitempty"`
+
+	// AutoStart 声明是否**伴随内核启动**（缺省 true）还是等显式启用（false）。
+	//
+	// 用 *bool 而非 bool：必须区分"未声明"与"显式 false"。
+	//   缺省(nil) ⇒ true（伴随启动，与旧行为一致）
+	//   显式 false ⇒ 不自动拉起，等 agent 经 plugin_enable 启用
+	// 若用普通 bool，零值是 false ⇒ "没写这个字段"会被当成"不自动启动"
+	// ⇒ 存量插件全部不启动（灾难性）。
+	AutoStart *bool `json:"auto_start,omitempty"`
 }
 
 // TargetList parses the Targets string into a slice.
@@ -285,6 +316,21 @@ func cmdInit(args []string) {
 
 	// create thirdpart directory for external library sources
 	os.MkdirAll(filepath.Join(dir, "thirdpart"), 0755)
+
+	// create rawfile directory：**默认打包目录**。
+	// 放这里的东西会被 hmapdev build 自动打进 .hmap，
+	// 解包后落在 <插件目录>/rawfile/ 下（见 tools/hmapdev/rawfiles.go）。
+	// 留一个 .gitkeep 让空目录也能进版本库。
+	rawDir := filepath.Join(dir, "rawfile")
+	os.MkdirAll(rawDir, 0755)
+	os.WriteFile(filepath.Join(rawDir, ".gitkeep"), []byte(""), 0644)
+	// ★ 自带的 .gitignore：rawfile/ 里放的是随包资源（可能内嵌 node/pi
+	// 等上百兆二进制），由构建方自行准备，不能进版本库 ——
+	// 一个克隆带上 300MB 二进制、每次升级产生巨型 diff。
+	// 规则放在目录内部（自包含），不依赖上层 .gitignore 的否定式语义。
+	os.WriteFile(filepath.Join(rawDir, ".gitignore"), []byte(
+		"# rawfile/ 里的是随包资源，由构建方自行准备（下载/拷贝），不进版本库。\n"+
+			"*\n!.gitignore\n!.gitkeep\n"), 0644)
 
 	fmt.Printf("Created plugin project %q (%s)\n", dir, entry)
 	if isLua {

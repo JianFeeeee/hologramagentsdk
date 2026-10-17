@@ -99,7 +99,17 @@ fail=0
 failed_names=""
 
 for dir in "$SDK_ROOT"/example/*/; do
-  [ -f "$dir/plugin.go" ] || continue
+  # ★ 入口判据：Go 插件是 plugin.go，**Lua 插件是 main.lua**。
+  #
+  # 原判据只有 `[ -f plugin.go ]` ⇒ **Lua 插件被静默跳过**
+  # （实测：luademo 是 Lua 插件，entry=main.lua，不产 .hmap 也不报错，
+  #   发版产物就少一个插件而没人发现）。改为认两种入口。
+  #
+  # 用 plg.json 的 entry 做最终判定更准，但**入口文件存在性**足以区分
+  # "这是不是一个插件工程"；真正的入口名由 hmapdev 从 plg.json 读。
+  if [ ! -f "$dir/plugin.go" ] && [ ! -f "$dir/main.lua" ]; then
+    continue
+  fi
   name="$(basename "$dir")"
 
   # 清掉旧产物：残留会让人（和本脚本）误判成功。
@@ -111,7 +121,28 @@ for dir in "$SDK_ROOT"/example/*/; do
   # 判据是**退出码 + 产物存在**，两者都要。
   #   只看退出码：hmapdev 曾经出错也退 0（已修，但脚本不该依赖它「现在」是对的）。
   #   只看产物：部分平台失败时会留下上一次的产物，看起来像成功。
-  hmap="$(ls "$dir"/dist/*.hmap 2>/dev/null | head -1)"
+  #
+  # ★★ 必须挑**本次目标平台**的产物，不能取 `head -1`。
+  #
+  # ## 为什么（实测缺陷，2026-10-17）
+  #
+  # `--target` 的语义是**追加**（docs/guide/multi-platform.md 明确写「追加一个目标」），
+  # 而示例的 plg.json 普遍声明 `targets: "linux/amd64"`。于是
+  # `build --no-bundle --target linux/arm64` 会**同时**产出
+  # `..._linux_amd64.hmap` 与 `..._linux_arm64.hmap`。
+  #
+  # 原代码取 `ls | head -1` ⇒ **按文件名字典序拿到 amd64 那份**
+  # ⇒ 打 arm64 包时实际装进去的是 **x86-64 二进制**，
+  # 而文件名却写着 `linux_arm64_...`（**文件名与内容不符**）。
+  # 实测：arm64 产物 `plugin.bin` 的 ELF machine = 0x003e（x86-64，应为 0x00b7=aarch64）。
+  # 这种包在 arm64 机器上只会以 "Exec format error" 失败，而排查方向会被文件名带偏。
+  #
+  # ⇒ 精确匹配 `<name>_<goos>_<goarch>.hmap`；匹配不到则视为失败（不静默退回任意产物）。
+  hmap="$(ls "$dir"/dist/*_"${GOOS}_${GOARCH}".hmap 2>/dev/null | head -1)"
+  if [ -z "$hmap" ]; then
+    # Lua 插件的产物名是 <name>_lua.hmap（无平台后缀，Lua 不编译）。
+    hmap="$(ls "$dir"/dist/*_lua.hmap 2>/dev/null | head -1)"
+  fi
   if [ $rc -eq 0 ] && [ -n "$hmap" ]; then
     # 保留插件自己声明的产物名（它用的是 plg.json 的 name_en，是插件的身份），
     # 只在前面加平台前缀避免多平台互相覆盖。

@@ -9,6 +9,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
+
+	pubsdk "github.com/JianFeeeee/homeagentsdk/sdk"
 	"strings"
 )
 
@@ -256,8 +259,24 @@ func buildBundle(plg *PlgConfig, outDir string, sdkPath string) {
 	writePluginJSON(plg, plats, procEntryFile)
 
 	// package single .hmap with correctly named entries
+	//
+	// rawfile：工程根 rawfile/ 默认全收 + plg.json 声明的外部路径。
+	// 收集失败即**整包失败**（少资源就是个坏包，却仍会产出 .hmap 让人以为成功）。
+	raws, rerr := collectRawFiles(".", plg.RawFiles)
+	if rerr != nil {
+		fmt.Printf("  error: rawfiles: %v\n", rerr)
+		return
+	}
+	// 随包 skill（skill/ 目录，与 rawfile/ 平行；见 skills.go）
+	skills, serr := collectSkillFiles(".")
+	if serr != nil {
+		fmt.Printf("  error: skill: %v\n", serr)
+		return
+	}
 	hmapPath := filepath.Join(outDir, fmt.Sprintf("%s_bundle.hmap", toSnake(plg.NameEn)))
-	createBundleHmap(hmapPath, "plugin.json", binaries)
+	// skill 与 rawfile 用同一个写入路径（都是"保留路径"的条目），
+	// 但分开收集以便分别报错与摘要。
+	createBundleHmap(hmapPath, "plugin.json", binaries, append(raws, skills...))
 	fmt.Printf("  packaged %s\n", filepath.Base(hmapPath))
 }
 
@@ -342,6 +361,23 @@ func writePluginJSON(plg *PlgConfig, platforms []string, entry string) {
 	// 没有任何报错，只有「访问不到」。这正是当初新增该字段时踩过的坑。
 	if len(plg.Proxies) > 0 {
 		m["proxies"] = plg.Proxies
+	}
+	// ★ 启动时机声明**必须透传**（与 proxies 同一类"漏了插件作者会静默踩坑"）：
+	// 内核读 plugin.json 的 requires_facilities 决定"何时拉起该插件"。
+	// 不透传 ⇒ 插件照常装上运行，但启动时机与作者预期不符，**无任何提示**。
+	if len(plg.RequiresFacilities) > 0 {
+		// 打包期校验：名字必须是内核已知设施（拼错在打包时报错，
+		// 而不是让用户装上一个"永不等不到就绪"因而**永不启动**的插件）。
+		if bad := unknownFacilities(plg.RequiresFacilities); len(bad) > 0 {
+			fmt.Printf("  error: requires_facilities 含内核未知的设施名 %v（已知: %v）\n",
+				bad, pubsdk.KnownFacilities())
+			return
+		}
+		m["requires_facilities"] = plg.RequiresFacilities
+	}
+	// auto_start：只有**显式 false** 才写（缺省 true 与旧行为一致，不写字段最兼容）
+	if plg.AutoStart != nil && !*plg.AutoStart {
+		m["auto_start"] = false
 	}
 	data, _ := json.MarshalIndent(m, "", "  ")
 	os.WriteFile("plugin.json", data, 0644)
@@ -711,7 +747,17 @@ func buildTarget(plg *PlgConfig, target, outDir, sdkPath string) {
 		}
 	}
 	hmapName := fmt.Sprintf("%s_%s_%s.hmap", toSnake(plg.NameEn), cfg.goos, cfg.goarch)
-	createHmap(filepath.Join(outDir, hmapName), pkgFiles)
+	raws, rerr := collectRawFiles(".", plg.RawFiles)
+	if rerr != nil {
+		fmt.Printf("  error: rawfiles: %v\n", rerr)
+		return
+	}
+	skills, serr := collectSkillFiles(".")
+	if serr != nil {
+		fmt.Printf("  error: skill: %v\n", serr)
+		return
+	}
+	createHmapWithRaw(filepath.Join(outDir, hmapName), pkgFiles, append(raws, skills...))
 	fmt.Printf("  packaged %s\n", hmapName)
 }
 
@@ -723,7 +769,7 @@ type binEntry struct {
 // createBundleHmap 创建包含多平台二进制的 bundle .hmap 文件。
 // jsonName 是 plugin.json 在 zip 中的条目名；
 // binaries 的 src 为磁盘路径，zip 为 zip 中的条目名。
-func createBundleHmap(hmapPath, jsonName string, binaries []binEntry) {
+func createBundleHmap(hmapPath, jsonName string, binaries []binEntry, raws []rawEntry) {
 	f, err := os.Create(hmapPath)
 	if err != nil {
 		fmt.Printf("error: create hmap %s: %v\n", hmapPath, err)
@@ -773,6 +819,27 @@ func createBundleHmap(hmapPath, jsonName string, binaries []binEntry) {
 			writeZipEntry(fname, fname)
 		}
 	}
+
+	// ★ rawfile：非代码资源（**保留路径**，与 writeZipEntry 的扁平化不同）
+	if len(raws) > 0 {
+		if err := writeRawEntries(w, raws); err != nil {
+			fmt.Printf("error: 写入 rawfiles 失败: %v\n", err)
+			return
+		}
+		if sum := rawFilesSummary(raws); sum != "" {
+			fmt.Printf("  已打包 %s\n", sum)
+		}
+		// skill 单独一行（与 rawfile 分开报，便于判断"我加的 skill 进去了吗"）
+		var skillOnly []rawEntry
+		for _, e := range raws {
+			if strings.HasPrefix(e.zip, SkillZipPrefix+"/") {
+				skillOnly = append(skillOnly, e)
+			}
+		}
+		if sum := skillFilesSummary(skillOnly); sum != "" {
+			fmt.Printf("  已打包 %s\n", sum)
+		}
+	}
 }
 
 func createHmap(hmapPath string, files []string) {
@@ -810,6 +877,49 @@ func createHmap(hmapPath string, files []string) {
 		}
 		io.Copy(writer, src)
 		src.Close()
+	}
+}
+
+// createHmapWithRaw 是 createHmap 的 rawfile 版本（保留路径）。
+func createHmapWithRaw(hmapPath string, files []string, raws []rawEntry) {
+	f, err := os.Create(hmapPath)
+	if err != nil {
+		fmt.Printf("error: create hmap %s: %v\n", hmapPath, err)
+		return
+	}
+	defer f.Close()
+	w := zip.NewWriter(f)
+	defer w.Close()
+	for _, path := range files {
+		if path == "" {
+			continue
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			continue
+		}
+		hdr, err := zip.FileInfoHeader(info)
+		if err != nil {
+			continue
+		}
+		hdr.Method = zip.Deflate
+		hdr.Name = filepath.Base(path)
+		writer, err := w.CreateHeader(hdr)
+		if err != nil {
+			continue
+		}
+		src, err := os.Open(path)
+		if err != nil {
+			continue
+		}
+		io.Copy(writer, src)
+		src.Close()
+	}
+	if len(raws) > 0 {
+		if err := writeRawEntries(w, raws); err != nil {
+			fmt.Printf("error: 写入 rawfiles 失败: %v\n", err)
+			return
+		}
 	}
 }
 
@@ -941,4 +1051,24 @@ func sdkHasInjectPriority(sdkPath string) bool {
 		seg = seg[:j]
 	}
 	return strings.Contains(seg, "Priority")
+}
+
+// unknownFacilities 返回**内核未知**的设施名（打包期校验，防拼错）。
+//
+// ★ 为什么在打包期校验而不是留给内核：拼错的后果是插件**永不启动**
+// （永远等不到那个名字就绪），且内核侧此前无任何报错。在这里报错时
+// 用户还没装它，代价最小。
+func unknownFacilities(declared []string) []string {
+	known := map[string]bool{}
+	for _, f := range pubsdk.KnownFacilities() {
+		known[f] = true
+	}
+	var bad []string
+	for _, f := range declared {
+		if !known[f] {
+			bad = append(bad, f)
+		}
+	}
+	sort.Strings(bad)
+	return bad
 }

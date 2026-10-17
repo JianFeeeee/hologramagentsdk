@@ -159,19 +159,19 @@ const (
 )
 
 type Plugin struct {
-	name           string
-	sdk            *sdk.PluginSDK
-	listenAddr     string
-	napcatURL      string
-	remoteDir      string
-	filesDir       string
-	webhookToken   string
-	ownerIDs       []int64
-	botID          int64
-	botNickname    string
-	dmPolicy       string
-	groupPolicy    string
-	httpClient     *http.Client
+	name         string
+	sdk          *sdk.PluginSDK
+	listenAddr   string
+	napcatURL    string
+	remoteDir    string
+	filesDir     string
+	webhookToken string
+	ownerIDs     []int64
+	botID        int64
+	botNickname  string
+	dmPolicy     string
+	groupPolicy  string
+	httpClient   *http.Client
 	// sendClient 专用于**发送类**端点（send_private_msg / send_group_msg）。
 	//
 	// ★ 为何与查询类分开（2026-10-13 实测）：QQ 发送要经过 NapCat 的
@@ -188,7 +188,7 @@ type Plugin struct {
 	//
 	//   发送超时给足 120s（与插件内 TTS/下载同量级）；查询类保持 30s
 	//   （它们是幂等的，超时就是真超时，快速失败更有利于排查）。
-	sendClient *http.Client
+	sendClient     *http.Client
 	allowFrom      map[int64]struct{}
 	groupAllowFrom map[int64]struct{}
 	srv            *http.Server
@@ -1302,6 +1302,36 @@ func (p *Plugin) currentToolAllowed(ctx *sdk.StageContext, name string) (bool, q
 	return matchesToolAllowlist(name, patterns), auth
 }
 
+// extraKeyComeFrom 是内核写在帧上的「来源标识」键。
+//
+// 契约（见内核 internal/agent/core/comefrom.go）：
+//
+//	"user"     用户请求在边界上发起（默认语义，本插件的权限门只应管这类）
+//	"internal" agent 体系内部发起（驻留子/转投/自主续跑）⇒ 不走用户权限模型
+//	缺失        旧内核 ⇒ 按 "user" 处理，**行为必须与改动前逐字一致**
+//
+// 为什么用 Extra 而不是具名字段：内核用 Extra 的通用袋跨进程透传插件自建键
+// （proc 桥的 fExtraBag），与既有 `input_source` / `qq_auth` 同一读法。
+const extraKeyComeFrom = "comefrom"
+
+// isInternalToolCall 报告本帧的工具调用是否由 agent 内部委派发起。
+//
+// ★ 保守默认：**只有明确读到 "internal" 才算内部**。
+// 缺失、空串、类型不对、未知取值 —— 全部当作 "user"（旧行为）。
+// 这个方向不能反：把用户请求误判成 internal 就是**权限门整体失效**，
+// 那比"多拦一次内部调用"严重得多。
+func isInternalToolCall(ctx *sdk.StageContext) bool {
+	if ctx == nil || ctx.Extra == nil {
+		return false
+	}
+	v, ok := ctx.Extra[extraKeyComeFrom]
+	if !ok {
+		return false
+	}
+	s, _ := v.(string)
+	return s == "internal"
+}
+
 // isAtBot checks if the message contains an @-mention of the bot.
 func (p *Plugin) isAtBot(msg interface{}) bool {
 	segments, ok := msg.([]interface{})
@@ -1389,6 +1419,37 @@ func (p *Plugin) beforeToolcall(ctx *sdk.StageContext) error {
 	defer ctx.Unlock()
 	p.clearPreviousDenial(ctx)
 	if len(ctx.ToolCalls) == 0 {
+		return nil
+	}
+	// ★ **内部委派的工具调用不走用户权限模型**（2026-10-16）。
+	//
+	// 内核在帧上写了 `comefrom`：
+	//   "user"     = 用户请求在边界上发起（**本插件要管的就是这类**）
+	//   "internal" = agent 体系内部发起（驻留子/转投/自主续跑）
+	//   缺失       = 旧内核，按 "user" 处理（保持既有行为，勿改）
+	//
+	// ## 为何这是正确的（实测故障 + 语义）
+	//
+	// 现场（2026-10-16）：驻留子 `dev-br-jianf-NextAgent-fix_abs-path` 自报 running
+	// 但**零产出**，它那一轮 8 个工具（cmd_run/files_ls/notify_parent/…）全被
+	// 本门拦下。日志实证：每个工具调用前都有
+	// `[proc] qq stage before_toolcall 改写了 1 个字段`（= 写入了拒绝响应）。
+	//
+	// 根因：驻留子的输入**继承自父**（转投刻意保留原事件，否则同步调用方永久
+	// 挂起），于是 `input_source` 仍是 "qq" ⇒ 本门把驻留子当成"那位 QQ 用户
+	// 在提请求" ⇒ 按用户白名单判 ⇒ 开发工具一条都不在白名单里 ⇒ 全拒。
+	//
+	// 但用户请求**已经过了这道门**（父按真实身份判定过）。驻留子做的是
+	// **父自己的委派决定**；对已经准入的工作再查一次"用户白名单"，既拦掉合法
+	// 工作、又零安全增益（同一次请求，父已判定）。
+	//
+	// 为何不"只跳白名单、仍查硬私有"：硬私有（calendar_/email_/memory_…）
+	// 防的是用户偷看私人数据；驻留子是父的内部执行体，父对它本就有完整
+	// 权限 —— 再查一遍等于"机器人自己派出去的活被自己拦住"，同样荒谬。
+	//
+	// 为何放在 `auth.Active` 判断**之前**：internal 与"非本插件来源"在语义上
+	// 是同一类（都不是"一条 QQ 用户消息"），走同一条放行路径最不容易出错。
+	if isInternalToolCall(ctx) {
 		return nil
 	}
 	tc := &ctx.ToolCalls[0]

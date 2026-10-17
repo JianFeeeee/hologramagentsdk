@@ -225,6 +225,14 @@ func (s *mockSettings) Get(key string) (interface{}, error) {
 	return v, nil
 }
 func (s *mockSettings) Set(key string, value interface{}) error { s.data[key] = value; return nil }
+func (s *mockSettings) SetSecret(key string, value interface{}) error {
+	// mock 无加密能力：与真实实现一致地**拒绝**明文落盘。
+	if str, ok := value.(string); ok && str != "" {
+		return fmt.Errorf("mock: 密钥未装配，拒绝以明文存储敏感项 %q", key)
+	}
+	return nil
+}
+func (s *mockSettings) GetSecret(key string) (string, error) { return "", nil }
 func (s *mockSettings) List(prefix string) ([]string, error) {
 	var ks []string
 	for k := range s.data {

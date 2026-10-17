@@ -13,7 +13,8 @@ const tmplPlgJSON = `{
   "entry": "{{.Plg.Entry}}",
   "sdk": "{{.Plg.SDK}}",
   "tags": [{{range $i, $t := .Plg.Tags}}{{if $i}}, {{end}}"{{$t}}"{{end}}],
-  "targets": "{{.Plg.Targets}}"
+  "targets": "{{.Plg.Targets}}",
+  "rawfiles": []
 }
 `
 
@@ -38,9 +39,21 @@ replace {{.SDKModule}} => {{.SDKLocalPath}}
 const tmplPluginGo = `package main
 
 import (
-	"fmt"
+	"log"
+
 	"github.com/JianFeeeee/homeagentsdk/sdk"
 )
+
+// ★★ 插件里**绝不能往 stdout 打印任何东西**（本注释是踩坑记录，2026-10-16）。
+//
+// 子进程插件的 **stdout 是 JSON-RPC 协议通道**（与内核的帧都走它），
+// stderr 才是日志通道（SDK 侧 log.SetOutput(os.Stderr)）。
+//
+// 用 fmt.Printf 打一行日志 ⇒ 内核 readLoop 收到一段非 JSON 文本，
+// 报「收到非法 JSON 帧（N 字节）」并**丢弃**。日志本身丢了，还刷了一条
+// 看起来像协议故障的报错（极难定位到「是我自己 printf 的」）。
+//
+// ⇒ 一律用 log.Printf（默认走 stderr）。
 
 type Plugin struct {
 	name string
@@ -51,7 +64,7 @@ func (p *Plugin) Name() string { return p.name }
 
 func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	p.sdk = s
-	s.RegisterStopHandler(func() { fmt.Printf("[%s] stop handler running\n", p.name) })
+	s.RegisterStopHandler(func() { log.Printf("[%s] stop handler running", p.name) })
 	s.Settings().RegisterDef(sdk.ConfigDef{
 		Key: "plugin.{{.Plg.Name}}.example", Default: "hello", Type: "string",
 		DisplayName: "示例配置", Description: "An example configuration key",
@@ -84,11 +97,11 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 		//     return output
 		// },
 	}, p.handleHello)
-	fmt.Printf("[%s] started\n", p.name)
+	log.Printf("[%s] started", p.name)
 	return nil
 }
 
-func (p *Plugin) Stop() error { fmt.Printf("[%s] stopped\n", p.name); return nil }
+func (p *Plugin) Stop() error { log.Printf("[%s] stopped", p.name); return nil }
 
 func (p *Plugin) handleHello(args map[string]interface{}) (interface{}, error) {
 	return map[string]interface{}{"content": "Hello from {{.Plg.Name}} plugin!"}, nil
