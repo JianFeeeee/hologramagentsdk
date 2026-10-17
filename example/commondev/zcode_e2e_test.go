@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func zcodeE2EReady(t *testing.T) (nodeBin, cliPath, dataDir string) {
@@ -144,11 +145,21 @@ func TestZcodeFullPipeline(t *testing.T) {
 	if err := json.Unmarshal(resp.Result, &pr); err != nil {
 		t.Fatal(err)
 	}
-	sid, _ := pr["session_id"].(string)
-	if !strings.HasPrefix(sid, "sess_") {
-		t.Fatalf("★ 未回报真实 ZCode 会话 id: %q", sid)
+	// ★ 异步投递（2026-10-17）：prompt 立即回 "accepted"，此时还没有真实
+	// sess_ id —— 它要等 zcode 真正建好会话。真实 id 与任务结果都随
+	// **完成通知**（id=0）推回。所以这里必须等通知，而不是看应答。
+	if st, _ := pr["status"].(string); st != "accepted" {
+		t.Fatalf("投递应回 status=accepted（异步），实际 %q", st)
 	}
-	t.Logf("zcode 会话: %s", sid)
+	notif := waitPromptDone(t, rd)
+	sid, _ := notif["session_id"].(string)
+	if !strings.HasPrefix(sid, "sess_") {
+		t.Fatalf("★ 完成通知未含真实 ZCode 会话 id: %q（通知=%v）", sid, notif)
+	}
+	if reply, _ := notif["reply"].(string); strings.TrimSpace(reply) == "" {
+		t.Logf("提示：完成通知里 reply 为空（zcode 可能只回了工具动作）")
+	}
+	t.Logf("zcode 会话: %s（任务已完成）", sid)
 
 	// ★ 关键断言：真的改了**这个工程**的文件，且没破坏原代码
 	b2, err := os.ReadFile(filepath.Join(workdir, "src", "calc.py"))
@@ -299,6 +310,12 @@ func TestZcodeOverSSH(t *testing.T) {
 	})
 	if resp.Error != nil {
 		t.Fatalf("远端投递失败: %s", resp.Error.Message)
+	}
+	// ★ 异步投递：必须等完成通知，否则读文件时远端任务还没开始跑
+	// （实测：不等的话 calc.py 根本还没被创建）。
+	notif := waitPromptDone(t, rd)
+	if sid, _ := notif["session_id"].(string); !strings.HasPrefix(sid, "sess_") {
+		t.Fatalf("远端完成通知未含真实会话 id: %q", sid)
 	}
 	b2, err := os.ReadFile(filepath.Join(remoteWork, "src", "calc.py"))
 	if err != nil {
@@ -493,11 +510,18 @@ func TestZcodeOverSSHWithPerHostEndpoints(t *testing.T) {
 			"session_id": "br-" + tc.proj,
 			"text":       "在 src/calc.py 里新增 multiply(a, b) 返回 a*b，保留 add。只回一句完成。",
 		})
-		_ = rc.Process.Kill()
-		_, _ = rc.Process.Wait()
 		if resp.Error != nil {
+			_ = rc.Process.Kill()
+			_, _ = rc.Process.Wait()
 			t.Fatalf("★ %s 投递失败（端点表里的 CLI 路径可能在该机器上不存在）: %s",
 				tc.host, resp.Error.Message)
+		}
+		// ★ 异步投递：等完成通知再读文件（并把会话 id 一并验掉）。
+		notif := waitPromptDone(t, rrd)
+		_ = rc.Process.Kill()
+		_, _ = rc.Process.Wait()
+		if sid, _ := notif["session_id"].(string); !strings.HasPrefix(sid, "sess_") {
+			t.Fatalf("★ %s 完成通知未含真实会话 id: %q", tc.host, sid)
 		}
 		b2, err := os.ReadFile(filepath.Join(tc.wd, "src/calc.py"))
 		if err != nil {
@@ -510,5 +534,55 @@ func TestZcodeOverSSHWithPerHostEndpoints(t *testing.T) {
 			t.Errorf("★ %s 上原有代码被破坏:\n%s", tc.host, b2)
 		}
 		_ = env
+	}
+}
+
+// waitPromptDone 等 sidecar 推来的「任务完成」通知（id=0）。
+//
+// 异步投递后，任务是否真的完成、结果是什么，只有这条通知说得清。
+// 超时给足 20 分钟：zcode 的默认单轮上限就是这个量级（见 sidecar.mjs）。
+func waitPromptDone(t *testing.T, rd *bufio.Reader) map[string]interface{} {
+	t.Helper()
+	type line struct{ s string }
+	ch := make(chan line, 1)
+	go func() {
+		for {
+			s, err := rd.ReadString('\n')
+			if err != nil {
+				ch <- line{""}
+				return
+			}
+			ch <- line{s}
+		}
+	}()
+	deadline := time.After(20 * time.Minute)
+	for {
+		select {
+		case l := <-ch:
+			if l.s == "" {
+				t.Fatal("sidecar 输出结束，未收到完成通知")
+			}
+			var m map[string]interface{}
+			if json.Unmarshal([]byte(l.s), &m) != nil {
+				continue
+			}
+			if id, _ := m["id"].(float64); id != 0 {
+				continue // 不是通知
+			}
+			res, _ := m["result"].(map[string]interface{})
+			if res == nil {
+				continue
+			}
+			ev, _ := res["event"].(string)
+			if ev == "prompt_error" {
+				e, _ := res["error"].(string)
+				t.Fatalf("★ 任务失败（通知）：%s", e)
+			}
+			if ev == "prompt_done" {
+				return res
+			}
+		case <-deadline:
+			t.Fatal("等任务完成通知超时（20 分钟）")
+		}
 	}
 }

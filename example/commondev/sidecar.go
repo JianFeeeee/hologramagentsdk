@@ -64,10 +64,21 @@ type sidecarProcess struct {
 	mu      sync.Mutex
 	nextID  int
 	pending map[int]chan []byte
-	closed  bool
-	stopped bool
-	exited  chan struct{}
-	waitErr error
+	// onNotify 处理 sidecar **主动推送**的帧（resp.ID == 0）。
+	//
+	// ★ 为什么需要它（2026-10-17 实测缺陷）：
+	//   deliverToPi 原来 `await s.prompt(text)` **同步等 pi 把任务跑完**，
+	//   而 pi 开工程线干活要几十秒到几分钟 ⇒ 内核 60s 工具超时先到，
+	//   报「执行超时（60秒）」。
+	//   但通道语义是"**投递**任务"（见 outputch 的描述），不是"等完成"。
+	//   ⇒ 改成：prompt 立即返回"已受理"，pi 跑完后用主动通知回投结果。
+	//
+	// 回调在 readLoop 里调用（已持锁外），实现方不得再进 readLoop。
+	onNotify func(branchID string, payload map[string]interface{})
+	closed   bool
+	stopped  bool
+	exited   chan struct{}
+	waitErr  error
 
 	timeout time.Duration
 
@@ -114,7 +125,21 @@ func (s *sidecarProcess) readLoop(r io.Reader) {
 			continue
 		}
 		if resp.ID == 0 {
-			// 主动通知（暂未使用，保留扩展位）
+			// 主动通知：sidecar 不等请求就推过来的帧。
+			//
+			// 当前用途：异步投递的**完成回投**（见 deliverToPi）。
+			// 在独立 goroutine 里跑回调 —— 回调可能调 InjectText，那会
+			// 走到内核（可能阻塞）；在 readLoop 里同步跑会堵住 stdout，
+			// 而 stdout 一堵，pi 就写不进来（RPC 类协议最常见的死法）。
+			if s.onNotify != nil {
+				var payload map[string]interface{}
+				if resp.Result != nil && len(*resp.Result) > 0 {
+					_ = json.Unmarshal(*resp.Result, &payload)
+				}
+				branch := s.branchID
+				fn := s.onNotify
+				go fn(branch, payload)
+			}
 			continue
 		}
 		s.mu.Lock()
@@ -413,6 +438,12 @@ func (p *Plugin) startSidecar(b *Branch, sessionID string) (*sidecarProcess, err
 
 	sp := newSidecarProcess(b.ID, b.Workdir, cmd, bufio.NewWriter(stdin), stdout, timeout)
 
+	// ★ 接上"完成回投"：pi 跑完任务后主动推通知，我们把它注入回 agent。
+	//
+	// 这是**异步投递**的另一半（见 deliverToPi 与 sidecar.mjs 的 prompt）。
+	// 没有它，任务虽然完成了但模型永远不知道结果 —— 比同步超时更糟。
+	sp.onNotify = p.makePromptNotifier()
+
 	// ★ 握手必须短且确定 —— 绝不能用默认 timeout（那是 60s，正好撞上内核的
 	// 工具调用 60s 硬上限 ⇒ 工具超时但进程已起，状态"做了一半"）。
 	sp.handshakeTimeout = 10 * time.Second
@@ -587,4 +618,54 @@ func (p *Plugin) locateSidecarScript(drv driverSpec, cliDir, cli string) (string
 		"找不到 %s 的 sidecar 脚本 %s；已找过：① %s ② <插件>/rawfile/runtime/%s/%s ③ <可执行文件目录>/%s。"+
 			"若要自带 CLI，请把 driver.json 与脚本放到 <插件数据>/runtime/%s/",
 		cli, drv.Script, filepath.Join(cliDir, drv.Script), cli, drv.Script, drv.Script, cli)
+}
+
+// makePromptNotifier 构造"任务完成回投"的回调。
+//
+// ## 它解决什么问题
+//
+// 异步投递后，pi 在后台跑完任务，结果必须回到 agent 的上下文里 ——
+// 否则模型只知道"投递成功了"，永远不知道 pi 干了什么、成功还是失败。
+//
+// ## 为什么走 inputch（而不是 return）
+//
+// 投递那一刻 tool 调用早已返回（这是异步的意义）。完成事件到时，
+// 已经没有"谁在等这个返回值"了。唯一能把信息送进 agent 的通道是
+// **注入输入**（InjectTextTo），而 commondev 已经为每条工程线注册了
+// inputch（`commondev/<id>`，NoMemory=true —— 控制流不进记忆）。
+//
+// ## 失败不静默
+//
+// 注入失败要记日志：否则表现是"任务跑完了、模型毫无反应"，
+// 排查时看不出任何线索。
+func (p *Plugin) makePromptNotifier() func(branchID string, payload map[string]interface{}) {
+	return func(branchID string, payload map[string]interface{}) {
+		if payload == nil {
+			return
+		}
+		event, _ := payload["event"].(string)
+		sess, _ := payload["session_id"].(string)
+
+		var text string
+		switch event {
+		case "prompt_done":
+			reply, _ := payload["reply"].(string)
+			if strings.TrimSpace(reply) == "" {
+				reply = "（pi 未返回文本回复）"
+			}
+			text = fmt.Sprintf("[工程线 %s 任务完成 · session=%s]\n%s", branchID, sess, reply)
+		case "prompt_error":
+			e, _ := payload["error"].(string)
+			text = fmt.Sprintf("[工程线 %s 任务失败 · session=%s]\n错误：%s", branchID, sess, e)
+		default:
+			log.Printf("[commondev] 未知的通知事件 %q（branch=%s），忽略", event, branchID)
+			return
+		}
+
+		// source 用插件名（内核据此识别来源），channel 是该线的 inputch。
+		inCh := inputChannelName(branchID)
+		log.Printf("[commondev] 回投任务结果到 %s（event=%s）", inCh, event)
+		// InjectText 无返回值（内部已做错误日志），调用即注入。
+		p.sdk.InjectText("commondev", inCh, text)
+	}
 }

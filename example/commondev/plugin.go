@@ -1347,6 +1347,13 @@ func (p *Plugin) deliverToPi(branchID string, cargs map[string]interface{}) (int
 		return nil, fmt.Errorf("投递给 pi 失败: %w", err)
 	}
 
+	// ★ 现在是**异步投递**（2026-10-17 修）：sidecar 立即回 "accepted"，
+	// 真正跑完时用主动通知（id=0）回投，见 sidecar.go 的 onNotify。
+	//
+	// 原实现同步等 pi 跑完 ⇒ 内核 60s 工具超时先到，报「执行超时（60秒）」，
+	// 而任务其实还在正常跑（生产实测两次）。
+	// 通道的语义是"投递任务"，不是"等任务完成"。
+
 	// ★ 纪律 4：断言 session 未变 —— 变了即响亮失败（不静默改投新会话）
 	got := wantSession
 	if m, ok := res.(map[string]interface{}); ok {
@@ -1360,8 +1367,17 @@ func (p *Plugin) deliverToPi(branchID string, cargs map[string]interface{}) (int
 		return nil, fmt.Errorf("%s", msg)
 	}
 
-	p.recordDelivery(branchID, got, payload, "sent", "")
-	return map[string]interface{}{"status": "sent"}, nil
+	p.recordDelivery(branchID, got, payload, "accepted", "")
+	// ★ status 用 "accepted" 而不是 "sent"：
+	//   sent 会让人以为"pi 已经干完了"，而实际只是**排队受理**。
+	//   内核的 executeOutputSendTool 会把 "queued"/"unconfirmed" 当成
+	//   "结果未知"回报给模型（见 output.go），accepted 走正常成功路径
+	//   但语义诚实：任务已送达、结果稍后回投。
+	return map[string]interface{}{
+		"status":  "accepted",
+		"note":    "任务已投递给 pi，完成结果稍后经 inputch 回投",
+		"session": got,
+	}, nil
 }
 
 func (p *Plugin) recordDelivery(branchID, sessionID, text, status, note string) {

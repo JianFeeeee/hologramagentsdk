@@ -65,6 +65,8 @@ try {
 
 let session;
 let started = false;
+// inflight 是**已受理但未完成**的 prompt 数（异步投递后用于观测与优雅退出判断）
+let inflight = 0;
 
 async function ensureSession() {
   if (session) return session;
@@ -114,13 +116,52 @@ async function handle(method, params) {
       const text = params?.text ?? "";
       const want = params?.session_id || sessionId;
       const s = await ensureSession();
-      await s.prompt(text);
+      // ★★ 投递语义（2026-10-17 修）：立即返回"已受理"，不等 pi 跑完。
+      //
+      // 原实现是 `await s.prompt(text)` —— 同步等整个任务结束再返回。
+      // 而 pi 开工程线干活（克隆/改代码/跑测试）要几十秒到几分钟，
+      // 于是内核的 60s 工具超时先到，用户看到「执行超时（60秒）」，
+      // 而任务其实还在正常跑。通道的语义是"**投递**任务"，不是"等完成"。
+      //
+      // 现在：prompt 在后台跑；跑完后用 **主动通知**（id=0）把结果推回
+      // Go 侧，由 deliverToPi 注册的 onNotify 注入回 agent（走 inputch）。
       const got = s.sessionId ?? s.id ?? want ?? null;
+
+      // 记录在途数量，供 state 查询
+      inflight++;
+      (async () => {
+        try {
+          await s.prompt(text);
+          const reply = s.getLastAssistantText ? s.getLastAssistantText() : "";
+          send({
+            jsonrpc: "2.0",
+            id: 0, // ★ 0 = 主动通知（Go 侧 readLoop 按此分派）
+            result: {
+              event: "prompt_done",
+              session_id: s.sessionId ?? s.id ?? got ?? null,
+              reply: String(reply || "").slice(0, 4000),
+            },
+          });
+        } catch (e) {
+          send({
+            jsonrpc: "2.0",
+            id: 0,
+            result: {
+              event: "prompt_error",
+              session_id: got,
+              error: String((e && e.message) || e),
+            },
+          });
+        } finally {
+          inflight--;
+        }
+      })();
+
       return {
         ok: true,
+        status: "accepted", // ★ 明确：已受理，未完成
         // ★ 必须回报 session_id：Go 侧据此断言「会话漂移」
         session_id: got,
-        reply: s.getLastAssistantText ? s.getLastAssistantText() : "",
       };
     }
     case "state": {

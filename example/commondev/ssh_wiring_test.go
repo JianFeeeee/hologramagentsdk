@@ -509,6 +509,26 @@ process.stdout.write(JSON.stringify({type:"result",sessionId:sid,response:"ok"})
 		return nil
 	}
 
+	// readNotification 读一条**主动通知**（id=0）。
+	//
+	// 异步投递后，任务完成不是通过请求应答返回，而是 sidecar 主动推一帧
+	// id=0 的通知（见 sidecar.go readLoop 的分派）。
+	readNotification := func(t *testing.T) map[string]any {
+		t.Helper()
+		for sc.Scan() {
+			var m map[string]any
+			if json.Unmarshal(sc.Bytes(), &m) != nil {
+				continue
+			}
+			if id, _ := m["id"].(float64); id == 0 {
+				res, _ := m["result"].(map[string]any)
+				return res
+			}
+		}
+		t.Fatal("等完成通知超时")
+		return nil
+	}
+
 	// 首轮
 	mustWrite(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "prompt",
 		"params": map[string]any{"session_id": "br-demo-label", "text": "hi"}})
@@ -517,10 +537,24 @@ process.stdout.write(JSON.stringify({type:"result",sessionId:sid,response:"ok"})
 		t.Fatalf("首轮失败: %v", r1["error"])
 	}
 	res1, _ := r1["result"].(map[string]any)
-	sid, _ := res1["session_id"].(string)
-	if !strings.HasPrefix(sid, "sess_") {
-		t.Fatalf("★ 首轮未回报真实 sess_ id: %q", sid)
+	// ★ 异步投递（2026-10-17）：prompt 立即回 "accepted"，此时**还拿不到**
+	// 真实 sess_ id（它要等 zcode 真正建好会话）。真实 id 随完成通知推回。
+	// 首轮这里只要求"受理成功且回报了一个 session_id 字段"。
+	if st, _ := res1["status"].(string); st != "accepted" {
+		t.Fatalf("首轮应回 status=accepted（异步投递），实际 %q", st)
 	}
+	sid, _ := res1["session_id"].(string)
+	if sid == "" {
+		t.Fatal("★ 首轮未回报 session_id 字段（Go 侧据此断言会话未漂移）")
+	}
+
+	// 等完成通知（id=0），从里面取真实 sess_ id
+	notif := readNotification(t)
+	realSid, _ := notif["session_id"].(string)
+	if !strings.HasPrefix(realSid, "sess_") {
+		t.Fatalf("★ 完成通知里未含真实 sess_ id: %q（通知=%v）", realSid, notif)
+	}
+	sid = realSid
 
 	// 第二轮：把真实 id 传回 → 必须 --resume
 	mustWrite(map[string]any{"jsonrpc": "2.0", "id": 2, "method": "prompt",
@@ -528,6 +562,9 @@ process.stdout.write(JSON.stringify({type:"result",sessionId:sid,response:"ok"})
 	if r2 := readReply(2); r2["error"] != nil {
 		t.Fatalf("第二轮失败: %v", r2["error"])
 	}
+	// 第二轮同样是异步：应答只代表"已受理"，假 CLI 的第二次执行发生在
+	// 完成通知之前。必须等通知，否则读 argv 时第二次还没被调起（实测）。
+	_ = readNotification(t)
 
 	raw, err := os.ReadFile(rec)
 	if err != nil {
