@@ -1,0 +1,65 @@
+module commondev
+
+go 1.21.0
+
+require github.com/JianFeeeee/homeagentsdk v1.4.0
+
+// 与同目录其它示例一致：SDK 指向仓库内的 vendored 副本
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+replace github.com/JianFeeeee/homeagentsdk => /root/.homeagent/hmapdev/sdk/v1.4.0
