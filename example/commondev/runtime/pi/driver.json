@@ -1,0 +1,14 @@
+{
+  "name": "pi",
+  "script": "sidecar.mjs",
+  "node": "auto",
+  "sessionNameFlag": true,
+  "sessionDirSuffix": ".pi-sessions",
+  "llmConfig": "pi",
+  "env": {
+    "PI_CODING_AGENT_DIR": "{dataDir}/runtime/agentdir",
+    "PI_CODING_AGENT_SESSION_DIR": "{workdir}/.pi-sessions"
+  },
+  "args": ["--workdir", "{workdir}", "--session-id", "{sessionId}", "--session-name", "{sessionName}"],
+  "note": "本文件与 sidecar_driver.go 的 builtinPiDriver() 必须逐字一致（判据会比对）"
+}

@@ -1,0 +1,22 @@
+{
+  "name": "zcode",
+  "script": "sidecar.mjs",
+  "node": "auto",
+  "sessionNameFlag": false,
+  "sessionDirSuffix": ".zcode-sessions",
+  "llmConfig": "none",
+  "env": {
+    "ZCODE_DATA_BASE_DIR": "{dataDir}/runtime/zcode",
+    "ZCODE_SESSION_DIR": "{workdir}/.zcode-sessions"
+  },
+  "args": [
+    "--workdir",
+    "{workdir}",
+    "--session-id",
+    "{sessionId}",
+    "--mode",
+    "guarded"
+  ],
+  "note": "llmConfig=none：ZCode 用自己的 provider 配置（插件不猜它的格式）。cliPath 支持占位符；{rawfile} 指随包资源目录 —— 把 zcode.cjs 放进 rawfile/zcode/ 即可随包分发。用户也可在 <插件数据>/runtime/zcode/driver.json 覆盖成本机真实路径。",
+  "cliPath": "{rawfile}/zcode/zcode.cjs"
+}

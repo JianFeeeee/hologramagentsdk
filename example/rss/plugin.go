@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -119,7 +120,7 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	}
 	p.dataDir = filepath.Join(fmt.Sprint(dataDirVal), "rss")
 	if err := os.MkdirAll(p.dataDir, 0755); err != nil {
-		fmt.Printf("[%s] mkdir %s: %v\n", p.name, p.dataDir, err)
+		log.Printf("[%s] mkdir %s: %v", p.name, p.dataDir, err)
 	}
 	p.loadData()
 
@@ -184,7 +185,7 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	p.wg.Add(1)
 	go p.pollLoop()
 
-	fmt.Printf("[%s] started (%d feeds, poll every %dm)\n", p.name, len(p.feeds), pollMin)
+	log.Printf("[%s] started (%d feeds, poll every %dm)", p.name, len(p.feeds), pollMin)
 	return nil
 }
 
@@ -193,7 +194,7 @@ func (p *Plugin) Stop() error {
 	p.pollTicker.Stop()
 	p.wg.Wait()
 	p.saveData()
-	fmt.Printf("[%s] stopped\n", p.name)
+	log.Printf("[%s] stopped", p.name)
 	return nil
 }
 
@@ -486,7 +487,7 @@ func (p *Plugin) cleanupData() {
 	for _, f := range []string{"feeds.json"} {
 		path := filepath.Join(p.dataDir, f)
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-			fmt.Printf("[%s] onRemove cleanup %s: %v\n", p.name, path, err)
+			log.Printf("[%s] onRemove cleanup %s: %v", p.name, path, err)
 		}
 	}
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -285,7 +286,7 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	}
 	p.dataDir = filepath.Join(fmt.Sprint(dataDirVal), "calendar")
 	if err := os.MkdirAll(p.dataDir, 0755); err != nil {
-		fmt.Printf("[%s] mkdir %s: %v\n", p.name, p.dataDir, err)
+		log.Printf("[%s] mkdir %s: %v", p.name, p.dataDir, err)
 	}
 	p.loadEvents()
 
@@ -401,7 +402,7 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	p.wg.Add(1)
 	go p.remindLoop()
 
-	fmt.Printf("[%s] started (%d events)\n", p.name, len(p.events))
+	log.Printf("[%s] started (%d events)", p.name, len(p.events))
 	return nil
 }
 
@@ -409,7 +410,7 @@ func (p *Plugin) Stop() error {
 	p.remindTicker.Stop()
 	close(p.stopCh)
 	p.wg.Wait()
-	fmt.Printf("[%s] stopped\n", p.name)
+	log.Printf("[%s] stopped", p.name)
 	return nil
 }
 
@@ -611,9 +612,9 @@ func (p *Plugin) cleanupData() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if err := os.Remove(p.eventsFile()); err != nil && !os.IsNotExist(err) {
-		fmt.Printf("[calendar] onRemove cleanup: %v\n", err)
+		log.Printf("[calendar] onRemove cleanup: %v", err)
 	} else {
-		fmt.Printf("[calendar] onRemove removed %s\n", p.eventsFile())
+		log.Printf("[calendar] onRemove removed %s", p.eventsFile())
 	}
 }
 

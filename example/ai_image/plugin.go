@@ -17,15 +17,15 @@ import (
 )
 
 type Plugin struct {
-	name    string
-	sdk     *sdk.PluginSDK
-	client  *http.Client
-	apiKey  string
+	name     string
+	sdk      *sdk.PluginSDK
+	client   *http.Client
+	apiKey   string
 	provider string
-	model   string
-	size    string
-	baseURL string
-	dataDir string // <data>/ai_images：生成本地图片存放目录
+	model    string
+	size     string
+	baseURL  string
+	dataDir  string // <data>/ai_images：生成本地图片存放目录
 }
 
 func NewPluginFactory(name string, config map[string]interface{}) (sdk.Plugin, error) {
@@ -119,12 +119,12 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	s.Settings().RegisterDef(sdk.ConfigDef{
 		Key: "base_url", Default: "", Type: "string",
 		DisplayName: "Base URL", Description: "自定义 OpenAI 兼容网关地址（不带 /v1 尾缀，如 http://127.0.0.1:8081）；为空走官方 https://api.openai.com",
-		Category:    "ai_image",
+		Category: "ai_image",
 	})
 	s.Settings().RegisterDef(sdk.ConfigDef{
 		Key: "provider", Default: "openai", Type: "string",
 		DisplayName: "Provider", Description: "Image generation provider: openai / stability",
-		Category:    "ai_image",
+		Category: "ai_image",
 	})
 	s.Settings().RegisterDef(sdk.ConfigDef{
 		Key: "model", Default: "dall-e-3", Type: "string",
@@ -143,17 +143,17 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	p.size = getSetting(s.Settings(), "size", "1024x1024")
 	p.baseURL = strings.TrimRight(strings.TrimSpace(getSetting(s.Settings(), "base_url", "")), "/")
 
-// 生图本地存放目录：插件专属数据目录（SDK DataDir API，内核保证存在）。
-if p.sdk != nil {
-	if dd := s.Settings().DataDir(); dd != "" {
-		p.dataDir = dd
+	// 生图本地存放目录：插件专属数据目录（SDK DataDir API，内核保证存在）。
+	if p.sdk != nil {
+		if dd := s.Settings().DataDir(); dd != "" {
+			p.dataDir = dd
+		}
 	}
-}
-if p.dataDir == "" {
-	// 旧版内核无 DataDir API 时退到 /tmp
-	p.dataDir = filepath.Join(os.TempDir(), "homeagent_ai_images")
-}
-os.MkdirAll(p.dataDir, 0755)
+	if p.dataDir == "" {
+		// 旧版内核无 DataDir API 时退到 /tmp
+		p.dataDir = filepath.Join(os.TempDir(), "homeagent_ai_images")
+	}
+	os.MkdirAll(p.dataDir, 0755)
 
 	tp := p.name + "_"
 	s.RegisterTool(tp+"generate", sdk.ToolDef{
@@ -170,12 +170,12 @@ os.MkdirAll(p.dataDir, 0755)
 		},
 	}, p.handleGenerate)
 
-	fmt.Printf("[%s] started (provider=%s, model=%s)\n", p.name, p.provider, p.model)
+	log.Printf("[%s] started (provider=%s, model=%s)", p.name, p.provider, p.model)
 	return nil
 }
 
 func (p *Plugin) Stop() error {
-	fmt.Printf("[%s] stopped\n", p.name)
+	log.Printf("[%s] stopped", p.name)
 	return nil
 }
 
