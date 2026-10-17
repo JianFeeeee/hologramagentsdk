@@ -18,6 +18,5 @@
   "outdir": "dist",
   "bundle": true,
   "replaces": {},
-  "source_dirs": [],
-  "sdk": "1.4.0"
+  "source_dirs": []
 }
