@@ -1380,11 +1380,13 @@ func (p *Plugin) deliverToPi(branchID string, cargs map[string]interface{}) (int
 	}, nil
 }
 
-func (p *Plugin) recordDelivery(branchID, sessionID, text, status, note string) {
+// recordDelivery 记一条投递台账，返回它的 key（供完成时回填）。
+func (p *Plugin) recordDelivery(branchID, sessionID, text, status, note string) string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	key := fmt.Sprintf("%s-%d", branchID, time.Now().UnixNano())
 	p.ledger.Deliveries = append(p.ledger.Deliveries, Delivery{
-		Key:      fmt.Sprintf("%s-%d", branchID, time.Now().UnixNano()),
+		Key:      key,
 		BranchID: branchID, Text: truncate(text, 200),
 		SessionID: sessionID, Status: status, Result: note,
 		At: time.Now().Format(time.RFC3339),
@@ -1394,6 +1396,43 @@ func (p *Plugin) recordDelivery(branchID, sessionID, text, status, note string) 
 		p.ledger.Deliveries = p.ledger.Deliveries[n-200:]
 	}
 	_ = p.saveLocked()
+	return key
+}
+
+// completeDelivery 把完成/失败结果**回填**到某条投递台账。
+//
+// ★ 为什么必须有它（2026-10-17 生产实测缺陷）：
+//
+//	异步投递后，投递那一刻只能记 "accepted"；真正的结果几十秒后才由
+//	完成通知送回来。原先没人把它写回台账 ⇒ 台账永远停在 accepted，
+//	看板/agent 都**查不到任何结果**。
+//	实测后果：agent 自己起了一个 6 轮的 timer 去轮询"有没新 result 回填"，
+//	而那件事永远不会发生 —— 白等 30 分钟。
+//
+// 匹配策略：找该 branch 下**最新一条**尚未回填（Result 为空）的 accepted。
+// 不做"按 key 精确匹配"是因为完成通知里没有 key（sidecar 不知道它）——
+// 而同一 branch 的投递是串行投给同一个 pi 会话的，最新未完成那条就是它。
+func (p *Plugin) completeDelivery(branchID, sessionID, status, result string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for i := len(p.ledger.Deliveries) - 1; i >= 0; i-- {
+		d := &p.ledger.Deliveries[i]
+		if d.BranchID != branchID || d.Result != "" {
+			continue
+		}
+		if d.Status != "accepted" {
+			continue
+		}
+		d.Status = status
+		d.Result = truncate(result, 500)
+		if sessionID != "" {
+			d.SessionID = sessionID
+		}
+		_ = p.saveLocked()
+		log.Printf("[commondev] 台账回填：%s → %s", d.Key, status)
+		return
+	}
+	log.Printf("[commondev] 台账回填：branch=%s 没有待完成的 accepted 记录（通知可能早于投递落盘）", branchID)
 }
 
 func (p *Plugin) handleBranchStatus(args map[string]interface{}) (interface{}, error) {

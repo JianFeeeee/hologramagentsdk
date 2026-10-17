@@ -654,9 +654,13 @@ func (p *Plugin) makePromptNotifier() func(branchID string, payload map[string]i
 				reply = "（pi 未返回文本回复）"
 			}
 			text = fmt.Sprintf("[工程线 %s 任务完成 · session=%s]\n%s", branchID, sess, reply)
+			// ★ 回填台账：否则台账永远停在 accepted，谁都查不到结果
+			// （实测：agent 为此起了 6 轮 timer 空等）。
+			p.completeDelivery(branchID, sess, "done", reply)
 		case "prompt_error":
 			e, _ := payload["error"].(string)
 			text = fmt.Sprintf("[工程线 %s 任务失败 · session=%s]\n错误：%s", branchID, sess, e)
+			p.completeDelivery(branchID, sess, "failed", e)
 		default:
 			log.Printf("[commondev] 未知的通知事件 %q（branch=%s），忽略", event, branchID)
 			return
