@@ -75,6 +75,60 @@ HomeAgent 插件开发 SDK，用于构建与 HomeAgent 平台交互的智能插�
 违规会让**整条 LLM 请求**被上游拒绝（2026-09-13 生产事故：`device/<id>` 导致全量对话 403）。
 派生规则与约束见下方「输出通道」一节。
 
+## 业务字段透传（`InjectOptions.Payload`）
+
+插件可以在**一次注入**上携带自己的业务字段，内核**不解释、只透传**：
+
+```go
+type InjectOptions struct {
+	// ... 上面的 NoMemory / ContextPolicy / CleanerName / Priority ...
+
+	// Payload 是本次注入要额外并入事件 payload 的字段（不透明）。
+	// 合并时**内核保留键不可覆盖**（见下）。
+	Payload map[string]interface{}
+}
+```
+
+### 它解决什么
+
+`InputEvent.Payload` 本就是通道送入内核的请求体，业务字段本该在那里。但
+`IOInjector` 的注入方法全是 `(source, channel, text, opts)` —— 插件无法直接
+给 payload 加字段。`Payload` 就是这个扩展口。
+
+典型用途：**通道插件需要知道"这条消息是发给谁的"**。
+
+```go
+// 注入时声明身份（键名加插件前缀，避免与内核字段撞车）
+sdk.InjectInterruptTextOpts("qq", "qq", text, sdk.InjectOptions{
+	NoMemory: true,
+	Payload:  map[string]interface{}{"qq_uid": userID},
+})
+```
+
+### 内核怎么传递
+
+```
+注入点 opts.Payload
+  → 与真 payload 合并（保留键跳过）
+  → emitResponse / output_send 把**非保留键**原样写进 stageCtx.Extra
+```
+
+插件在 stage 里直接读：
+
+```go
+uid, ok := ctx.Extra["qq_uid"]
+```
+
+### 保留键不可覆盖
+
+`no_memory` / `context_policy` / `recall_policy` / `scene_policy` /
+`cleaner_name` / `priority` / `type` / `content` / `interrupt` / `stop` /
+`command` / `scene` / `source` / `channel` / `media_blocks` / `media_type`
+由内核语义决定，插件写了会被**跳过并记日志**（不是拒绝整次注入）。
+
+原因：允许覆盖等于允许插件伪造「这条不记记忆」或「这条要立即打断」——
+那是权限提升，不是便利。
+
 ## 注入行为与上下文裁剪（1.2.0）
 
 「记不记入记忆」与「要不要据此裁剪上下文」这两件事，原先只有 `ToolDef` 能声明；
@@ -112,6 +166,72 @@ InjectInterruptMediaOpts(source, channel, text string, blocks []ContentBlock, op
   避开「按原文裁剪、按清洗后计算」这种不一致。
 - `ChannelDef` 也有同名 `context_policy`（并且 1.2.0 给它补上了 JSON tag——通道定义要跨进程
   传给内核，而 `Cleaner` 是函数必须忽略；无 tag 时新增字段会被静默丢掉）。
+
+## 阶段钩子：触发时机与陷阱
+
+七个阶段，按一轮任务的真实时序：
+
+```
+on_input → pre_action → [ stepLLM 调模型 ] → post_action
+                ↓
+        工具循环: before_toolcall → [ 执行工具 ] → after_toolcall
+                ↓                                      ↓
+        （还有工具则回到 stepLLM）                  （否则）
+                ↓
+        before_output → [ 发送 ] → after_output
+```
+
+| 阶段 | 时机 | 典型用途 |
+|---|---|---|
+| `on_input` | 输入事件刚进内核 | 权限上下文绑定、改写用户输入 |
+| `pre_action` | **即将调 LLM** | 标记"接下来要等模型" |
+| `post_action` | LLM 已返回、工具未执行 | 审阅/改写模型的 tool_calls |
+| `before_toolcall` | 即将执行工具 | 权限门、参数校验、拦截 |
+| `after_toolcall` | 工具已返回 | 清洗结果、度量 |
+| `before_output` | 即将发送/输出 | 改写文本、发"正在输入"指示 |
+| `after_output` | 已发送/一轮结束 | 收尾、状态归位 |
+
+### ★★ 每个阶段只能注册一个 handler
+
+插件侧把 handler 存在 `map[string]StageHandler`（**阶段名为键**）⇒
+**同一阶段注册两次，后者静默覆盖前者**。
+
+```go
+s.RegisterStage(sdk.StageBeforeToolcall, p.permissionGate)  // ← 被下一条覆盖
+s.RegisterStage(sdk.StageBeforeToolcall, p.updateStatus)    // ← 实际生效的
+```
+
+后果不只是功能不生效 —— 如果被覆盖的是**权限门**，等于权限被静默关掉。
+而内核日志会显示 `2 handlers [qq qq]`，看起来完全正常。
+
+**正确做法：把多个功能合并进同一个 handler。** 每次阶段往返都有跨进程开销，
+合并写法本身也是性能要求。hmapdev 在**构建期**对重复注册告警：
+
+```
+⚠️  警告: stage StageBeforeToolcall 注册了 2 次
+    插件侧 stageHandlers 是 map（阶段名为键）⇒ 只有最后一次注册生效
+```
+
+### ★★ `before_output` / `after_output` 有**两条触发路径**
+
+它们的触发源不止"一轮结束"，还有"单次 output_send__调用"：
+
+| 来源 | Extra 内容 | 含义 |
+|---|---|---|
+| `emitResponse` | `input_source`、本轮 payload 透传字段 | **一轮的回复**（turn 边界） |
+| `output_send__<ch>` | `output_channel` / `output_meta` / `output_type` | **单次发送** |
+
+插件必须区分，否则会错：
+
+```go
+// 判断是否"单次发送"
+_, isSingleSend := ctx.Extra["output_meta"]
+```
+
+- **"正在输入"类指示器**：应挂在单次发送上（消息发出前开始、发出后结束）。
+  挂在轮次边界会漏 —— 一轮可能发多条消息。
+- **状态归位（回到"空闲"）**：**只能**由轮次边界触发。每条发送都归位的话，
+  状态会在干活期间反复跳回空闲。
 
 ## SDK API 接口
 
