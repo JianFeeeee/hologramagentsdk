@@ -842,20 +842,28 @@ type 枚举: text（文字）/ voice（语音转文字后发送）/ image（图�
 		NoMemory: true,
 	}, p.handleSendLike)
 
-	// 全局权限门：只有 QQ 当前输入需要受此插件约束；Bot 所有者始终完整放行。
-	s.RegisterStage(sdk.StageOnInput, p.onInputAuthContext, sdk.StageScopeGlobal)
-	s.RegisterStage(sdk.StageBeforeToolcall, p.beforeToolcall, sdk.StageScopeGlobal)
-	// 在线状态随阶段切换（默认关闭，见 statusAutoEnabled 的注释）。
+	// ★★ 每个 stage **只能注册一个 handler**（2026-10-18 踩到的坑）。
 	//
-	// ★ 三个钩子都只有一件事：调 p.applyStatus；**永远 return nil**。
-	//   状态是非致命错误 —— 不能因为它阻塞工具调用或改写回复。
-	s.RegisterStage(sdk.StageBeforeToolcall, p.stageStatusWorking, sdk.StageScopeGlobal)
-	s.RegisterStage(sdk.StageBeforeOutput, p.stageStatusThinking, sdk.StageScopeGlobal)
-	s.RegisterStage(sdk.StageAfterOutput, p.stageStatusOnline, sdk.StageScopeGlobal)
+	// 插件侧（工具链生成的 proc_main）把 handler 存在
+	// `stageHandlers map[string]StageHandler`（stage 名为键）⇒
+	// **同一 stage 注册两次，后者静默覆盖前者**。而之前写成：
+	//
+	//	s.RegisterStage(StageBeforeToolcall, p.beforeToolcall, Global)
+	//	s.RegisterStage(StageBeforeToolcall, p.stageStatusWorking, Global)  ← 覆盖了上面
+	//	s.RegisterStage(StageAfterOutput,    p.stageStatusOnline, Global)
+	//	s.RegisterStage(StageAfterOutput,    p.afterOutputAuthContext, Global) ← 覆盖了上面
+	//
+	// 后果不只是状态不切换 —— **QQ 的权限门被静默关掉了**（那几版部署里
+	// 任何人发消息都能调任何工具）。hmapdev 现在会在构建期对这类重复告警。
+	//
+	// 现在合并成一个 handler，每个 stage 一次注册。
+	s.RegisterStage(sdk.StageOnInput, p.onInputAuthContext, sdk.StageScopeGlobal)
+	s.RegisterStage(sdk.StageBeforeToolcall, p.stageBeforeToolcall, sdk.StageScopeGlobal)
+	s.RegisterStage(sdk.StageBeforeOutput, p.stageBeforeOutput, sdk.StageScopeGlobal)
+	s.RegisterStage(sdk.StageAfterOutput, p.stageAfterOutput, sdk.StageScopeGlobal)
 	// before_toolcall 的 Response 只用于拒绝当前工具。下一次模型补全到达时必须清掉，
 	// 否则内核会把它误当作“结束整个推理”的最终响应。
 	s.RegisterStage(sdk.StagePostAction, p.clearDeniedResponse, sdk.StageScopeGlobal)
-	s.RegisterStage(sdk.StageAfterOutput, p.afterOutputAuthContext, sdk.StageScopeGlobal)
 
 	// ---- HTTP server for NapCat webhook ----
 	mux := http.NewServeMux()

@@ -88,6 +88,14 @@ var qqStatusByName = map[string]qqStatus{
 	"离线": qqStatusHidden,
 }
 
+// minStatusInterval 是两次自动状态切换的最小间隔。
+//
+// 取 2 秒：stage 在每次工具调用都会触发，一轮对话可能有十几次；
+// 逐次发 HTTP 会把 NapCat 打满，且 QQ 侧看到状态疯狂闪烁。
+//
+// ★ 收尾（StageAfterOutput）**不受此限**，见 applyStatusForce。
+const minStatusInterval = 2 * time.Second
+
 // statusState 是自动状态切换的运行态。
 type statusState struct {
 	mu sync.Mutex
@@ -133,6 +141,27 @@ func (p *Plugin) setSelfDiyStatus(faceID, wording string) error {
 // ★ 这里刻意**不做排队重试**：状态是"当前观感"，错过一次就在下一个 stage 补上，
 // 没必要维护队列（队列会让状态滞后于阶段，反而更错）。
 func (p *Plugin) applyStatus(st qqStatus) {
+	p.applyStatusMaybe(st, true)
+}
+
+// applyStatusForce 跳过防抖（用于"收尾"：一轮结束时必须回在线）。
+//
+// ## 为什么必须有这个分支（2026-10-18 实测 bug）
+//
+// QQ 界面持续停「学习中」。原因：
+//
+//	BeforeOutput → AfterOutput 常常不足 2 秒
+//	⇒ 收尾状态被防抖拦住 ⇒ **永远回不到在线**
+//
+// 防抖本身是对的（防刷 NapCat），但**收尾不能被防抖** ——
+// 它是一轮结束时唯一的"归位"机会，错过就得等下一轮，
+// 那期间好友看到的是错的状态。
+func (p *Plugin) applyStatusForce(st qqStatus) {
+	p.applyStatusMaybe(st, false)
+}
+
+// applyStatusMaybe 是 applyStatus / applyStatusForce 的共同实现。
+func (p *Plugin) applyStatusMaybe(st qqStatus, debounce bool) {
 	if !p.statusAutoEnabled.Load() {
 		return
 	}
@@ -141,7 +170,7 @@ func (p *Plugin) applyStatus(st qqStatus) {
 		p.statusState.mu.Unlock()
 		return
 	}
-	if time.Since(p.statusState.lastAt) < 2*time.Second {
+	if debounce && time.Since(p.statusState.lastAt) < minStatusInterval {
 		p.statusState.mu.Unlock()
 		return
 	}
@@ -249,23 +278,6 @@ func normalizeStatusName(s string) (qqStatus, bool) {
 //
 // 这与 typing（set_input_status）的处置一致：那套也从不因失败中断对话。
 
-func (p *Plugin) stageStatusWorking(ctx *sdk.StageContext) error {
-	p.applyStatus(qqStatusWorking)
-	return nil
-}
-
-func (p *Plugin) stageStatusThinking(ctx *sdk.StageContext) error {
-	// "生成回复中"用「学习中」的预置状态：QQ 没有"思考中"这个预置项。
-	// 想要精确文字可调 qq_set_diy_status 工具（自定义 face_id + wording）。
-	p.applyStatus(qqStatusStudy)
-	return nil
-}
-
-func (p *Plugin) stageStatusOnline(ctx *sdk.StageContext) error {
-	p.applyStatus(qqStatusOnline)
-	return nil
-}
-
 // ======== 工具 handler ========
 
 // handleSetStatus 处理 qq_set_status：手动设预置在线状态。
@@ -318,4 +330,55 @@ func (p *Plugin) handleSetDiyStatus(args map[string]interface{}) (interface{}, e
 		"face_id": faceID,
 		"wording": wording,
 	}, nil
+}
+
+// ======== 合并后的 stage 入口 ========
+//
+// ★★ 为什么必须合并（2026-10-18 踩到的真坑）
+//
+// 工具链生成的 proc_main 把 stage handler 存在
+// `stageHandlers map[string]sdk.StageHandler`（**stage 名为键**）：
+//
+//	func(stage sdk.Stage, handler sdk.StageHandler) {
+//		stageHandlers[string(stage)] = handler   // ← 后者覆盖前者
+//	}
+//
+// 所以一个插件**每个 stage 只能有一个 handler**。原先写成两行注册：
+//
+//	RegisterStage(StageBeforeToolcall, p.beforeToolcall, Global)   ← 权限门
+//	RegisterStage(StageBeforeToolcall, p.stageStatusWorking, Global) ← 覆盖了它
+//
+// 后果不只是"状态不切换"——**QQ 的权限门被静默关掉了**。
+// hmapdev 现在会在**构建期**对这类重复告警（开发者在构建输出里必然看见）。
+
+// stageBeforeToolcall 把「权限门」与「状态切换」合成一次注册。
+//
+// 顺序：先跑权限门（它可能拒绝工具），再切状态。
+// 即使权限门拒绝，状态也该显示"在干活"——拒绝也是 agent 在工作。
+func (p *Plugin) stageBeforeToolcall(ctx *sdk.StageContext) error {
+	if err := p.beforeToolcall(ctx); err != nil {
+		return err
+	}
+	p.applyStatus(qqStatusWorking)
+	return nil
+}
+
+// stageBeforeOutput 把「状态切换」接到 before_output（该 stage 无其它 handler）。
+func (p *Plugin) stageBeforeOutput(ctx *sdk.StageContext) error {
+	// "生成回复中"用「学习中」的预置状态：QQ 没有"思考中"这个预置项。
+	// 想要精确文字可调 qq_set_diy_status 工具（自定义 face_id + wording）。
+	p.applyStatus(qqStatusStudy)
+	return nil
+}
+
+// stageAfterOutput 把「清理 auth 上下文」与「状态归位」合成一次注册。
+//
+// 顺序：先清理（原有语义，必须执行），再切状态（**force**，不受防抖）。
+// 清理不能因状态失败而跳过 —— 它关系到下一轮的权限判定。
+func (p *Plugin) stageAfterOutput(ctx *sdk.StageContext) error {
+	if err := p.afterOutputAuthContext(ctx); err != nil {
+		return err
+	}
+	p.applyStatusForce(qqStatusOnline)
+	return nil
 }

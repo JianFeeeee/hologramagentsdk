@@ -684,6 +684,17 @@ func resolveSDKPath(sdkPath string) string {
 func buildTarget(plg *PlgConfig, target, outDir, sdkPath string) {
 	os.MkdirAll(outDir, 0755)
 
+	// ★ 构建期静态检查：同一 stage 被重复注册。
+	//
+	// 这类错误编译器不报、运行时不报错、内核日志看着正常
+	// （`2 handlers [qq qq]`），只有源码检查能发现。
+	// 告警打在构建输出里 —— 开发者必然看见（用户原话：
+	// 「工具链这个编译器警告就是给开发者看的」）。
+	//
+	// 不中断构建：存量插件里重复注册可能是本意，直接 fail 会让它们
+	// 升 SDK 后无法构建。
+	warnDuplicateStageRegs(".")
+
 	// Lua: no compilation, package source directly
 	if target == "lua" {
 		writePluginJSON(plg, nil, "main.lua")

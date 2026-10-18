@@ -39,9 +39,9 @@ func TestStatusStageNeverBlocksOnFailure(t *testing.T) {
 		name string
 		fn   func(*sdk.StageContext) error
 	}{
-		{"before_toolcall", p.stageStatusWorking},
-		{"before_output", p.stageStatusThinking},
-		{"after_output", p.stageStatusOnline},
+		{"before_toolcall", p.stageBeforeToolcall},
+		{"before_output", p.stageBeforeOutput},
+		{"after_output", p.stageAfterOutput},
 	} {
 		if err := c.fn(ctx); err != nil {
 			t.Fatalf("★ %s 返回了 error（%v）—— 状态设置是非致命错误，"+
@@ -55,7 +55,7 @@ func TestStatusStageNoopWhenDisabled(t *testing.T) {
 	p := &Plugin{name: "qq", napcatURL: "http://127.0.0.1:1"}
 	// statusAutoEnabled 默认零值 false
 	ctx := &sdk.StageContext{}
-	if err := p.stageStatusWorking(ctx); err != nil {
+	if err := p.stageBeforeToolcall(ctx); err != nil {
 		t.Fatalf("开关关闭时不应出错: %v", err)
 	}
 	p.statusState.mu.Lock()
