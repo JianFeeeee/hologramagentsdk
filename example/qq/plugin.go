@@ -197,7 +197,12 @@ type Plugin struct {
 	downloadMu     sync.Mutex
 	downloadTasks  []*DownloadTask
 	typingMu       sync.Mutex
-	typingMap      map[int64]*typingState
+	// toolCount 是本次启动实际注册的工具数，仅用于启动日志。
+	//
+	// 存在的原因：这里原本在日志里**硬编码 15**，工具加到 24 后日志仍报 15，
+	// 导致排查时误以为装的是旧版。日志必须说真话。
+	toolCount int
+	typingMap map[int64]*typingState
 
 	// statusAutoEnabled 是「随内核阶段自动切 QQ 在线状态」的总开关。
 	//
@@ -643,6 +648,49 @@ type 枚举: text（文字）/ voice（语音转文字后发送）/ image（图�
 		},
 	}, p.handleGetFriends)
 
+	// ★ QQ空间（Qzone）说说。
+	//
+	// ## 2026-10-18 的误判，引以为戒
+	//
+	// 我曾断言“NapCat 不支持发说说”，依据是探测返回
+	// 「不支持的Api SendQzoneMsg」。**那是我的调用方式错了**：
+	// NapCat 的 action 名是下划线式的 `send_qzone_msg`，
+	// 而我用的是源码里的**类名** `SendQzoneMsg`。
+	//
+	// 换对名字后：
+	//
+	//	POST /send_qzone_msg {"content":"…","ugc_right":64}
+	//	→ retcode 0, tid=a5c1ca56d081d46a789a0200（实测成功，已删除）
+	//
+	// 教训：“API 不存在”这个结论必须用**真实 action 名**验证；
+	// 源码里的类名/文件名都不是调用名。
+	p.regTool(s, sdk.ToolDef{
+		Name: tp + "send_qzone_msg",
+		Description: "发QQ空间说说。支持纯文字或带图，可设查看权限。" +
+			"ugc_right: 1所有人可见 4好友可见 16部分好友可见 64仅自己可见 128部分好友不可见" +
+			"（16/128 需同时给 target_uins）。返回 tid，可用于 delete_qzone_msg。",
+		NoMemory: false,
+		Parameters: map[string]interface{}{
+			"type": "object", "properties": map[string]interface{}{
+				"content":     map[string]interface{}{"type": "string", "description": "说说正文"},
+				"images":      map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}, "description": "图片数组，支持 http(s):// / file:// / base64:// ，自动上传"},
+				"ugc_right":   map[string]interface{}{"type": "integer", "description": "查看权限，默认 1（所有人可见）。见工具说明"},
+				"target_uins": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "integer"}, "description": "ugc_right 为 16/128 时作用的好友 QQ 号数组"},
+			}, "required": []string{"content"},
+		},
+	}, p.handleSendQzoneMsg)
+
+	p.regTool(s, sdk.ToolDef{
+		Name:        tp + "delete_qzone_msg",
+		Description: "删除一条QQ空间说说。tid 来自 send_qzone_msg 或空间列表。",
+		NoMemory:    false,
+		Parameters: map[string]interface{}{
+			"type": "object", "properties": map[string]interface{}{
+				"tid": map[string]interface{}{"type": "string", "description": "说说 tid"},
+			}, "required": []string{"tid"},
+		},
+	}, p.handleDeleteQzoneMsg)
+
 	p.regTool(s, sdk.ToolDef{
 		Name: tp + "get_recent_contacts", Description: "查看最近有消息的联系人和群聊，返回最近消息概览（含消息数、最后一条消息内容）。可用于发现有谁发过消息但未处理。",
 		NoMemory: false,
@@ -857,8 +905,34 @@ type 枚举: text（文字）/ voice（语音转文字后发送）/ image（图�
 	// 任何人发消息都能调任何工具）。hmapdev 现在会在构建期对这类重复告警。
 	//
 	// 现在合并成一个 handler，每个 stage 一次注册。
+	//
+	// ## 状态映射（用户定义的语义，2026-10-18）
+	//
+	//	学习中  = agent 正在**等待 LLM**
+	//	搬砖中  = 真正**执行 toolcall**
+	//	在线    = **空闲**
+	//
+	// 对应到内核 stage 时序（task.go）：
+	//
+	//	pre_action  ──→ stepLLM() ──→ ★等 LLM★ ──→ post_action
+	//	                                            ↓
+	//	                         工具循环: before_toolcall → ★跑工具★ → after_toolcall
+	//	                                            ↓
+	//	                         再次 stepLLM（第二轮工具）或 before_output
+	//
+	// 所以：
+	//	pre_action       → 学习中（即将调 LLM，接下来就是等）
+	//	before_toolcall  → 搬砖中（即将/正在跑工具）
+	//	after_toolcall   → 学习中（工具回来了，又要等 LLM 决定下一步）
+	//	after_output     → 在线（一轮真正结束）
+	//
+	// ★ `before_output` **不**改状态：它是「LLM 已返回、即将输出」，
+	// 既不是等 LLM 也不是跑工具；若在那里写“学习中”会让状态在收尾时
+	// 继续挂着，看起来像永远在想。
 	s.RegisterStage(sdk.StageOnInput, p.onInputAuthContext, sdk.StageScopeGlobal)
+	s.RegisterStage(sdk.StagePreAction, p.stagePreAction, sdk.StageScopeGlobal)
 	s.RegisterStage(sdk.StageBeforeToolcall, p.stageBeforeToolcall, sdk.StageScopeGlobal)
+	s.RegisterStage(sdk.StageAfterToolcall, p.stageAfterToolcall, sdk.StageScopeGlobal)
 	s.RegisterStage(sdk.StageBeforeOutput, p.stageBeforeOutput, sdk.StageScopeGlobal)
 	s.RegisterStage(sdk.StageAfterOutput, p.stageAfterOutput, sdk.StageScopeGlobal)
 	// before_toolcall 的 Response 只用于拒绝当前工具。下一次模型补全到达时必须清掉，
@@ -879,7 +953,12 @@ type 枚举: text（文字）/ voice（语音转文字后发送）/ image（图�
 		}
 	}()
 
-	log.Printf("[qq] plugin started: %s (%d tools)", p.name, 15)
+	// ★ 用**真实计数**，不写死。
+	//
+	// 这里原本是硬编码的 `15` —— 后来工具加到 24 个，日志仍然报 15。
+	// 后果：排查“qzone 工具装上没”时看日志说 15，误以为装的是旧版，
+	// 白折腾了几轮。这类“日志说谎”比不日志更坏。
+	log.Printf("[qq] plugin started: %s (%d tools)", p.name, p.toolCount)
 	return nil
 }
 
@@ -914,6 +993,7 @@ func (p *Plugin) Stop() error {
 
 func (p *Plugin) regTool(s *sdk.PluginSDK, def sdk.ToolDef, handler sdk.ToolHandler) {
 	s.RegisterTool(def.Name, def, handler)
+	p.toolCount++
 }
 
 // ======== Bot Identity ========
@@ -1409,6 +1489,29 @@ func isInternalToolCall(ctx *sdk.StageContext) bool {
 }
 
 // isAtBot checks if the message contains an @-mention of the bot.
+//
+// ★ **@全体成员（qq="all"）不算 @bot**（2026-10-18 修正）。
+//
+// ## 为什么改（现场事实）
+//
+// 原实现把 `v == "all"` 也当命中：
+//
+//	if v == botIDStr || v == "all" { return true }
+//
+// 后果：群里任何人 `@全体成员` 都会拉起 bot。那不是“在叫 bot”，
+// 而是“在叫所有人” —— 一个是**针对性请求**，一个是**广播**，
+// 语义完全不同。
+//
+// 现场佐证：群友直接质问过“又没@你，你就这么确定是找你的？”。
+//
+// ## 为什么不能“宽松一点”
+//
+// 群里发言代表公开可见。误响应的代价不是“多回一句”，而是
+// **在未被邀请的场合发言**。宁可漏响应（用户会再 @ 一次），
+// 不能误响应。
+//
+// 注：如果将来确实要支持“@全体就响应”，应做成显式配置项
+// （默认关闭），而不是藏在 @ 判定里默认生效。
 func (p *Plugin) isAtBot(msg interface{}) bool {
 	segments, ok := msg.([]interface{})
 	if !ok {
@@ -1425,7 +1528,8 @@ func (p *Plugin) isAtBot(msg interface{}) bool {
 				if qq, ok := data["qq"]; ok {
 					switch v := qq.(type) {
 					case string:
-						if v == botIDStr || v == "all" {
+						// "all"（@全体成员）**不**算命中，见上方注释。
+						if v == botIDStr {
 							return true
 						}
 					case float64:
@@ -1526,6 +1630,31 @@ func (p *Plugin) beforeToolcall(ctx *sdk.StageContext) error {
 	// 为何放在 `auth.Active` 判断**之前**：internal 与"非本插件来源"在语义上
 	// 是同一类（都不是"一条 QQ 用户消息"），走同一条放行路径最不容易出错。
 	if isInternalToolCall(ctx) {
+		// ★ 内部委派**不得向群聊发送**（2026-10-18 现场事故）。
+		//
+		// ## 事故
+		//
+		// offload 子 agent 的「分诊汇报」把本应发给用户的进度播报
+		// **发到了群里**（meta={"group_id": 979911915}）。
+		//
+		// 根因：子 agent 被授予全部输出通道（AllowedOutputs=nil，用户明确要求
+		// “持有全部输出通道”），于是它能自己选目标 —— 而它只从上下文里看到
+		// 一个群号，就选了群。
+		//
+		// ## 为什么不允许
+		//
+		// 群的发言代表公开可见。子 agent 看不到“这个群里刚刚是谁 @ 了我”、
+		// 也分不清“这句是回给谁的”，它只有一句任务描述。
+		// 让它自由向群发言 = 把私聊级别的判断拿到公开场合执行。
+		//
+		// 真需要群里回时，由**父**（有完整上下文与用户身份）来发 —— 父的
+		// comefrom 是 user，不受这条约束。
+		if tc := outputSendGroupTarget(ctx, p.name); tc != "" {
+			msg := fmt.Sprintf("内部委派不得向群聊发送消息（目标群 %s）。"+
+				"请改发私聊，或把结果返回给父由它决定", tc)
+			p.setDenial(ctx, msg)
+			return nil
+		}
 		return nil
 	}
 	tc := &ctx.ToolCalls[0]
@@ -1644,7 +1773,7 @@ func (p *Plugin) enqueueInterrupt(msgType string, userID, groupID, messageID int
 		return
 	}
 	if p.batchWindow <= 0 {
-		p.injectInterrupt(single, p.interruptLevel(owner))
+		p.injectInterrupt(single, p.interruptLevel(owner), qqInjectPayload(userID, groupID, msgType == "group"))
 		return
 	}
 	key := qqBatchKey(msgType, groupID, userID)
@@ -1696,8 +1825,33 @@ func (p *Plugin) interruptLevel(owner bool) string {
 	return sdk.PriorityL1
 }
 
+// qqInjectPayload 构造注入的 payload 扩展：告诉内核“这一轮是哪个用户引起的”。
+//
+// ## 为什么需要它（2026-10-18）
+//
+// 「对方正在输入中」必须只在**自己引起的** before_output 里发，而且要知道
+// 发给谁。但 `before_output` 的 stageCtx 是内核新建的（emitResponse），
+// 与 `on_input` 的 stageCtx 不共享 Extra（后者是局部变量）。
+//
+// ## 为什么走 Payload 而不是另立一个字段
+//
+// `InputEvent.Payload` 本就是通道送入内核的请求体，身份信息本该在那里。
+// 第一版我加了 `InjectOptions.Meta` —— 那是把同一件事做了两遍，
+// 而且只服务注入路径。现在用 `InjectOptions.Payload`：
+// 内核把**非保留键**原样透传到 stageCtx.Extra，HTTP/CLI/ACP 也能共用。
+//
+// ★ 键名选 `qq_uid` 而不是 `user_id`：后者太通用，将来内核若加同名字段
+// 会撞车；加插件名前缀是低成本的隔离。
+func qqInjectPayload(userID, groupID int64, isGroup bool) map[string]interface{} {
+	if userID <= 0 || isGroup {
+		// 群聊不发输入指示（QQ 的“正在输入”只在私聊标题栏有意义）。
+		return nil
+	}
+	return map[string]interface{}{"qq_uid": userID}
+}
+
 // injectInterrupt 投递一条中断提示（NoMemory：HTTP 侧来的不是对话内容）。
-func (p *Plugin) injectInterrupt(text, level string) {
+func (p *Plugin) injectInterrupt(text, level string, payload map[string]interface{}) {
 	if text == "" {
 		return
 	}
@@ -1716,6 +1870,8 @@ func (p *Plugin) injectInterrupt(text, level string) {
 		Priority: level,
 		// 中断文本是路由/取正文的指令，不是对话内容，不据它召回。
 		RecallPolicy: sdk.RecallPolicyNone,
+		// 业务字段（身份）随 payload 走，内核原样透传到本轮 stageCtx.Extra。
+		Payload: payload,
 	})
 }
 
@@ -1733,7 +1889,7 @@ func (p *Plugin) flushBatch(key string) {
 		text = p.buildBatchInterrupt(b)
 	}
 	// 一批里只要有一条来自 Bot 所有者，整批按 L2 投递（不因混入路人消息而降低）。
-	p.injectInterrupt(text, p.interruptLevel(b.owner))
+	p.injectInterrupt(text, p.interruptLevel(b.owner), qqInjectPayload(b.userID, b.groupID, b.isGroup))
 }
 
 // flushAllBatches 停机前把未到点的批次立刻投出去（best effort）。
@@ -1932,11 +2088,24 @@ func (p *Plugin) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	// 必须在注入前记录 OneBot 可信来源；权限判断绝不依赖昵称、正文或模型参数。
 	p.activateAuthContext(evt.MessageID, evt.UserID, evt.GroupID, evt.MessageType == "group")
 
-	if evt.MessageType == "private" {
-		p.startTyping(evt.UserID)
-	}
-
-	// 合并投递：同一会话同一发送者在 batchWindow 内的连续消息并成一次中断。
+	// ★ 「对方正在输入中」**不**在这里发起。
+	//
+	// ## 旧写法错在哪（2026-10-18）
+	//
+	// 原本是 `if private { p.startTyping(evt.UserID) }` —— 消息**刚到**
+	// 就挂上“正在输入”，但此时：
+	//   · agent 还没接受这条消息（下面才 enqueueInterrupt）
+	//   · 批量合并窗口内可能还要等一段
+	//   · 权限门可能直接拒掉（那人就一直看着“正在输入”却等不到回复）
+	// 而且 typingLoop 有 30 秒超时 —— agent 跑得慢就自己灭了，
+	// 回复还在路上。
+	//
+	// 正确边界：`before_output` 开始、`after_output` 结束（见 status.go
+	// 的 stageBeforeOutput / stageAfterOutput），且只处理 output_channel==qq
+	// 且带本人身份的注入（`inject_meta`）。
+	//
+	// 这样做的前提是：身份要由注入方声明（InjectOptions.Meta），
+	// 内核透传到本轮 stageCtx.Extra["inject_meta"]。
 	p.enqueueInterrupt(evt.MessageType, evt.UserID, evt.GroupID, evt.MessageID, nickname, interrupt, p.isOwner(evt.UserID), highRisk)
 
 	w.WriteHeader(http.StatusOK)
@@ -2270,10 +2439,20 @@ func (p *Plugin) handleChannelOutput(args map[string]interface{}) (interface{}, 
 		return nil, fmt.Errorf("meta 中需要 group_id 或 user_id 字段。用 output_send__qq_help 查看格式说明")
 	}
 
-	if userID > 0 {
-		p.stopTyping(userID)
-	}
-
+	// ★ 「对方正在输入中」**不**在这里停。
+	//
+	// ## 旧写法错在哪（2026-10-18）
+	//
+	// 原本是 `if userID > 0 { p.stopTyping(userID) }` —— 它是挂在
+	// **发送消息**上的，而发送消息可能是：
+	//   · 群聊消息（与死个私聊用户无关）
+	//   · 给**另一个人**的私聊消息
+	//   · 同一个人但只是中途的一句话，而推理还在继续
+	//
+	// 后果：正在跟 A 私聊时 agent 发了条群消息，A 的输入指示被莫名关掉
+	// —— 他以为 bot 跑了。
+	//
+	// 正确边界：`after_output`（一轮真正结束），见 status.go。
 	var sendErr error
 	switch rawType {
 	case "text":
@@ -3642,9 +3821,28 @@ func oneBotError(raw json.RawMessage) error {
 	return nil
 }
 
+// setInputStatus 发「对方正在输入中」指示。
+//
+// ★★ `user_id` 必须传**字符串**（2026-10-18 实测）。
+//
+// NapCat 4.8.x 接受数字，但 4.18.37 的 payloadSchema 把它声明成 Type.String：
+//
+//	const PayloadSchema = Type.Object({
+//	  user_id: Type.String({ description: 'QQ号' }),
+//	  event_type: Type.Number({...}),
+//	})
+//
+// 传数字会直接报 `uid is empty`（不是 schema 错误 —— 更容易误判成"用户不存在"）。
+// 实测：
+//
+//	{"user_id":1,"event_type":1}            → uid is empty
+//	{"user_id":"1456128421","event_type":1} → retcode 0, errMsg success
+//
+// 这个差异不会引起编译错误、也不会引起内核告警 —— 只会让功能**静默失效**
+// （Qzone 那批 API 在 4.18.37 仍未支持，同理）。
 func (p *Plugin) setInputStatus(userID int64, eventType int) (interface{}, error) {
 	return p.napcat("set_input_status", map[string]interface{}{
-		"user_id":    userID,
+		"user_id":    strconv.FormatInt(userID, 10),
 		"event_type": eventType,
 	})
 }
@@ -3758,4 +3956,49 @@ func NewPluginFactory(name string, config map[string]interface{}) (sdk.Plugin, e
 		dmPolicy:             "open",
 		groupPolicy:          "open",
 	}, nil
+}
+
+// outputSendGroupTarget 检查一次工具调用是不是「向群聊发送消息」，
+// 是的话返回群号字符串，否则返回空串。
+//
+// ## 为什么需要它（2026-10-18 现场事故）
+//
+// offload 子 agent 播报进度时调 `output_send__qq` 并填了
+// `meta={"group_id": 979911915}` —— 本该私聊给用户的进度播报进了群。
+//
+// 子 agent 的 comefrom 是 `internal`，而原先 `isInternalToolCall(ctx)`
+// 一放行就 `return nil`，**内部调用完全不检查目标**。
+//
+// ## 为什么在 before_toolcall 拦而不是 handleChannelOutput
+//
+// `ToolHandler` 只收 `args`，**拿不到帧上的 comefrom**（SDK 契约如此）。
+// 只有 stage 帧能看到 `comefrom` + `ToolCalls`。所以必须在阶段里拦。
+//
+// 拦的方式是写 denial（与现有权限门一致），而不是返回 error ——
+// 返回 error 会让整轮任务失败；写 denial 让模型收到“这条被拒、换个目标”的
+// 明确指令，与其它权限拒绝的行为一致。
+func outputSendGroupTarget(ctx *sdk.StageContext, selfName string) string {
+	if ctx == nil || len(ctx.ToolCalls) == 0 {
+		return ""
+	}
+	tc := &ctx.ToolCalls[0]
+	if tc.Name != "output_send__"+selfName {
+		return ""
+	}
+	meta, _ := tc.Arguments["meta"].(string)
+	if meta == "" {
+		return ""
+	}
+	var m struct {
+		GroupID int64 `json:"group_id"`
+	}
+	if err := json.Unmarshal([]byte(meta), &m); err != nil {
+		// meta 解析失败时不拦：让 handleChannelOutput 去报格式错，
+		// 那里本来就有更准确的提示。
+		return ""
+	}
+	if m.GroupID <= 0 {
+		return ""
+	}
+	return strconv.FormatInt(m.GroupID, 10)
 }

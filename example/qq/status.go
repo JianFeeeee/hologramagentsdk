@@ -34,6 +34,7 @@ package main
 // 4. **失败静默**：只记一次日志（同类失败合并计数），不打爆日志。
 
 import (
+	"encoding/json"
 	"log"
 	"strings"
 	"sync"
@@ -351,6 +352,26 @@ func (p *Plugin) handleSetDiyStatus(args map[string]interface{}) (interface{}, e
 // 后果不只是"状态不切换"——**QQ 的权限门被静默关掉了**。
 // hmapdev 现在会在**构建期**对这类重复告警（开发者在构建输出里必然看见）。
 
+// stagePreAction：即将调 LLM ⇒ 「学习中」。
+//
+// ## 为什么这里才是“等 LLM”（2026-10-18 用户定义语义）
+//
+//	学习中  = agent 正在**等待 LLM**
+//	搬砖中  = 真正**执行 toolcall**
+//	在线    = **空闲**
+//
+// 内核时序（task.go）：
+//
+//	pre_action ──→ stepLLM() ──→ ★等 LLM★ ──→ post_action
+//
+// `pre_action` 就在 `stepLLM()` **之前** —— 这是唯一能提前标记
+// “接下来要等模型”的位置。之前把「学习中」挂在 `before_output` 上是错的：
+// 那个时刻 LLM **已经返回**了，等的是输出而不是等模型。
+func (p *Plugin) stagePreAction(ctx *sdk.StageContext) error {
+	p.applyStatus(qqStatusStudy)
+	return nil
+}
+
 // stageBeforeToolcall 把「权限门」与「状态切换」合成一次注册。
 //
 // 顺序：先跑权限门（它可能拒绝工具），再切状态。
@@ -363,11 +384,39 @@ func (p *Plugin) stageBeforeToolcall(ctx *sdk.StageContext) error {
 	return nil
 }
 
-// stageBeforeOutput 把「状态切换」接到 before_output（该 stage 无其它 handler）。
-func (p *Plugin) stageBeforeOutput(ctx *sdk.StageContext) error {
-	// "生成回复中"用「学习中」的预置状态：QQ 没有"思考中"这个预置项。
-	// 想要精确文字可调 qq_set_diy_status 工具（自定义 face_id + wording）。
+// stageAfterToolcall：工具跑完了，接下来又要等 LLM 决定下一步 ⇒ 「学习中」。
+//
+// 不回到「学习中」的话，状态会在整个工具循环期间一直挂着「搬砖中」——
+// 看起来像工具卡住了。
+func (p *Plugin) stageAfterToolcall(ctx *sdk.StageContext) error {
 	p.applyStatus(qqStatusStudy)
+	return nil
+}
+
+// stageBeforeOutput：**不改在线状态**，只负责「对方正在输入中」的起点。
+//
+// ## 为什么这里不写状态
+//
+// `before_output` 是「LLM 已返回、即将输出」——既不是等 LLM 也不是跑工具。
+// 在那里写「学习中」会让状态在收尾时继续挂着，看起来像永远在想。
+func (p *Plugin) stageBeforeOutput(ctx *sdk.StageContext) error {
+	// ★ 「对方正在输入中」的**起点**。
+	//
+	// ## 为什么是 before_output（而不是消息到达时）
+	//
+	// 旧写法在 HTTP 入口 startTyping —— 那时 agent 还没接受消息、可能在
+	// 批量合并窗口里等、甚至可能被权限门拒掉；typingLoop 还有 30 秒超时，
+	// agent 跑得慢就自己灭了，回复还在路上。
+	//
+	// `before_output` 在内核里**每轮只触发一次**（emitResponse），
+	// 正好是“这一轮的天花板要出了”的时刻 —— 与打字指示器的语义完全对上。
+	//
+	// ## 为什么读 payload 透传的字段而不是 p.auth
+	//
+	// p.auth 是“最近一次输入”的全局状态，并发多个私聊会**串号**
+	// （A 的输入指示可能打到 B 身上）。注入 payload 是**注入方声明**的、
+	// 随这一轮走到 stageCtx.Extra 的不透明数据，不会串。
+	p.startTypingForTurn(ctx)
 	return nil
 }
 
@@ -376,9 +425,81 @@ func (p *Plugin) stageBeforeOutput(ctx *sdk.StageContext) error {
 // 顺序：先清理（原有语义，必须执行），再切状态（**force**，不受防抖）。
 // 清理不能因状态失败而跳过 —— 它关系到下一轮的权限判定。
 func (p *Plugin) stageAfterOutput(ctx *sdk.StageContext) error {
+	// ★ 「对方正在输入中」的**终点**：先停打字指示（不能让 auth 清理失败
+	// 就永久留在“正在输入”），再清理 auth，最后状态归位。
+	p.stopTypingForTurn(ctx)
 	if err := p.afterOutputAuthContext(ctx); err != nil {
 		return err
 	}
 	p.applyStatusForce(qqStatusOnline)
 	return nil
+}
+
+// ======== 「对方正在输入中」的按轮驱动 ========
+
+// turnTypingUser 从这一轮的 stage 上下文里取出发输入指示的目标用户。
+//
+// 只认**注入方声明**的 payload 字段：它随这一轮走到 stageCtx.Extra，不会串号。
+//
+// 返回 0 表示这一轮不该发输入指示（群聊 / 非 QQ 来源 / 无身份声明）。
+//
+// ## 为什么不用 p.auth（2026-10-18）
+//
+// p.auth 是"最近一次输入"的全局状态。并发两个私聊时，A 的消息进来后
+// 内核可能先跑 B 那一轮 —— before_output 读 p.auth 就拿到 B，
+// A 的输入指示会**打到 B 身上**（用户看到的是"你在跟谁说话"的错乱）。
+func (p *Plugin) turnTypingUser(ctx *sdk.StageContext) int64 {
+	if ctx == nil {
+		return 0
+	}
+	ctx.RLock()
+	defer ctx.RUnlock()
+	// 只处理自己引起的轮次：别的插件/通道的输出不该动我们的输入指示器。
+	if src, _ := ctx.Extra["input_source"].(string); src != "" && src != p.name {
+		return 0
+	}
+	// `qq_uid` 是 qq 自己在 InjectOptions.Payload 里声明的，内核原样透传。
+	// 加 qq_ 前缀是为了避免将来与内核字段撞车。
+	uid, ok := ctx.Extra["qq_uid"]
+	if !ok {
+		return 0
+	}
+	// 经 proc 协议（JSON）往返，数字可能变成 float64 或 json.Number。
+	switch v := uid.(type) {
+	case float64:
+		return int64(v)
+	case int64:
+		return v
+	case int:
+		return int64(v)
+	case json.Number:
+		n, err := v.Int64()
+		if err == nil {
+			return n
+		}
+	}
+	return 0
+}
+
+// startTypingForTurn 在 before_output 发起「对方正在输入中」。
+func (p *Plugin) startTypingForTurn(ctx *sdk.StageContext) {
+	uid := p.turnTypingUser(ctx)
+	if uid <= 0 {
+		return
+	}
+	p.startTyping(uid)
+	log.Printf("[qq] 对方正在输入中 → 开始（uid=%d，before_output）", uid)
+}
+
+// stopTypingForTurn 在 after_output 结束「对方正在输入中」。
+//
+// ★ 即使这一轮没发过指示（turnTypingUser 返回 0）也要兜一次：
+// 上一轮若因超时/异常没停干净，这里能收尾。stopTyping 对不存在的条目是空操作。
+func (p *Plugin) stopTypingForTurn(ctx *sdk.StageContext) {
+	uid := p.turnTypingUser(ctx)
+	if uid <= 0 {
+		return
+	}
+	p.stopTyping(uid)
+	log.Printf("[qq] 对方正在输入中 → 结束（uid=%d, after_output）", uid)
 }
