@@ -699,6 +699,20 @@ func (p *Plugin) registerTools() {
 		ParallelSafe: true,
 	}, p.handleAgentState)
 
+	p.sdk.RegisterTool("commondev_agent_interrupt", sdk.ToolDef{
+		Name: "commondev_agent_interrupt",
+		Description: "取消某条工程对话**正在运行的任务**（保留会话与工作目录，可继续派新任务）。" +
+			"用于派错任务、或某个 session 卡住时不再干等它跑完。" +
+			"与 commondev_agent_down 的区别：这是「停当前这一轮」，那是「停整个进程」。" +
+			"中断是**协作式**的，工具调用中途可能还要一小段时间才真正停下。",
+		Parameters: map[string]interface{}{"type": "object", "properties": map[string]interface{}{
+			"branch_id": map[string]interface{}{"type": "string", "description": "工程对话 id"},
+		}, "required": []string{"branch_id"}},
+		NoMemory: true,
+		Serial:   true,
+		Timeout:  "60s",
+	}, p.handleAgentInterrupt)
+
 	p.sdk.RegisterTool("commondev_agent_down", sdk.ToolDef{
 		Name: "commondev_agent_down",
 		Description: "停掉一条工程对话的 agent 进程（**保留工作目录与分支状态**）。" +

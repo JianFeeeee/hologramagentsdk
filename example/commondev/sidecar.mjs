@@ -172,6 +172,35 @@ async function handle(method, params) {
         messages: Array.isArray(s.messages) ? s.messages.length : 0,
       };
     }
+    // ★★ interrupt：取消正在运行的任务（2026-10-18 新增）。
+    //
+    // 为什么必须有：prompt 改成异步投递后，Go 侧只能"发出去"，无法收回。
+    // 实测后果 —— 用户发现派错了任务、或某个 session 卡住时，**没有任何办法
+    // 停下它**，只能等 pi 自己跑完（agent 在日志里如实回答"无法取消"）。
+    //
+    // pi 的 AgentSession 本身有 abort()：Abort current operation and wait
+    // for agent to become idle。这里直接用它，不自己造机制。
+    //
+    // 语义说明（必须如实回给调用方）：
+    //   · abort() 是**协作式**的：它在下一个可中断点生效，不是 SIGKILL。
+    //     工具调用中途可能还要一小段时间才真正停下。
+    //   · 返回 interrupted=true 表示"已发出中断且会话已回到空闲"；
+    //     若当时没有在跑的任务，interrupted=false 但 ok=true（不算错误）。
+    case "interrupt": {
+      if (!session) return { ok: true, interrupted: false, reason: "no_session" };
+      const hadInflight = inflight > 0;
+      try {
+        await session.abort();
+      } catch (e) {
+        return { ok: false, interrupted: false, error: String((e && e.message) || e) };
+      }
+      return {
+        ok: true,
+        interrupted: hadInflight,
+        // 如实报告剩余在途数：>0 说明还有任务在收尾（调用方可据此决定是否再等）
+        inflight,
+      };
+    }
     case "close": {
       try {
         session?.dispose?.();

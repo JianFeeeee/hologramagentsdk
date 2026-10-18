@@ -47,6 +47,70 @@ func (p *Plugin) handleAgentState(args map[string]interface{}) (interface{}, err
 	return out, nil
 }
 
+// handleAgentInterrupt 是 commondev_agent_interrupt 的实现。
+//
+// 为什么需要它（2026-10-18 用户实测反馈）：prompt 改成异步投递后，
+// 插件只能"把任务发出去"，**无法收回**。于是用户发现派错了任务、
+// 或某条 session 卡住时，除了等它自己跑完以外没有任何办法 ——
+// agent 在日志里也只能如实回答"无法取消，只能等它跑完"。
+//
+// 三个 CLI 的取消方式不同，这里统一到 sidecar 的 interrupt method：
+//
+//	pi    → session.abort()（pi SDK 自带，协作式中断）
+//	zcode → 整组杀掉当前回合的子进程（没有 abort API）
+//	其它  → 由各自 sidecar 决定；未实现时如实报错，不假装成功
+//
+// ★ 关键纪律：**不谎报成功**。sidecar 没在跑、或该 CLI 没实现 interrupt 时，
+// 必须把"没有真正中断"如实回给调用方 —— 否则用户以为停了，实际还在跑。
+func (p *Plugin) handleAgentInterrupt(args map[string]interface{}) (interface{}, error) {
+	id := strings.TrimSpace(str(args, "branch_id"))
+	if id == "" {
+		return map[string]interface{}{"error": "branch_id 必填"}, nil
+	}
+	p.mu.Lock()
+	b, ok := p.ledger.Branches[id]
+	sc := p.sidecars[id]
+	p.mu.Unlock()
+	if !ok {
+		return map[string]interface{}{"error": fmt.Sprintf("工程对话 %s 不存在", id)}, nil
+	}
+	if sc == nil || !sc.Alive() {
+		return map[string]interface{}{
+			"branch_id":   id,
+			"interrupted": false,
+			"note":        "sidecar 未在运行 —— 没有在跑的任务可取消。用 commondev_agent_up 拉起。",
+		}, nil
+	}
+
+	raw, err := sc.call("interrupt", nil)
+	if err != nil {
+		// 未实现 / 调用失败：如实报告，绝不返回 interrupted=true
+		return map[string]interface{}{
+			"branch_id":   id,
+			"interrupted": false,
+			"error":       fmt.Sprintf("sidecar 不支持或中断失败: %v", err),
+			"note": "该 CLI 的 sidecar 可能还没有 interrupt 实现；" +
+				"可改用 commondev_agent_down 直接停进程（会结束整个会话）。",
+		}, nil
+	}
+
+	out := map[string]interface{}{"branch_id": id, "agent_cli": cliOrPi(b.AgentCLI)}
+	if m, ok := raw.(map[string]interface{}); ok {
+		for k, v := range m {
+			out[k] = v
+		}
+	}
+	// ★ 只有 sidecar 明确说 interrupted=true 才算真的中断了
+	if v, _ := out["interrupted"].(bool); !v {
+		if r, _ := out["reason"].(string); r != "" {
+			out["note"] = "没有在跑的任务（reason=" + r + "）"
+		} else {
+			out["note"] = "sidecar 未确认有任务被中断"
+		}
+	}
+	return out, nil
+}
+
 // handleAgentDown 是 commondev_agent_down 的实现（幂等收尾）。
 //
 // 与 branch_close 的区别：**只杀进程、不动工作目录、不改分支状态**。

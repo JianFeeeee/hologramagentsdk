@@ -128,6 +128,8 @@ func handlerFor(p *Plugin, name string) func(map[string]interface{}) (interface{
 		return p.handleEndpointList
 	case "commondev_endpoint_remove":
 		return p.handleEndpointRemove
+	case "commondev_agent_interrupt":
+		return p.handleAgentInterrupt
 	}
 	return nil
 }
