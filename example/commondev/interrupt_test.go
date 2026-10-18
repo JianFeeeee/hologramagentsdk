@@ -45,6 +45,33 @@ func TestPiSidecarImplementsInterrupt(t *testing.T) {
 		if !strings.Contains(src, "await session.abort()") {
 			t.Fatalf("★ %s 的 abort() 没有 await —— 会谎报已中断", path)
 		}
+		// ★ 判定"是否真的中断"必须用 pi 的 isIdle，不能用包装层的 inflight。
+		//
+		// 我第一版写 `interrupted: hadInflight`（中断前 >0 就算成功），
+		// 于是"删掉 abort()"这个变异**完全测不出来**：任务还在跑，
+		// hadInflight 仍为 true，照样回报"已中断" —— 那正是最坏的情形。
+		//
+		// 第二版改用 inflight 的变化，又**反向**错了：inflight 只在后台
+		// promise 的 finally 里递减，abort() 返回时还没减 ⇒ 实测
+		// before=1/inflight=1 误报"未中断"，而任务其实已经停了。
+		//
+		// isIdle 是 pi 的权威视图，正确。
+		if !strings.Contains(src, "session.isIdle") {
+			t.Fatalf("★ %s 判定中断成功没有用 session.isIdle —— "+
+				"用 inflight 之类的包装计数会误报（两个方向都试过了）", path)
+		}
+		// ★ 只查**代码行**，不查注释：这个反例本身就该写在注释里当说明，
+		// 直接全文 Contains 会把解释性注释当成缺陷（实测误报过一次）。
+		for _, ln := range strings.Split(src, "\n") {
+			code := strings.TrimSpace(ln)
+			if strings.HasPrefix(code, "//") || strings.HasPrefix(code, "*") {
+				continue
+			}
+			if strings.Contains(code, "interrupted: hadInflight") {
+				t.Fatalf("★ %s 又回到了 `interrupted: hadInflight` —— "+
+					"只看中断前 >0 会让「删掉 abort」的变异测不出", path)
+			}
+		}
 	}
 }
 

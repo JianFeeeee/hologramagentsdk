@@ -188,16 +188,32 @@ async function handle(method, params) {
     //     若当时没有在跑的任务，interrupted=false 但 ok=true（不算错误）。
     case "interrupt": {
       if (!session) return { ok: true, interrupted: false, reason: "no_session" };
-      const hadInflight = inflight > 0;
+      // ★ 判定"是否真的中断了"必须靠**中断前后 inflight 的变化**，不能只看
+      // 中断前 >0。第一版写成 `interrupted: hadInflight`，判据也照这个断言，
+      // 于是"把 abort() 删掉"这个变异**完全测不出来**：
+      // 任务还在跑 → inflight 仍 >0 → 照样回报 interrupted=true。
+      // 那正是最坏的情形：用户以为停了，任务还在改代码、推分支。
+      // ★ 判定依据必须用 pi 自己的状态（isIdle），不能用本文件的 inflight：
+      //
+      //   inflight 是**包装层**的计数，只在后台 promise 的 finally 里递减，
+      //   而 abort() 返回时那个 promise 还没收尾 ⇒ abort 成功也没减。
+      //   实测（第一版）：before=1, inflight=1 ⇒ 误报 interrupted=false，
+      //   而任务其实已经停了 —— 反向的谎报，同样有害（用户重复发任务）。
+      //
+      //   session.isIdle 是 pi 的权威视图："当前没有在跑的任务"。
+      const wasIdle = session.isIdle;
       try {
         await session.abort();
       } catch (e) {
         return { ok: false, interrupted: false, error: String((e && e.message) || e) };
       }
+      // abort() 语义是"中止并等待 agent 回到空闲"⇒ 返回时应已 idle。
+      // 仍非 idle 说明中止没生效（或还在收尾），如实回报，不夸大成已中断。
       return {
         ok: true,
-        interrupted: hadInflight,
-        // 如实报告剩余在途数：>0 说明还有任务在收尾（调用方可据此决定是否再等）
+        interrupted: !wasIdle && session.isIdle,
+        was_idle: wasIdle,
+        now_idle: session.isIdle,
         inflight,
       };
     }
