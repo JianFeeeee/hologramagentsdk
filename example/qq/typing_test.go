@@ -176,40 +176,38 @@ func TestTypingWiredToOutputStages(t *testing.T) {
 
 	// 定位 stageBeforeOutput / stageAfterOutput 的函数体
 	bodyOf := func(name string) string {
-		start := -1
-		for i, ln := range lines {
-			if strings.HasPrefix(ln, "func (p *Plugin) "+name+"(") {
-				start = i
-				break
-			}
-		}
-		if start < 0 {
-			t.Fatalf("找不到 %s —— 判据需同步", name)
-		}
-		for j := start + 1; j < len(lines); j++ {
-			if lines[j] == "}" {
-				return strings.Join(lines[start:j+1], "\n")
-			}
-		}
-		t.Fatalf("%s 函数体没闭合", name)
-		return ""
+		// ★ 用 funcBody（括号计数），不能用"找行首 }"：
+		// 函数体内有 if/for 块，第一个行首 `}` 往往是**内层块**的结尾，
+		// 于是判据看到的是被截断的前半段 —— 后半段里的调用"看不见"，
+		// 删掉也不咬（实测：stageAfterOutput 新增 if 分支后本判据假绿）。
+		return funcBody(t, lines, "func (p *Plugin) "+name+"(")
 	}
 
 	before := bodyOf("stageBeforeOutput")
 	if !strings.Contains(before, "p.startTypingForTurn(ctx)") {
 		t.Fatal("★ before_output 没有发起输入指示（startTypingForTurn）")
 	}
+	// after_output 现在有**两条分支**（2026-10-18）：
+	//
+	//	单次 output_send  → stopTypingAfterOutput（配对的收尾）
+	//	turn 边界         → stopTypingForTurn + auth 清理 + 状态归位
+	//
+	// 两条都必须存在：只留一条会让另一种路径的指示器收不了尾。
 	after := bodyOf("stageAfterOutput")
+	if !strings.Contains(after, "p.stopTypingAfterOutput(ctx)") {
+		t.Fatal("★ after_output 没有为单次发送收尾（stopTypingAfterOutput）——" +
+			"agent 用 output_send__qq 直接发消息时，打字指示器会一直挂着")
+	}
 	if !strings.Contains(after, "p.stopTypingForTurn(ctx)") {
-		t.Fatal("★ after_output 没有结束输入指示（stopTypingForTurn）")
+		t.Fatal("★ after_output 的 turn 边界分支没有结束输入指示（stopTypingForTurn）")
 	}
 
-	// after_output 必须先停指示再清理 auth —— auth 清理若失败，
+	// turn 边界分支必须先停指示再清理 auth —— auth 清理若失败，
 	// 指示不能永久留在"正在输入"。
 	iStop := strings.Index(after, "stopTypingForTurn")
 	iAuth := strings.Index(after, "afterOutputAuthContext")
 	if iStop < 0 || iAuth < 0 || iStop > iAuth {
-		t.Fatal("★ after_output 里应先停输入指示、再清理 auth")
+		t.Fatal("★ turn 边界分支里应先停输入指示、再清理 auth")
 	}
 }
 

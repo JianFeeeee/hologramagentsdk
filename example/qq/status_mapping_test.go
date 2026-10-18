@@ -149,3 +149,43 @@ func TestToolCountLoggedIsNotHardcoded(t *testing.T) {
 		t.Fatal("★ regTool 没有累加 p.toolCount —— 计数恒为 0，日志会报 `0 tools`")
 	}
 }
+
+// ★★★ 判据 8：状态归位（在线）**只能由 turn 边界触发**，不能由单次发送触发。
+//
+// after_output 被两条路径共用（2026-10-18）：
+//
+//	output.go   单次 output_send__*（Extra 有 output_meta）
+//	eventloop   一轮的回复（turn 边界）
+//
+// 一轮可能发多条消息。若每条发完都归位「在线」，状态会在干活期间
+// 反复跳回空闲 —— "通过状态展示工作进度"就失效了。
+func TestOnlineResetOnlyOnTurnBoundary(t *testing.T) {
+	lines := codeLines(t, "status.go")
+	body := funcBody(t, lines, "func (p *Plugin) stageAfterOutput(")
+
+	// 必须有区分两条路径的分支
+	if !strings.Contains(body, "isSingleSendStage(ctx)") {
+		t.Fatal("★ stageAfterOutput 没有区分「单次发送」与「turn 边界」——\n" +
+			"   两条路径共用同一个 stage，不区分会让单次发送也归位「在线」")
+	}
+
+	// 单次发送分支必须在归位之前 return（不能继续往下走到 applyStatusForce）
+	iBranch := strings.Index(body, "if isSingleSendStage(ctx) {")
+	iOnline := strings.Index(body, "applyStatusForce(qqStatusOnline)")
+	if iBranch < 0 || iOnline < 0 {
+		t.Fatal("找不到分支或状态归位调用")
+	}
+	branch := ifBlockAt(body, iBranch)
+	if !strings.Contains(branch, "return") {
+		t.Fatal("★ 单次发送分支没有 return —— 会继续走到状态归位")
+	}
+	if strings.Contains(branch, "applyStatusForce") {
+		t.Fatal("★ 单次发送分支里归位了「在线」—— 一轮发多条消息时状态会反复跳回空闲")
+	}
+
+	// isSingleSendStage 的判据键必须是 output_meta（内核 output.go 放的）
+	helper := funcBody(t, lines, "func isSingleSendStage(")
+	if !strings.Contains(helper, `ctx.Extra["output_meta"]`) {
+		t.Fatal("★ isSingleSendStage 没认 output_meta —— 与内核 output.go 的契约不符")
+	}
+}

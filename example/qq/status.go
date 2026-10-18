@@ -102,10 +102,86 @@ type statusState struct {
 	mu sync.Mutex
 	// applied 是**最近一次成功应用**的状态（空 Name = 还没设过）。
 	applied qqStatus
-	// lastAt 是最近一次实际发请求的时间（防抖用）。
+	// lastAt 是最近一次实际发请求的时间（限流用）。
 	lastAt time.Time
 	// failCount 统计连续失败次数（只在首次与每 10 次记日志，避免刷屏）。
 	failCount int
+
+	// pending 是**限流期间被推迟**的最新期望状态（空 Name = 无待发）。
+	//
+	// ## 为什么需要它（2026-10-18 修）
+	//
+	// 原先限流（2 秒）一命中就直接 `return`，**期望状态被丢弃**。
+	// 而 stage 之间的间隔常常不到 2 秒：
+	//
+	//	pre_action(学习中) --0.5s--> before_toolcall(搬砖中)
+	//	⇒ "搬砖中" 被丢；工具跑完后 after_toolcall 又要"学习中"，
+	//	   若落在限流窗口内同样被丢 ⇒ QQ 上看到的状态与实际工作**长期不符**。
+	//
+	// 状态是「当前工作阶段」的**投影**，不是事件流 —— 投影必须最终收敛到
+	// 最新值，不能因为来得早而被丢掉。所以限流只限制**发送频率**，
+	// 被推迟的那一次必须在窗口结束后补发（见 flushPendingStatusLocked）。
+	pending qqStatus
+	// pendingTimer 是补发定时器（非 nil = 已有一次补发排队，勿重复排）。
+	pendingTimer *time.Timer
+}
+
+// schedulePendingFlushLocked 排一次「窗口结束后补发最新期望状态」。
+//
+// 调用方必须持有 statusState.mu。
+//
+// ## 为什么是"补发最新"而不是"补发被拒的那个"
+//
+// 限流窗口内可能连续来了多个期望（学习中 → 搬砖中 → 学习中）。
+// 真正的语义是"最终应该是什么状态"，中间值没有独立意义 ——
+// 所以补发时取 `pending`（已被后续调用覆盖成最新值）。
+//
+// 已排过一次就不再排（pendingTimer != nil）：多次排队会让补发风暴，
+// 每个 timer 都会发一次请求。
+func (p *Plugin) schedulePendingFlushLocked(delay time.Duration) {
+	if p.statusState.pendingTimer != nil {
+		return // 已有补发排队，它醒来时会取最新 pending
+	}
+	if delay < 0 {
+		delay = 0
+	}
+	p.statusState.pendingTimer = time.AfterFunc(delay, func() {
+		p.flushPendingStatus()
+	})
+}
+
+// flushPendingStatus 补发被限流推迟的最新状态。
+//
+// 取 pending 后**立刻清空**再释放锁：补发过程中若又来了新的期望，
+// 它们会各自走 applyStatusMaybe 重新判断，不会被这里的清理误吞。
+func (p *Plugin) flushPendingStatus() {
+	p.statusState.mu.Lock()
+	st := p.statusState.pending
+	p.statusState.pending = qqStatus{}
+	p.statusState.pendingTimer = nil
+	if st.Name == "" || p.statusState.applied.Name == st.Name {
+		// 无待发，或补发前状态已被别的路径设成一样 ⇒ 什么都不用做
+		p.statusState.mu.Unlock()
+		return
+	}
+	p.statusState.lastAt = time.Now()
+	p.statusState.mu.Unlock()
+
+	if err := p.setSelfStatus(st); err != nil {
+		p.statusState.mu.Lock()
+		p.statusState.failCount++
+		n := p.statusState.failCount
+		p.statusState.mu.Unlock()
+		if n == 1 || n%10 == 0 {
+			log.Printf("[qq] 补发在线状态 %s 失败（第 %d 次，已忽略）: %v", st.Name, n, err)
+		}
+		return
+	}
+	p.statusState.mu.Lock()
+	p.statusState.applied = st
+	p.statusState.failCount = 0
+	p.statusState.mu.Unlock()
+	log.Printf("[qq] 在线状态 → %s（status=%d ext=%d，限流后补发）", st.Name, st.Status, st.ExtStatus)
 }
 
 // setSelfStatus 调 NapCat 设置在线状态。
@@ -167,14 +243,21 @@ func (p *Plugin) applyStatusMaybe(st qqStatus, debounce bool) {
 		return
 	}
 	p.statusState.mu.Lock()
-	if p.statusState.applied.Name == st.Name {
+	if p.statusState.applied.Name == st.Name && p.statusState.pending.Name == "" {
 		p.statusState.mu.Unlock()
 		return
 	}
 	if debounce && time.Since(p.statusState.lastAt) < minStatusInterval {
+		// ★ 限流命中：**记住**这个期望，等窗口结束补发，不能丢。
+		//
+		// 原先这里直接 return ⇒ "搬砖中"/"学习中" 在快速切换时被丢掉，
+		// QQ 上看到的状态与实际工作长期不符。
+		p.statusState.pending = st
+		p.schedulePendingFlushLocked(minStatusInterval - time.Since(p.statusState.lastAt))
 		p.statusState.mu.Unlock()
 		return
 	}
+	p.statusState.pending = qqStatus{}
 	p.statusState.lastAt = time.Now()
 	p.statusState.mu.Unlock()
 
@@ -208,6 +291,14 @@ func (p *Plugin) applyStatusMaybe(st qqStatus, debounce bool) {
 // 必须无条件发一次，否则状态会错位。
 func (p *Plugin) restoreStatus() {
 	p.statusState.mu.Lock()
+	// ★ 先取消待补发：否则停机后定时器还会醒来发一次 set_online_status，
+	// 而此时插件进程/连接已在拆除 —— 要么报错刷日志，要么把刚恢复的
+	// “在线”又改成别的状态。
+	if p.statusState.pendingTimer != nil {
+		p.statusState.pendingTimer.Stop()
+		p.statusState.pendingTimer = nil
+	}
+	p.statusState.pending = qqStatus{}
 	cur := p.statusState.applied
 	p.statusState.mu.Unlock()
 	if cur.Name == "" || cur.Name == qqStatusOnline.Name {
@@ -400,6 +491,22 @@ func (p *Plugin) stageAfterToolcall(ctx *sdk.StageContext) error {
 // `before_output` 是「LLM 已返回、即将输出」——既不是等 LLM 也不是跑工具。
 // 在那里写「学习中」会让状态在收尾时继续挂着，看起来像永远在想。
 func (p *Plugin) stageBeforeOutput(ctx *sdk.StageContext) error {
+	// ★ 「对方正在输入中」的起点：**就在消息真正发出前**。
+	//
+	// ## 为什么是这里（而不是轮次边界）
+	//
+	// `before_output` 被两个语义共用：
+	//
+	//	emitResponse（eventloop）  = 一轮的回复
+	//	本期 output_send__*（output.go）= 单次发送
+	//
+	// 「对方正在输入中」表达的是"我在给你打字"，它的正确时点就是
+	// **这条消息发出之前** —— 也就是 output.go 那条路径。
+	//
+	// 这一期能拿到 `output_meta`（本次发送的 meta 原文），从中取 user_id
+	// 就知道这条发给谁。群聊（有 group_id）不发指示：QQ 的「正在输入」
+	// 只在私聊标题栏有意义。
+	p.startTypingForOutput(ctx)
 	// ★ 「对方正在输入中」的**起点**。
 	//
 	// ## 为什么是 before_output（而不是消息到达时）
@@ -425,14 +532,44 @@ func (p *Plugin) stageBeforeOutput(ctx *sdk.StageContext) error {
 // 顺序：先清理（原有语义，必须执行），再切状态（**force**，不受防抖）。
 // 清理不能因状态失败而跳过 —— 它关系到下一轮的权限判定。
 func (p *Plugin) stageAfterOutput(ctx *sdk.StageContext) error {
-	// ★ 「对方正在输入中」的**终点**：先停打字指示（不能让 auth 清理失败
-	// 就永久留在“正在输入”），再清理 auth，最后状态归位。
+	// ★ after_output 被**两条路径**共用，必须区分（2026-10-18）：
+	//
+	//	output.go    单次 output_send__*：Extra 里有 output_meta
+	//	eventloop    一轮的回复（turn 边界）：Extra 里是 input_source 等
+	//
+	// 区别决定两件事：
+	//
+	//  · 打字指示器：只有"单次发送"这条路径才有配对的 start；
+	//    turn 边界那次是"这一轮说完了"，没有正在打的字要收。
+	//  · 状态归位（在线）：**只能由 turn 边界触发**。一轮可能发多条消息，
+	//    若每条发完都归位「在线」，状态会在干活期间反复跳回空闲 ——
+	//    那正是"通过状态展示工作进度"失效的原因之一。
+	if isSingleSendStage(ctx) {
+		p.stopTypingAfterOutput(ctx)
+		return nil
+	}
+
+	// —— 以下是 turn 边界 ——
 	p.stopTypingForTurn(ctx)
 	if err := p.afterOutputAuthContext(ctx); err != nil {
 		return err
 	}
 	p.applyStatusForce(qqStatusOnline)
 	return nil
+}
+
+// isSingleSendStage 报告这个 after_output 是不是"单次 output_send"那一期。
+//
+// 判据：内核在 output.go 的 Extra 里放了 output_meta（发送目标），
+// 而 emitResponse 的 turn 边界没有这个键。
+func isSingleSendStage(ctx *sdk.StageContext) bool {
+	if ctx == nil {
+		return false
+	}
+	ctx.RLock()
+	defer ctx.RUnlock()
+	_, has := ctx.Extra["output_meta"]
+	return has
 }
 
 // ======== 「对方正在输入中」的按轮驱动 ========
@@ -479,6 +616,86 @@ func (p *Plugin) turnTypingUser(ctx *sdk.StageContext) int64 {
 		}
 	}
 	return 0
+}
+
+// startTypingForOutput 在**一条消息真正发出前**发起「对方正在输入中」。
+//
+// ## 数据来源（2026-10-18 实测确定）
+//
+// 内核在 `output.go` 的 stageCtx.Extra 里放了：
+//
+//	output_channel  目标通道（"qq"）
+//	output_meta     本次发送的 meta 原文（含 user_id / group_id）
+//	output_type     text / image / file …
+//
+// 之前这里读的是 `qq_uid`（注入 payload 透传），但那条路径只在
+// `emitResponse`（轮次边界）生效，而 agent 实际常用 `output_send__qq`
+// 直接发消息 —— 那条路径原先 **Extra 是 nil**（实测 `extra_keys=0`），
+// 所以打字指示器一次都没触发。
+//
+// ## 为什么只处理私聊
+//
+// QQ 的「正在输入中」显示在**私聊窗口标题栏**。群里没有这个语义
+// （群聊显示"xx 正在输入"是干扰），所以有 group_id 就不发。
+func (p *Plugin) startTypingForOutput(ctx *sdk.StageContext) {
+	if ctx == nil {
+		return
+	}
+	ctx.RLock()
+	ch, _ := ctx.Extra["output_channel"].(string)
+	rawMeta, _ := ctx.Extra["output_meta"].(string)
+	ctx.RUnlock()
+
+	if ch != p.name {
+		return // 不是发往本通道
+	}
+	if rawMeta == "" {
+		return
+	}
+	var m struct {
+		GroupID int64 `json:"group_id"`
+		UserID  int64 `json:"user_id"`
+	}
+	if err := json.Unmarshal([]byte(rawMeta), &m); err != nil {
+		return
+	}
+	if m.GroupID > 0 {
+		return // 群聊不发打字指示
+	}
+	if m.UserID <= 0 {
+		return
+	}
+	p.startTyping(m.UserID)
+	log.Printf("[qq] 对方正在输入中 → 开始（uid=%d，消息发出前）", m.UserID)
+}
+
+// stopTypingAfterOutput 在一条消息**发出后**结束「对方正在输入中」。
+//
+// 与 startTypingForOutput 同源（同一份 output_meta），保证成对。
+func (p *Plugin) stopTypingAfterOutput(ctx *sdk.StageContext) {
+	if ctx == nil {
+		return
+	}
+	ctx.RLock()
+	ch, _ := ctx.Extra["output_channel"].(string)
+	rawMeta, _ := ctx.Extra["output_meta"].(string)
+	ctx.RUnlock()
+
+	if ch != p.name || rawMeta == "" {
+		return
+	}
+	var m struct {
+		GroupID int64 `json:"group_id"`
+		UserID  int64 `json:"user_id"`
+	}
+	if err := json.Unmarshal([]byte(rawMeta), &m); err != nil {
+		return
+	}
+	if m.GroupID > 0 || m.UserID <= 0 {
+		return
+	}
+	p.stopTyping(m.UserID)
+	log.Printf("[qq] 对方正在输入中 → 结束（uid=%d，消息已发出）", m.UserID)
 }
 
 // startTypingForTurn 在 before_output 发起「对方正在输入中」。
