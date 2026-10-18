@@ -377,6 +377,24 @@ func writePluginJSON(plg *PlgConfig, platforms []string, entry string) {
 	}
 	// auto_start：只有**显式 false** 才写（缺省 true 与旧行为一致，不写字段最兼容）
 	if plg.AutoStart != nil && !*plg.AutoStart {
+		// ★★ auto_start=false 的插件**必须**带 skill，否则等价于没装。
+		//
+		// 逻辑链：
+		//   auto_start=false ⇒ 内核启动时不拉起它 ⇒ 它的工具不出现在
+		//   工具的初始清单里 ⇒ 模型不知道它存在 ⇒ 永远不会被调用，
+		//   也永远不会被拉起。
+		//
+		// 也就是说缺 skill 的按需插件**等价于没装**，但比没装更糟：
+		// 它占着磁盘和安装记录，让人以为它可用。
+		//
+		// 所以这不是"建议配 skill"，而是"没有 skill 就不该声明按需加载"。
+		// 在**打包期**拦住，比等用户装上后困惑早得多。
+		if !hasSkillDir(".") {
+			fmt.Printf("  error: auto_start=false 但没有 skill/ 目录 —— " +
+				"按需加载的插件必须配 skill 说明\"先 plugin_enable 再调用\"" +
+				"，否则 agent 不知道它存在（等价于没装）\n")
+			os.Exit(1)
+		}
 		m["auto_start"] = false
 	}
 	data, _ := json.MarshalIndent(m, "", "  ")
@@ -687,8 +705,32 @@ func buildTarget(plg *PlgConfig, target, outDir, sdkPath string) {
 			}
 		}
 		hmapName := fmt.Sprintf("%s_lua.hmap", toSnake(plg.NameEn))
-		createHmap(filepath.Join(outDir, hmapName), pkgFiles)
+
+		// ★ Lua 插件以前**完全不走** rawfile/skill 收集（直接 createHmap），
+		// 于是 luademo 这类 Lua 插件永远带不上 skill —— 而 skill 是 Lua
+		// 插件唯一能向 agent 说明自己的途径（它没有 Go 侧 RegisterTool 那么
+		// 直观的文档位）。实测：加了 skill/luademo-tools/SKILL.md 后，
+		// 打出的 linux_amd64_lua_demo_lua.hmap 里 skill 条目数为 0。
+		//
+		// 与 Go 路径对齐：收集 rawfile（工程根 rawfile/ 默认全收）与 skill。
+		raws, rerr := collectRawFiles(".", plg.RawFiles)
+		if rerr != nil {
+			fmt.Printf("  error: rawfiles: %v\n", rerr)
+			return
+		}
+		skills, serr := collectSkillFiles(".")
+		if serr != nil {
+			fmt.Printf("  error: skills: %v\n", serr)
+			return
+		}
+		createHmapWithRaw(filepath.Join(outDir, hmapName), pkgFiles, append(raws, skills...))
 		fmt.Printf("  packaged %s\n", hmapName)
+		if len(raws) > 0 {
+			fmt.Printf("  已打包 %d 个 rawfile\n", len(raws))
+		}
+		if len(skills) > 0 {
+			fmt.Printf("  已打包 %d 个 skill 文件\n", len(skills))
+		}
 		return
 	}
 

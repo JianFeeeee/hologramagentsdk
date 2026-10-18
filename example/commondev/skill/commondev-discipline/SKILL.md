@@ -7,6 +7,43 @@ author: HomeAgent
 
 # commondev 纪律（主管模式 · 工程对话 · 平台操作）
 
+## ★ 本插件默认不自启：先拉起再用
+
+commondev 的 44 个工具占约 726 tokens，是本组最大的。因此它**默认不自启**
+（`auto_start: false`），不在初始工具清单里。
+
+需要开工程线/派活时：
+
+```
+plugin_start  name=commondev
+```
+
+**用完必须关掉**（44 个工具常驻会持续吃上下文）：
+
+```
+plugin_stop  name=commondev
+```
+
+### 什么时候可以关
+
+安全关闭的判据是"**没有在跑的工程线**"：
+
+1. 先查有没有活着的 sidecar：`commondev_agent_state`（看 `agent_alive`）
+2. 有在跑的线，先停：`commondev_agent_down`（暂停）或
+   `commondev_agent_interrupt`（只停当前这一轮，保留会话）
+3. 确认都不在跑，再 `plugin_stop`
+
+★ **不要在有 sidecar 在跑时直接 disable** —— 进程会变成孤儿。
+插件 `Stop()` 里有幂等全清（sidecar / pi 进程一个不留），但那是兜底，
+不是正常路径。
+
+### 关闭不影响已做的活
+
+台账（`ledger.json`）、工作目录、分支状态、凭据全部**持久化在磁盘**。
+下次 `plugin_start` 后 `commondev_project_list` / `commondev_branch_status`
+能看到之前的一切，`commondev_agent_up` 能接着用原来的 session 续投。
+
+
 本技能三部分，**都可能与你的任务直接相关**：
 
 - **第一部分：使用者纪律** —— 怎么开工程、怎么派活。
@@ -853,3 +890,20 @@ pi 进程、sidecar、ssh 会话、workdir（含凭据残留检查）一个不�
 6. **改了内置插件源码只重启服务** —— 必须重编 homed。
 7. **手改生成的文档**（`docs/api/*.md` 首行写着「请勿手改」）—— 改 `sdk/*.go` 注释再重新生成。
 8. **为了让插件生效去改 homed 的源码** —— 先确认它是不是内置插件。
+
+## ★ 用 plugin_stop / plugin_start，不要用 plugin_disable / plugin_enable
+
+四个工具看着像同义词，语义差别很大：
+
+| 工具 | 作用 | 跨重启 |
+|---|---|---|
+| `plugin_stop` | **运行态**关闭，现在停掉 | **不影响**，重启照常加载 |
+| `plugin_start` | **运行态**拉起，现在开回来 | 不影响 |
+| `plugin_disable` | **持久**禁用 | **会记下来**，开机也不自启 |
+| `plugin_enable` | 解除持久禁用 | 会记下来 |
+
+**释放上下文用 `plugin_stop`。** 用 `plugin_disable` 会顺手把"开机自启"
+永久关掉 —— 用户下次开机发现插件没了，得再手动开回来。
+
+（本插件声明 `auto_start: false`，所以它本来就不自启；但 `plugin_disable`
+仍会写进持久禁用清单，让 `plugin_start` 拒绝拉起，只能再用 `plugin_enable` 解。）

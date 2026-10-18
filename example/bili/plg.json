@@ -15,5 +15,6 @@
   "outdir": "dist",
   "bundle": true,
   "replaces": {},
-  "source_dirs": []
+  "source_dirs": [],
+  "auto_start": false
 }

@@ -13,5 +13,6 @@
     "gtd",
     "productivity"
   ],
-  "targets": "linux/amd64"
+  "targets": "linux/amd64",
+  "auto_start": false
 }

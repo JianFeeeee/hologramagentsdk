@@ -6,11 +6,15 @@
   "description": "天气查询插件（基于 wttr.in），支持实时天气和未来预报",
   "author": "HomeAgent",
   "entry": "plugin.so",
-  "tags": ["weather", "forecast", "wttr"],
+  "tags": [
+    "weather",
+    "forecast",
+    "wttr"
+  ],
   "targets": "linux/amd64",
   "outdir": "dist",
   "bundle": true,
   "replaces": {},
-  "source_dirs": []
+  "source_dirs": [],
+  "auto_start": false
 }
-

@@ -77,7 +77,26 @@ fi
 #   发版路径传的是旧名（build.sh:92）故一直没暴露——正是「兼容」二字
 #   写在注释里、却没在代码里做到的那种缺陷。
 HMAPDEV="${HMAPDEV:-${PLUGINDEV:-$SDK_ROOT/build/hmapdev}}"
+
+# ★ 工具链二进制**过期就必须重编**，不能只看"文件在不在"。
+#
+# 原来的判据是 `[ ! -x "$HMAPDEV" ]`：只要二进制存在就跳过构建。
+# 于是改了 hmapdev 源码后重新打包，用的仍是**旧工具链** ——
+# 而日志看起来完全正常（每个包都"成功"）。
+#
+# 实测代价（2026-10-18）：给 Lua 打包路径加上了 skill 收集，
+# 但 build/hmapdev 还是前一天编的，重建 22 个包后 luademo 里
+# skill 条目仍然为 0。我一度以为修复没生效，实际是工具链没换。
+#
+# 现在：源码比二进制新就重编。
+needs_build=0
 if [ ! -x "$HMAPDEV" ]; then
+  needs_build=1
+elif [ -n "$(find "$SDK_ROOT/tools/hmapdev" -name '*.go' -newer "$HMAPDEV" -print -quit 2>/dev/null)" ]; then
+  echo "[examples] hmapdev 源码比二进制新，重新构建 ..."
+  needs_build=1
+fi
+if [ "$needs_build" = "1" ]; then
   echo "[examples] 先构建 hmapdev ..."
   ( cd "$SDK_ROOT/tools/hmapdev" && "$GO" build -o "$HMAPDEV" . ) || {
     echo "[examples] hmapdev 构建失败，无法继续" >&2; exit 1; }

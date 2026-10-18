@@ -99,6 +99,14 @@ type ToolDef struct {
 	// TestMockSDKToolDefMatchesSDK 钉住这一致。
 	ParallelSafe bool `json:"parallel_safe,omitempty"`
 	Serial       bool `json:"serial,omitempty"`
+
+	// Timeout 是工具自声明的超时（如 "5m"）。
+	//
+	// 与公共 SDK 的 ToolDef.Timeout 逐字对齐：内核按
+	// max(声明值, 参数里的 timeout) 计算，并夹到 10 分钟上限。
+	// 缺这个字段，本地 yaegi 调试时写 Timeout 不报错，
+	// 装到内核后却发现声明被忽略（超时仍是一刀切的默认值）。
+	Timeout string `json:"timeout,omitempty"`
 }
 
 // 上下文策略取值，与公共 SDK 一致。

@@ -6,6 +6,11 @@
   "description": "管理 VanBlog 开源博客系统：文章的增删改查、分类标签管理、草稿发布、备份导出等",
   "author": "HomeAgent",
   "entry": "plugin.so",
-  "tags": ["blog", "vanblog", "cms"],
-  "targets": "linux/amd64"
+  "tags": [
+    "blog",
+    "vanblog",
+    "cms"
+  ],
+  "targets": "linux/amd64",
+  "auto_start": false
 }

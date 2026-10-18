@@ -127,3 +127,24 @@ func skillFilesSummary(ents []rawEntry) string {
 	return fmt.Sprintf("%d 个 skill（%s，共 %d 个文件）",
 		len(list), strings.Join(list, ", "), len(ents))
 }
+
+// hasSkillDir 判断工程根是否有**至少一个真实 skill**（供打包期校验用）。
+//
+// 为什么不用简单的 os.Stat(SkillDir)：空目录、只有 .gitkeep 的脚手架目录
+// 都会让它返回 true，而那种情况下 agent 一样拿不到任何说明 ⇒ 校验形同虚设。
+// 这里复用 collectSkillFiles 的实际收集结果，与打包时的判定**同源**，
+// 避免"校验说有、打包说没有"的分叉。
+func hasSkillDir(root string) bool {
+	files, err := collectSkillFiles(root)
+	if err != nil {
+		return false
+	}
+	// 收集到的条目里必须真的有 SKILL.md 才算一个可用 skill：
+	// 只有目录没有说明文件的条目，注册到 skillmgr 也是空壳。
+	for _, f := range files {
+		if strings.HasSuffix(f.zip, "SKILL.md") {
+			return true
+		}
+	}
+	return false
+}

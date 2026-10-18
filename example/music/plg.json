@@ -6,10 +6,16 @@
   "description": "音乐搜索插件，支持搜索歌曲和查看歌词（基于网易云音乐）",
   "author": "HomeAgent",
   "entry": "plugin.so",
-  "tags": ["music", "song", "lyrics", "网易云"],
+  "tags": [
+    "music",
+    "song",
+    "lyrics",
+    "网易云"
+  ],
   "targets": "linux/amd64",
   "outdir": "dist",
   "bundle": true,
   "replaces": {},
-  "source_dirs": []
+  "source_dirs": [],
+  "auto_start": false
 }
