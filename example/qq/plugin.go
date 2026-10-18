@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/JianFeeeee/homeagentsdk/sdk"
@@ -197,6 +198,13 @@ type Plugin struct {
 	downloadTasks  []*DownloadTask
 	typingMu       sync.Mutex
 	typingMap      map[int64]*typingState
+
+	// statusAutoEnabled 是「随内核阶段自动切 QQ 在线状态」的总开关。
+	//
+	// 默认**关闭**：自动改 QQ 状态是内核替用户做决定（与 offload 同理，
+	// 属于显式特权）。且它对外可见 —— 好友会看到你的状态在跳。
+	statusAutoEnabled atomic.Bool
+	statusState       statusState
 
 	authMu               sync.RWMutex
 	auth                 qqAuthContext
@@ -397,6 +405,11 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "listen", Default: "0.0.0.0:25580", Type: "string", DisplayName: "监听地址", Description: "Webhook HTTP 监听地址", Category: "qq"})
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "napcat_url", Default: "http://127.0.0.1:3000", Type: "string", DisplayName: "NapCat 地址", Description: "NapCat HTTP API 基础 URL", Category: "qq"})
+	// 在线状态随阶段切换（默认关）。
+	//
+	// 默认关的理由：它对外可见（好友会看到状态在跳），属于
+	// "内核替用户做决定"——与 offload 同一类，必须显式打开。
+	s.Settings().RegisterDef(sdk.ConfigDef{Key: "status_auto", Default: "false", Type: "bool", DisplayName: "随阶段切在线状态", Description: "开启后：调工具时切「搬砖中」、生成回复时切「学习中」、一轮结束切回「在线」。失败不影响工具调用", Category: "qq"})
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "owner", Default: "", Type: "string", DisplayName: "Bot 所有者 QQ", Description: "Bot 所有者 QQ 号列表，逗号分隔。所有者无论私聊或群聊均拥有完整工具权限", Category: "qq"})
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "admin", Default: "", Type: "string", DisplayName: "Bot 所有者 QQ（旧配置）", Description: "兼容旧版 admin 配置；owner 为空时作为 Bot 所有者列表", Category: "qq"})
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "group_tool_allowlists", Default: defaultGroupToolAllowlists, Type: "string", DisplayName: "群聊工具白名单", Description: "JSON 对象：群号到允许工具名/前缀*的数组；* 为未单独配置群的默认白名单。Bot 所有者不受限制", Category: "qq"})
@@ -421,6 +434,15 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	p.listenAddr = getSetting[string](settings, "listen", "0.0.0.0:25580")
 	p.webhookToken = getSetting[string](settings, "webhook_token", "")
 	p.napcatURL = strings.TrimRight(getSetting[string](settings, "napcat_url", "http://127.0.0.1:3000"), "/")
+	// 自动状态切换的总开关（默认 false，见 RegisterDef 处的理由）。
+	//
+	// ★ 用 getSetting[string] 而不是 bool：该泛型约束是
+	// string | int64 | float64（不含 bool），SettingsAPI.Get 返回
+	// interface{} ⇒ 布尔值在存储层是 "true"/"false" 字符串。
+	if strings.EqualFold(getSetting[string](settings, "status_auto", "false"), "true") {
+		p.statusAutoEnabled.Store(true)
+		log.Printf("[qq] 自动在线状态切换已开启（随内核阶段）")
+	}
 	ownerRaw := getSetting[string](settings, "owner", "")
 	if strings.TrimSpace(ownerRaw) == "" {
 		ownerRaw = getSetting[string](settings, "admin", "")
@@ -780,6 +802,36 @@ type 枚举: text（文字）/ voice（语音转文字后发送）/ image（图�
 
 	// ---- 附加 ----
 	p.regTool(s, sdk.ToolDef{
+		Name: tp + "set_status",
+		Description: "设 QQ 在线状态（对外可见）。" +
+			"可选：online/busy/leave/dnd/hidden/working/study/music（也收中文名）。" +
+			"失败只记日志、不影响其他工具。",
+		Parameters: map[string]interface{}{
+			"type": "object", "properties": map[string]interface{}{
+				"status": map[string]interface{}{
+					"type":        "string",
+					"description": "状态名：online|busy|leave|dnd|hidden|working|study|music，或中文（在线/忙碌/离开/请勿打扰/隐身/搬砖中/学习中/听歌中）",
+				},
+			}, "required": []string{"status"},
+		},
+		NoMemory: true,
+	}, p.handleSetStatus)
+
+	p.regTool(s, sdk.ToolDef{
+		Name: tp + "set_diy_status",
+		Description: "设 QQ **自定义**在线状态（图标 + 文字）。" +
+			"face_id 是 QQ 状态图标 ID（需自行提供，无内置图标表）；" +
+			"wording 是显示文字（如「思考中…」）。失败只记日志。",
+		Parameters: map[string]interface{}{
+			"type": "object", "properties": map[string]interface{}{
+				"face_id": map[string]interface{}{"type": "string", "description": "状态图标 ID（QQ 的 QSid）"},
+				"wording": map[string]interface{}{"type": "string", "description": "状态文字，如「思考中…」"},
+			}, "required": []string{"face_id", "wording"},
+		},
+		NoMemory: true,
+	}, p.handleSetDiyStatus)
+
+	p.regTool(s, sdk.ToolDef{
 		Name: tp + "send_like", Description: "给QQ好友点赞/戳一戳",
 		Parameters: map[string]interface{}{
 			"type": "object", "properties": map[string]interface{}{
@@ -793,6 +845,13 @@ type 枚举: text（文字）/ voice（语音转文字后发送）/ image（图�
 	// 全局权限门：只有 QQ 当前输入需要受此插件约束；Bot 所有者始终完整放行。
 	s.RegisterStage(sdk.StageOnInput, p.onInputAuthContext, sdk.StageScopeGlobal)
 	s.RegisterStage(sdk.StageBeforeToolcall, p.beforeToolcall, sdk.StageScopeGlobal)
+	// 在线状态随阶段切换（默认关闭，见 statusAutoEnabled 的注释）。
+	//
+	// ★ 三个钩子都只有一件事：调 p.applyStatus；**永远 return nil**。
+	//   状态是非致命错误 —— 不能因为它阻塞工具调用或改写回复。
+	s.RegisterStage(sdk.StageBeforeToolcall, p.stageStatusWorking, sdk.StageScopeGlobal)
+	s.RegisterStage(sdk.StageBeforeOutput, p.stageStatusThinking, sdk.StageScopeGlobal)
+	s.RegisterStage(sdk.StageAfterOutput, p.stageStatusOnline, sdk.StageScopeGlobal)
 	// before_toolcall 的 Response 只用于拒绝当前工具。下一次模型补全到达时必须清掉，
 	// 否则内核会把它误当作“结束整个推理”的最终响应。
 	s.RegisterStage(sdk.StagePostAction, p.clearDeniedResponse, sdk.StageScopeGlobal)
@@ -817,6 +876,15 @@ type 枚举: text（文字）/ voice（语音转文字后发送）/ image（图�
 }
 
 func (p *Plugin) Stop() error {
+	// ★ 停机前把在线状态恢复为「在线」。
+	//
+	// 不恢复的话，若停机时正处于“搬砖中”，QQ 会一直挂着那个状态，
+	// 而下一次自动切换只在开关打开时才生效 —— 用户会看到一个
+	// **永久错位**的状态，且不知道是什么改的。
+	//
+	// 放在最前：后面的 flushAllBatches 可能耗时，先把对外观感收尾。
+	p.restoreStatus()
+
 	p.typingMu.Lock()
 	for _, st := range p.typingMap {
 		select {
