@@ -708,9 +708,50 @@ func buildPluginSDK(name string) *sdk.PluginSDK {
 			})
 		},
 		func(stage sdk.Stage, handler sdk.StageHandler) {
+			// ★★ 同一 stage 多次注册 ⇒ **默认合并**（按注册顺序链式），并告警。
+			//
+			// ## 原先的静默覆盖造成过真实事故（2026-10-18）
+			//
+			// 原实现是 `stageHandlers[string(stage)] = handler`（stage 名为键）⇒
+			// 后者**静默覆盖**前者。有人写了：
+			//
+			//	RegisterStage(BeforeToolcall, 权限门)   ← 被下一条覆盖
+			//	RegisterStage(BeforeToolcall, 切状态)   ← 实际生效
+			//
+			// 后果不只是状态不切换 —— **权限门被静默关掉了**。
+			// 而内核侧日志显示 `2 handlers [qq qq]`，看着完全正常。
+			//
+			// 三种处置的取舍：
+			//	禁止重复 → 存量插件可能直接起不来（它们的重复常是本意）
+			//	静默覆盖 → 就是当前 bug
+			//	默认合并 → 两件事都做，且告警让开发者知道该优化写法 ← 选这个
+			//
+			// 告警在**注册期**（插件启动时）打到 stderr，开发者在本地跑就能看见。
+			// 想消除告警就把多个功能写进同一个 handler（本项目 QQ 插件的做法）。
 			handlerMu.Lock()
-			stageHandlers[string(stage)] = handler
+			prev, dup := stageHandlers[string(stage)]
+			if dup {
+				// 链式：先跑已注册的，它返回 error 就中止（与内核 RunStage 语义一致：
+				// 错误要能拦住后面的处理——比如权限门拒了就不该再切状态）。
+				stageHandlers[string(stage)] = func(ctx *sdk.StageContext) error {
+					if err := prev(ctx); err != nil {
+						return err
+					}
+					return handler(ctx)
+				}
+			} else {
+				stageHandlers[string(stage)] = handler
+			}
 			handlerMu.Unlock()
+
+			if dup {
+				log.Printf("[plugin] ⚠️ stage %q 重复注册（已按注册顺序链式合并）。"+
+					"建议把多个功能合并进同一个 handler —— 每次 stage 往返都有跨进程开销。", stage)
+				// ★ 重复注册**不**再次上报 stage.register：内核已经登记过一条，
+				// 再报一条会让内核以为有两个独立 handler（它确实会记两条，
+				// 但派发时只调用一次 —— 这就是之前那个 `2 handlers [qq qq]` 假象）。
+				return
+			}
 			if err := callCoreVoid("stage.register", map[string]interface{}{
 				"stage": string(stage), "scope": "global",
 			}); err != nil {
