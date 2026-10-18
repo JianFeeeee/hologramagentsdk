@@ -67,6 +67,42 @@ jobs:
             echo "ERROR: 无法从 meta/meta.go 读出 Version"
             exit 1
           fi
+
+          # ★★ 开发阶段保护（2026-10-18 实测事故）
+          #
+          # 本 workflow 的触发条件就是 push release/**，而 tag 名 = v$V。
+          # 于是只要有人**为了走 PR 流程**随手推一个 release/vX.Y.x 分支，
+          # meta 里的开发版本号就会被**自动打 tag 并发布 Release**：
+          #
+          #   2026-10-17 08:35  github-actions[bot] 打出 v1.4.0 并发布
+          #                     → 而 1.4.0 当时还是开发阶段
+          #
+          # 更麻烦的是它指向旧提交：之后又合了三个修复（异步投递、台账回填），
+          # 已发布的 1.4.0 里**没有**这些修复，而 Release 看起来是"最新"。
+          #
+          # ⇒ 分支名与 meta.Version 必须**一致**才允许发版。
+          #   推 release/v1.4.x 而 meta 写着 1.4.0（开发中）时，
+          #   意图明显是"走流程"而不是"发这个版本"，直接拒绝。
+          BRANCH="${GITHUB_REF_NAME:-}"
+          case "$BRANCH" in
+            release/v*.*.x)
+              # release/vX.Y.x —— 中版本长跑线，允许发该中版本下的任何 patch
+              MAJMIN=$(printf '%s' "$BRANCH" | sed -E 's#^release/v([0-9]+\.[0-9]+)\.x$#\1#')
+              case "$V" in
+                "$MAJMIN"|"$MAJMIN".*) ;;
+                *)
+                  echo "ERROR: 分支 $BRANCH 与 meta.Version=$V 不匹配。" >&2
+                  echo "       该分支承载的是 $MAJMIN.* 系列，而 meta 是 $V。" >&2
+                  echo "       开发阶段请勿推 release/** —— 它会自动打 tag 并发 Release。" >&2
+                  exit 1 ;;
+              esac ;;
+            release/v[0-9]*.[0-9]*.[0-9]*)
+              BVER=$(printf '%s' "$BRANCH" | sed -E 's#^release/v##')
+              if [ "$BVER" != "$V" ]; then
+                echo "ERROR: 分支 $BRANCH（钉到 $BVER）与 meta.Version=$V 不一致。" >&2
+                exit 1
+              fi ;;
+          esac
           echo "version=$V" >> "$GITHUB_OUTPUT"
           echo "tag=v$V" >> "$GITHUB_OUTPUT"
           case "$V" in
