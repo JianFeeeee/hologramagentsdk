@@ -6,7 +6,6 @@
   "description": "沙箱内执行",
   "author": "HomeAgent",
   "entry": "plugin.so",
-  "sdk": "1.4.0",
   "tags": [
     "cmd"
   ],
