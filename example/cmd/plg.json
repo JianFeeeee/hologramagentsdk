@@ -1,0 +1,19 @@
+{
+  "name": "cmd",
+  "name_zh": "命令执行",
+  "name_en": "cmd",
+  "version": "1.0.0",
+  "description": "沙箱内执行",
+  "author": "HomeAgent",
+  "entry": "plugin.so",
+  "sdk": "1.4.0",
+  "tags": [
+    "cmd"
+  ],
+  "targets": "linux/amd64",
+  "outdir": "dist",
+  "bundle": false,
+  "replaces": {},
+  "source_dirs": [],
+  "auto_start": false
+}

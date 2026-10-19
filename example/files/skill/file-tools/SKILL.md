@@ -22,7 +22,8 @@ plugin_start  name=files
 |---|---|
 | `files_read` | 读文件内容 |
 | `files_write` | 写文件（覆盖） |
-| `files_edit` | 局部替换编辑 |
+| `files_edit` | 局部替换编辑（old 文本须全文件唯一） |
+| `files_edit_line` | **按行号**精确替换/插入/删除（目标文本不唯一时用它，如改第 N 个 `}`） |
 | `files_ls` | 列目录 |
 
 ## 用完可释放

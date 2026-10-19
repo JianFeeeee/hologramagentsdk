@@ -124,6 +124,43 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 		},
 	}, p.handleEdit)
 
+	s.RegisterTool(tp+"edit_line", sdk.ToolDef{
+		Name: tp + "edit_line",
+		Description: fmt.Sprintf("Replace or insert by **line number** within the sandbox (%s). "+
+			"Use this instead of %sedit when the target text is not unique (e.g. a blank line, "+
+			"a closing brace, or a repeated statement) — %sedit requires the old text to appear exactly "+
+			"once and will refuse otherwise. Line numbers are 1-indexed and refer to the file as it is "+
+			"before this call; multiple edits are applied bottom-up so earlier line numbers stay valid.",
+			p.filesDir, p.name+"_", p.name+"_"),
+		Parameters: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"path": map[string]interface{}{"type": "string", "description": "File path relative to sandbox or absolute"},
+				"edits": map[string]interface{}{
+					"type": "array",
+					"description": "Line-targeted operations. Do not overlap ranges. Applied from the last line to the first.",
+					"items": map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"line": map[string]interface{}{"type": "integer", "description": "Target line (1-indexed)"},
+							"op": map[string]interface{}{
+								"type":        "string",
+								"description": "replace (default): replace that line | insert: insert new text *before* that line | delete: remove that line",
+							},
+							"text": map[string]interface{}{"type": "string", "description": "New text (may contain \\n for multiple lines). Omit for delete."},
+							"expect": map[string]interface{}{
+								"type":        "string",
+								"description": "Optional safety check: the current line must equal this exactly (ignoring trailing \\r). Guards against acting on a stale line number.",
+							},
+						},
+						"required": []string{"line"},
+					},
+				},
+			},
+			"required": []string{"path", "edits"},
+		},
+	}, p.handleEditLine)
+
 	s.RegisterTool(tp+"ls", sdk.ToolDef{
 		Name:        tp + "ls",
 		Description: fmt.Sprintf("List directory contents within the sandbox (%s). Directories are marked with / suffix.", p.filesDir),
@@ -462,6 +499,190 @@ func (p *Plugin) handleEdit(args map[string]interface{}) (interface{}, error) {
 	return map[string]interface{}{
 		"content": msg,
 	}, nil
+}
+
+// handleEditLine implements the edit_line tool: line-number targeted edits.
+//
+// ## 为什么除了 edit 还要这个
+//
+// files_edit 的判据是「old 文本在文件里**恰好出现一次**」。这个约束在真实
+// 改代码时经常不成立：
+//
+//	· 改一个 `}`、一个空行、`return nil` —— 全文件出现几十次，edit 直接拒绝；
+//	· 改「第三个 case 分支里的 break」—— 文本与前两个字节相同，无法定位。
+//
+// 于是模型只能退化成 read 全文 + write 全文，而那是有损的：整段重写会
+// 顺带改动空白/换行/文件末尾，diff 里再也看不出「只改了这一行」。
+//
+// 本工具按**行号**定位，不依赖文本唯一性；`expect` 提供可选的安全闸
+// （行内容与预期不符就整体放弃，防止拿到过期行号后改错地方）。
+func (p *Plugin) handleEditLine(args map[string]interface{}) (interface{}, error) {
+	path, _ := args["path"].(string)
+	if path == "" {
+		return errorResult("path is required"), nil
+	}
+	absPath, err := p.resolvePath(path)
+	if err != nil {
+		return errorResult(err.Error()), nil
+	}
+
+	rawEdits, ok := args["edits"].([]interface{})
+	if !ok || len(rawEdits) == 0 {
+		return errorResult("edits must be a non-empty array"), nil
+	}
+
+	data, err := os.ReadFile(absPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errorResult("file not found: " + path), nil
+		}
+		return errorResult("read error: " + err.Error()), nil
+	}
+	original := string(data)
+
+	// 按行切分并保留行尾信息：是否有 \r\n、末尾是否带换行。
+	// 这两点必须原样还原，否则「精确替换一行」会顺手改掉整个文件的换行风格。
+	crlf := strings.Contains(original, "\r\n")
+	endsWithNewline := strings.HasSuffix(original, "\n")
+	lines := strings.Split(original, "\n")
+	if endsWithNewline {
+		lines = lines[:len(lines)-1]
+	}
+	// 每行去掉 \r（若原文件是 CRLF），edit 内部统一按无 \r 的文本处理。
+	for i := range lines {
+		lines[i] = strings.TrimSuffix(lines[i], "\r")
+	}
+
+	type op struct {
+		line   int
+		kind   string
+		text   string
+		expect string
+		idx    int
+	}
+	var ops []op
+	var errors []string
+
+	for i, raw := range rawEdits {
+		edit, ok := raw.(map[string]interface{})
+		if !ok {
+			errors = append(errors, fmt.Sprintf("edit[%d]: invalid format", i))
+			continue
+		}
+		ln64, err := toInt64(edit["line"])
+		if err != nil || ln64 < 1 {
+			errors = append(errors, fmt.Sprintf("edit[%d]: line must be a positive integer", i))
+			continue
+		}
+		kind, _ := edit["op"].(string)
+		if kind == "" {
+			kind = "replace"
+		}
+		if kind != "replace" && kind != "insert" && kind != "delete" {
+			errors = append(errors, fmt.Sprintf("edit[%d]: op must be replace|insert|delete, got %q", i, kind))
+			continue
+		}
+		text, _ := edit["text"].(string)
+		if kind != "delete" && text == "" && edit["text"] == nil {
+			errors = append(errors, fmt.Sprintf("edit[%d]: text is required for op=%s", i, kind))
+			continue
+		}
+		expect, _ := edit["expect"].(string)
+		ops = append(ops, op{line: int(ln64), kind: kind, text: text, expect: expect, idx: i})
+	}
+
+	if len(errors) > 0 {
+		return errorResult("invalid edits: " + strings.Join(errors, "; ")), nil
+	}
+
+	// 行号允许等于 len(lines)+1 用于在文件末尾追加（insert）。
+	for _, o := range ops {
+		if o.line > len(lines)+1 {
+			return errorResult(fmt.Sprintf(
+				"edit[%d]: line %d is out of range (file has %d lines)", o.idx, o.line, len(lines))), nil
+		}
+	}
+
+	// ★ 从后往前应用：这样前面编辑的行号不受影响，调用方可以用「一次性
+	// 基于原始文件的行号」来描述多处修改，无需自己算偏移。
+	sort.SliceStable(ops, func(a, b int) bool { return ops[a].line > ops[b].line })
+
+	for _, o := range ops {
+		pos := o.line - 1 // 0-indexed 插入/替换位置
+		switch o.kind {
+		case "insert":
+			// 允许 line == len(lines)+1：追加到末尾。
+			if pos > len(lines) {
+				pos = len(lines)
+			}
+			newLines := strings.Split(o.text, "\n")
+			lines = append(lines[:pos], append(newLines, lines[pos:]...)...)
+		case "delete":
+			if pos >= len(lines) {
+				return errorResult(fmt.Sprintf(
+					"edit[%d]: cannot delete line %d (file has %d lines)", o.idx, o.line, len(lines))), nil
+			}
+			if o.expect != "" && lines[pos] != o.expect {
+				return errorResult(fmt.Sprintf(
+					"edit[%d]: line %d is %q, expected %q — file changed since you read it; re-read and retry",
+					o.idx, o.line, lines[pos], o.expect)), nil
+			}
+			lines = append(lines[:pos], lines[pos+1:]...)
+		case "replace":
+			if pos >= len(lines) {
+				return errorResult(fmt.Sprintf(
+					"edit[%d]: cannot replace line %d (file has %d lines); use op=insert to append",
+					o.idx, o.line, len(lines))), nil
+			}
+			// expect 是安全闸：行号过期时宁可报错，也不要在错误位置写内容。
+			if o.expect != "" && lines[pos] != o.expect {
+				return errorResult(fmt.Sprintf(
+					"edit[%d]: line %d is %q, expected %q — file changed since you read it; re-read and retry",
+					o.idx, o.line, lines[pos], o.expect)), nil
+			}
+			newLines := strings.Split(o.text, "\n")
+			lines = append(lines[:pos], append(newLines, lines[pos+1:]...)...)
+		}
+	}
+
+	sep := "\n"
+	if crlf {
+		sep = "\r\n"
+	}
+	out := strings.Join(lines, sep)
+	if endsWithNewline {
+		out += sep
+	}
+
+	if err := os.WriteFile(absPath, []byte(out), 0644); err != nil {
+		return errorResult("write error: " + err.Error()), nil
+	}
+
+	return map[string]interface{}{
+		"content": fmt.Sprintf("Successfully applied %d line edit(s) to %s (%d lines now)",
+			len(ops), path, len(lines)),
+	}, nil
+}
+
+// toInt64 宽容地把 JSON 数字（float64）或字符串转成 int64。
+func toInt64(v interface{}) (int64, error) {
+	switch n := v.(type) {
+	case float64:
+		return int64(n), nil
+	case int:
+		return int64(n), nil
+	case int64:
+		return n, nil
+	case json.Number:
+		return n.Int64()
+	case string:
+		var i int64
+		if _, err := fmt.Sscanf(n, "%d", &i); err != nil {
+			return 0, err
+		}
+		return i, nil
+	}
+	return 0, fmt.Errorf("cannot convert %T to int64", v)
 }
 
 // handleLs implements the ls tool.

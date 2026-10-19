@@ -1,0 +1,19 @@
+{
+  "name": "localuse",
+  "name_zh": "本地外设",
+  "name_en": "localuse",
+  "version": "1.0.0",
+  "description": "Device",
+  "author": "HomeAgent",
+  "entry": "plugin.so",
+  "sdk": "1.4.0",
+  "tags": [
+    "localuse"
+  ],
+  "targets": "linux/amd64",
+  "outdir": "dist",
+  "bundle": false,
+  "replaces": {},
+  "source_dirs": [],
+  "auto_start": false
+}
