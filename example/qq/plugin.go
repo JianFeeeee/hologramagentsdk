@@ -599,8 +599,16 @@ type 枚举: text（文字）/ voice（语音转文字后发送）/ image（图�
 		RecallPolicy:  "auto",
 		Parameters: map[string]interface{}{
 			"type": "object", "properties": map[string]interface{}{
-				"group_id": map[string]interface{}{"type": "integer", "description": "群号（与user_id二选一）"},
-				"user_id":  map[string]interface{}{"type": "integer", "description": "QQ号私聊历史（与group_id二选一）"},
+				// ★ 参数语义必须写死「私聊不要传 group_id」。
+				//
+				// 现场故障（2026-10-19）：模型先调 qq_get_message 取私聊正文，
+				// 而私聊消息的返回体带 "group_id": 0（QQ 协议里私聊群号为 0）。
+				// 它随后把整个返回体的字段原样喂给本工具，于是传入 group_id=0，
+				// 后端走了 get_group_msg_history(群0) → NapCat 回「消息undefined不存在」，
+				// 私聊历史永远拉不到。光在代码里把 0 判成缺失还不够 —— 模型仍需
+				// 知道自己该传什么，否则会反复试错。
+				"group_id": map[string]interface{}{"type": "integer", "description": "群号（仅群聊）。私聊必须省略此字段、只传 user_id；不要传 group_id=0 —— 0 不是合法群号，私聊的 group_id 在消息体里就是 0，回灌进来会查不到任何东西。"},
+				"user_id":  map[string]interface{}{"type": "integer", "description": "QQ号（仅私聊历史）。私聊请只传这个，不要同时传 group_id。"},
 				"count":    map[string]interface{}{"type": "integer", "description": "拉取条数，默认10"},
 			}, "required": []string{},
 		},
@@ -1210,6 +1218,24 @@ func argInt64(args map[string]interface{}, key string) (int64, bool) {
 	}
 	parsed, err := convInt64(value)
 	return parsed, err == nil && parsed != 0
+}
+
+// argPeerID 解析「会话标识」参数（group_id / user_id），把 0 视为**未提供**。
+//
+// ## 为什么不能直接用 convInt64 的 err==nil 当「存在」（2026-10-19 实测故障）
+//
+// convInt64 对 0 是成功返回的，于是 `if gerr == nil` 会把「没传」和「传了 0」
+// 混为一谈。真实后果：模型从 qq_get_message 的返回体里读到私聊消息的
+// `group_id: 0`，原样回灌给 qq_get_history，代码便认为「调用方要查群 0」，
+// 打 get_group_msg_history(group_id=0)，NapCat 回
+// `retcode=200 消息undefined不存在`；而真正的私聊端点
+// get_friend_msg_history **一次都没被调用**（内核日志 13 次失败全部如此）。
+//
+// 群号/QQ 号都是正整数，0 从来不是合法会话，所以这里必须把 0 判成缺失。
+// 权限门用的 argInt64 早有 `parsed != 0` 检查 —— 本函数把同一个判据
+// 补到业务分支上，避免同一份代码里「权限门严、取数松」的错配。
+func argPeerID(args map[string]interface{}, key string) (int64, bool) {
+	return argInt64(args, key)
 }
 
 func (p *Plugin) sessionToolArgsAllowed(name string, args map[string]interface{}, auth qqAuthContext) (bool, string) {
@@ -2221,16 +2247,28 @@ func msgToGetMsgResult(msg map[string]interface{}) map[string]interface{} {
 	if mtType == "group" || gid > 0 {
 		loc = "群聊"
 	}
-	return map[string]interface{}{
+	// ★ 私聊不要输出 group_id。
+	//
+	// 现场故障（2026-10-19）：这里无条件写 "group_id": 0，模型取回私聊正文后
+	// 看到 group_id 字段就以为"这个会话的群号是 0"，把它原样回灌给
+	// qq_get_history，于是后者打 get_group_msg_history(group_id=0) 拿到
+	// 「消息undefined不存在」，13 次调用全灭（get_friend_msg_history 0 次）。
+	//
+	// 光在下游把 0 判成缺失只能止血，模型仍会一次次误用。**不在返回体里给它
+	// 这个字段**，才是从源头断掉这条错误链：群聊才带 group_id，私聊只带 user_id。
+	result := map[string]interface{}{
 		"content":      content,
 		"message_id":   int64(mid),
 		"user_id":      int64(uid),
-		"group_id":     int64(gid),
 		"nickname":     nickname,
 		"message_type": mtType,
 		"type":         loc,
 		"time":         time.Unix(int64(mt), 0).Format("2006-01-02 15:04:05"),
 	}
+	if gid > 0 {
+		result["group_id"] = int64(gid)
+	}
+	return result
 }
 
 func (p *Plugin) handleGetMessage(args map[string]interface{}) (interface{}, error) {
@@ -2611,10 +2649,15 @@ func (p *Plugin) ttsToFile(text string) (string, error) {
 }
 
 func (p *Plugin) handleSendFile(args map[string]interface{}) (interface{}, error) {
-	gid, gerr := convInt64(args["group_id"])
-	uid, uerr := convInt64(args["user_id"])
-	if gerr != nil && uerr != nil {
-		return nil, fmt.Errorf("need group_id or user_id")
+	// 用 argPeerID（0 视为未提供）：旧的 convInt64 会把 group_id=0 当成
+	// "发往群 0"，于是文件发不出去还报得含糊 —— 同一个零值缺陷，见 argPeerID 注释。
+	gid, hasGroup := argPeerID(args, "group_id")
+	uid, hasUser := argPeerID(args, "user_id")
+	if !hasGroup && !hasUser {
+		return nil, fmt.Errorf("需要 group_id（群）或 user_id（私聊）：私聊请只传 user_id，不要传 group_id=0")
+	}
+	if hasGroup && hasUser {
+		return nil, fmt.Errorf("group_id 与 user_id 只能二选一")
 	}
 	filePath, _ := args["file"].(string)
 	if filePath == "" {
@@ -2646,7 +2689,7 @@ func (p *Plugin) handleSendFile(args map[string]interface{}) (interface{}, error
 	}
 
 	params := map[string]interface{}{"message": cqMsg}
-	if gerr == nil {
+	if hasGroup {
 		params["group_id"] = gid
 		return p.napcat("send_group_msg", params)
 	}
@@ -2668,11 +2711,12 @@ func (p *Plugin) handleListChats(args map[string]interface{}) (interface{}, erro
 }
 
 func (p *Plugin) handleMarkRead(args map[string]interface{}) (interface{}, error) {
-	if gid, err := convInt64(args["group_id"]); err == nil {
+	// 0 不是合法会话，必须当"未提供"（否则 markChatRead(0) 静默清不存在的会话）
+	if gid, ok := argPeerID(args, "group_id"); ok {
 		p.markChatRead(gid)
 		return map[string]interface{}{"status": "ok", "group_id": gid, "unread": 0}, nil
 	}
-	if uid, err := convInt64(args["user_id"]); err == nil {
+	if uid, ok := argPeerID(args, "user_id"); ok {
 		p.markChatRead(uid)
 		return map[string]interface{}{"status": "ok", "user_id": uid, "unread": 0}, nil
 	}
@@ -2680,8 +2724,8 @@ func (p *Plugin) handleMarkRead(args map[string]interface{}) (interface{}, error
 }
 
 func (p *Plugin) handleGetHistory(args map[string]interface{}) (interface{}, error) {
-	gid, gerr := convInt64(args["group_id"])
-	uid, uerr := convInt64(args["user_id"])
+	gid, hasGroup := argPeerID(args, "group_id")
+	uid, hasUser := argPeerID(args, "user_id")
 	count := 10
 	if c, err := convInt64(args["count"]); err == nil && c > 0 {
 		count = int(c)
@@ -2689,14 +2733,19 @@ func (p *Plugin) handleGetHistory(args map[string]interface{}) (interface{}, err
 
 	var endpoint string
 	var params map[string]interface{}
-	if gerr == nil {
+	switch {
+	case hasGroup && hasUser:
+		// 两个都给 ⇒ 语义不明。旧实现静默走群聊分支，把私聊请求打成群号查询，
+		// 用户看到的是 NapCat 的「消息undefined不存在」，根本看不出是参数用错。
+		return nil, fmt.Errorf("group_id 与 user_id 只能二选一：私聊请只传 user_id，群聊请只传 group_id")
+	case hasGroup:
 		endpoint = "get_group_msg_history"
 		params = map[string]interface{}{"group_id": gid, "count": count}
-	} else if uerr == nil {
+	case hasUser:
 		endpoint = "get_friend_msg_history"
 		params = map[string]interface{}{"user_id": uid, "count": count}
-	} else {
-		return nil, fmt.Errorf("need group_id or user_id")
+	default:
+		return nil, fmt.Errorf("需要 group_id（群聊）或 user_id（私聊）：私聊请只传 user_id，不要传 group_id=0")
 	}
 
 	rawResp, err := p.napcat(endpoint, params)
@@ -2818,9 +2867,9 @@ func (p *Plugin) handleGetHistory(args map[string]interface{}) (interface{}, err
 		result["files"] = files
 	}
 	// 拉取过某会话历史即视为已读（与真人客户端一致：看过=已读）
-	if gerr == nil {
+	if hasGroup {
 		p.markChatRead(gid)
-	} else if uerr == nil {
+	} else if hasUser {
 		p.markChatRead(uid)
 	}
 	return result, nil
@@ -2859,8 +2908,8 @@ func (p *Plugin) handleResolveNickname(args map[string]interface{}) (interface{}
 	}
 	keyword = strings.ToLower(keyword)
 
-	gid, groupErr := convInt64(args["group_id"])
-	if groupErr == nil {
+	gid, hasGroupID := argPeerID(args, "group_id")
+	if hasGroupID {
 		v, err := p.napcat("get_group_member_list", map[string]interface{}{"group_id": gid})
 		if err != nil {
 			return nil, err
