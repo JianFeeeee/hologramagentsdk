@@ -634,6 +634,20 @@ type 枚举: text（文字）/ voice（语音转文字后发送）/ image（图�
 	}, p.handleDescribeSticker)
 
 	p.regTool(s, sdk.ToolDef{
+		Name: tp + "add_sticker", Description: "把别人发来的表情**添加到我自己的收藏表情**（NapCat add_custom_face）。" +
+			"三种来源任选：message_id（把那条消息里的表情全部收藏）、url（表情图片地址）、file（本机图片路径）。" +
+			"收藏后可用 qq_list_stickers 看到并发送。",
+		Parameters: map[string]interface{}{
+			"type": "object", "properties": map[string]interface{}{
+				"message_id": map[string]interface{}{"type": "integer", "description": "消息 ID：会把该消息里所有表情图片都收藏"},
+				"url":        map[string]interface{}{"type": "string", "description": "单张表情图片地址"},
+				"file":       map[string]interface{}{"type": "string", "description": "本机图片路径"},
+			},
+		},
+		NoMemory: true,
+	}, p.handleAddSticker)
+
+	p.regTool(s, sdk.ToolDef{
 		Name: tp + "get_history", Description: "获取QQ群聊/私聊最近历史消息。当收到引用回复消息或需要了解对话上下文时应优先调用此工具查看前后文。返回值每条格式为 [时间] 发送者: 消息内容。如果消息包含文件，会额外返回 files 字段（含 file_id 和 name），可用 qq_download_file 工具下载。",
 		NoMemory: false,
 		Cleaner:  cleaner,
@@ -2945,6 +2959,199 @@ func (p *Plugin) handleSendSticker(args map[string]interface{}) (interface{}, er
 	}
 	msg["user_id"] = uid
 	return p.napcat("send_private_msg", msg)
+}
+
+// addFaceByFile 把已放到 remote 目录的图片加入收藏表情。
+//
+// NapCat 的 add_custom_face 只认**它自己能读到的路径**（容器里的 /app/files），
+// 与 send_file 是同一个共享目录约定，所以先落地到 p.remoteDir 再传 file:///app/files。
+func (p *Plugin) addFaceByFile(fileName string) (bool, error) {
+	raw, err := p.napcat("add_custom_face", map[string]interface{}{
+		"file": "/app/files/" + fileName,
+	})
+	if err != nil {
+		return false, err
+	}
+	var rawData []byte
+	switch v := raw.(type) {
+	case json.RawMessage:
+		rawData = v
+	case []byte:
+		rawData = v
+	default:
+		rawData, _ = json.Marshal(v)
+	}
+	var resp struct {
+		Data struct {
+			Result  int `json:"result"`
+			IsExist int `json:"isExist"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rawData, &resp); err != nil {
+		return false, fmt.Errorf("解析 add_custom_face 失败: %w", err)
+	}
+	if resp.Data.Result != 0 {
+		return false, fmt.Errorf("add_custom_face result=%d", resp.Data.Result)
+	}
+	return resp.Data.IsExist == 1, nil
+}
+
+// downloadToRemote 下载图片到 remote 目录（NapCat 可见），返回文件名。
+func (p *Plugin) downloadToRemote(url, baseName string) (string, error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return "", err
+	}
+	// QQ 多媒体 CDN 对 UA 有要求；空 UA 会被 403。
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	client := p.httpClient
+	if client == nil {
+		client = &http.Client{Timeout: 30 * time.Second}
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("下载表情失败: HTTP %d", resp.StatusCode)
+	}
+	if baseName == "" {
+		baseName = fmt.Sprintf("sticker_%d.jpg", time.Now().UnixNano())
+	}
+	os.MkdirAll(p.remoteDir, 0755)
+	dest := filepath.Join(p.remoteDir, sanitizeFilename(baseName))
+	f, err := os.Create(dest)
+	if err != nil {
+		return "", err
+	}
+	if _, err := io.Copy(f, resp.Body); err != nil {
+		f.Close()
+		return "", err
+	}
+	f.Close()
+	return filepath.Base(dest), nil
+}
+
+// copyToRemote 把本机已有图片复制到 remote 目录。
+func (p *Plugin) copyToRemote(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	os.MkdirAll(p.remoteDir, 0755)
+	dest := filepath.Join(p.remoteDir, sanitizeFilename(filepath.Base(path)))
+	if err := os.WriteFile(dest, data, 0644); err != nil {
+		return "", err
+	}
+	return filepath.Base(dest), nil
+}
+
+// stickerURLsFromMessage 取一条消息里所有表情图片的 URL（sub_type=1）。
+//
+// 为什么按 sub_type 而不是 summary：NapCat 上报表情包时是 image 段、sub_type=1，
+// summary 可能是空的或本地化的「[动画表情]」，不可靠。
+func (p *Plugin) stickerURLsFromMessage(messageID int64) ([]string, error) {
+	if messageID <= 0 {
+		return nil, fmt.Errorf("message_id 无效")
+	}
+	raw, err := p.napcat("get_msg", map[string]interface{}{"message_id": messageID})
+	if err != nil {
+		return nil, err
+	}
+	var rawData []byte
+	switch v := raw.(type) {
+	case json.RawMessage:
+		rawData = v
+	case []byte:
+		rawData = v
+	default:
+		rawData, _ = json.Marshal(v)
+	}
+	var resp struct {
+		Data struct {
+			Message []struct {
+				Type string                 `json:"type"`
+				Data map[string]interface{} `json:"data"`
+			} `json:"message"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rawData, &resp); err != nil {
+		return nil, fmt.Errorf("解析消息失败: %w", err)
+	}
+	var urls []string
+	for _, seg := range resp.Data.Message {
+		if seg.Type != "image" {
+			continue
+		}
+		if st, ok := seg.Data["sub_type"].(float64); !ok || int(st) != 1 {
+			continue
+		}
+		if u, _ := seg.Data["url"].(string); u != "" {
+			urls = append(urls, u)
+		}
+	}
+	return urls, nil
+}
+
+// handleAddSticker 收藏表情：message_id 整条消息 / url 单张 / file 本机文件。
+func (p *Plugin) handleAddSticker(args map[string]interface{}) (interface{}, error) {
+	var files []string
+
+	// 来源 1：整条消息里的所有表情
+	if id, err := convInt64(args["message_id"]); err == nil && id > 0 {
+		urls, err := p.stickerURLsFromMessage(id)
+		if err != nil {
+			return nil, err
+		}
+		if len(urls) == 0 {
+			return nil, fmt.Errorf("这条消息里没有表情图片（只有 sub_type=1 的 image 段才算表情）")
+		}
+		for i, u := range urls {
+			name, err := p.downloadToRemote(u, fmt.Sprintf("sticker_%d_%d.jpg", id, i+1))
+			if err != nil {
+				return nil, fmt.Errorf("第 %d 张下载失败: %w", i+1, err)
+			}
+			files = append(files, name)
+		}
+	}
+
+	// 来源 2：直接给图片地址
+	if u, _ := args["url"].(string); u != "" {
+		name, err := p.downloadToRemote(u, "")
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, name)
+	}
+
+	// 来源 3：本机文件
+	if path, _ := args["file"].(string); path != "" {
+		name, err := p.copyToRemote(path)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, name)
+	}
+
+	if len(files) == 0 {
+		return nil, fmt.Errorf("需要 message_id、url 或 file 之一")
+	}
+
+	added := make([]map[string]interface{}, 0, len(files))
+	for _, f := range files {
+		existed, err := p.addFaceByFile(f)
+		if err != nil {
+			added = append(added, map[string]interface{}{"file": f, "ok": false, "error": err.Error()})
+			continue
+		}
+		added = append(added, map[string]interface{}{"file": f, "ok": true, "already_existed": existed})
+	}
+	return map[string]interface{}{
+		"added": added,
+		"total": len(added),
+		"hint":  "收藏后用 qq_list_stickers 查看；新表情还没有描述，第一次发之前先 see_image 看一眼再 qq_describe_sticker 记下来",
+	}, nil
 }
 
 // handleDescribeSticker 记录一个表情的内容/情绪描述（按 url 缓存）。

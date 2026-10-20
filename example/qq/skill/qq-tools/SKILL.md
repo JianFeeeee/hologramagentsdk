@@ -1,6 +1,6 @@
 ---
 name: qq-tools
-description: QQ 消息收发（NapCat 协议桥接）。本插件**常驻自启**：它在监听外部消息，不能按需加载。
+description: QQ 消息收发（NapCat 协议桥接）+ 发收藏表情包。本插件**常驻自启**：它在监听外部消息，不能按需加载。
 ---
 
 # QQ 消息
@@ -30,6 +30,7 @@ QQ 插件在 **HTTP 端口上监听 NapCat 推送**。用户发来的 QQ 消息*
 | `qq_list_stickers` | 列出收藏表情包（index + url + 已缓存的 desc/mood） |
 | `qq_send_sticker` | 发表情：传 `index`（来自 list_stickers）或直接传 `url` |
 | `qq_describe_sticker` | 给表情记录内容/情绪描述（先用 see_image 看，再记） |
+| `qq_add_sticker` | 把别人发的表情收藏到自己账号（message_id / url / file） |
 
 ## ★★ 拉私聊历史：只传 user_id，**不要**传 group_id
 
@@ -71,6 +72,27 @@ qq_get_history(group_id=0, user_id=2198972886) ❌ 报「消息undefined不存�
 
 ## 表情包
 
+### 该主动发，不要等用户要
+
+表情是**情绪的表达方式**，不是"用户点名才发的附件"。在 QQ 聊天里遇到这些场合，
+**主动**挑一张合适的发过去（发完可以再补一句文字，或只发表情）：
+
+- 用户吐槽、抱怨、被气到 → 发一张「无语 / 翻白眼 / 扶额 / 摊手」类的
+- 用户自嘲、搞砸了、认错 → 发一张「心虚 / 委屈 / 求放过」类的
+- 用户分享好消息、得意 → 发一张「比心 / 开心 / 鼓掌」类的
+- 你在卖萌、撒娇、被夸 → 发一张「害羞 / 得意」类的
+- 对话冷场/收尾，可以用表情代替一句干巴巴的「好的」
+
+**分寸**（避免刷屏）：
+
+- 一轮对话最多 1～2 张，别每句都贴。
+- 表情要和当下情绪**真的对得上**；没有匹配的就只说话，别硬发。
+- 别在同一轮里连发表情；连续对话里也别一直用同一张。
+- 群里发要更克制：只在明确对某人说话、或气氛合适时发。
+
+挑选方式：先 `qq_list_stickers` 看 `mood`/`desc`，选最贴的一张 `index`；
+列表里没有匹配的（或都没有描述）就先按下面的流程补描述，别乱发一张。
+
 NapCat 的表情接口是 `fetch_custom_face`（收藏表情，返回的是**图片 URL**，
 不是 mface 的 emoji_id/key —— 后者只有收到别人发表情时才带）。所以发收藏表情
 走 image 段：QQ 会渲染成表情图。
@@ -82,6 +104,19 @@ qq_send_sticker user_id=2198972886 index=1
 ```
 
 也可以 `output_send__qq` 用 `type=sticker` + 表情 URL 直接发。
+
+### 别人发的表情，可以收进自己收藏
+
+用户（或群里）发来表情时，如果想留着以后自己用：
+
+```
+qq_add_sticker message_id=12345     # 那条消息里的表情全部收藏
+qq_add_sticker url="https://..."    # 单张
+qq_add_sticker file="/path/a.gif"   # 本机图片
+```
+
+收藏后 `qq_list_stickers` 就能看到；新收藏的还没有描述，第一次发之前先 `see_image`
+看一眼再用 `qq_describe_sticker` 记下来（否则列表里只有 URL，挑不准）。
 
 ### 第一次用某张表情：先看再记，之后按情绪挑
 

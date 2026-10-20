@@ -161,3 +161,69 @@ func TestDescribeStickerRequiresContent(t *testing.T) {
 		t.Fatal("desc/mood 都为空时应报错")
 	}
 }
+
+// add_sticker：从消息里提取 sub_type=1 的表情图片，下载落地后调 add_custom_face。
+func TestAddStickerFromMessage(t *testing.T) {
+	var mu sync.Mutex
+	var actions []string
+	var addFiles []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		action := strings.TrimPrefix(r.URL.Path, "/")
+		mu.Lock()
+		actions = append(actions, action)
+		mu.Unlock()
+		switch action {
+		case "get_msg":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"status": "ok", "retcode": 0,
+				"data": map[string]interface{}{
+					"message": []interface{}{
+						map[string]interface{}{"type": "image", "data": map[string]interface{}{
+							"sub_type": float64(1), "url": "http://" + r.Host + "/cdn/a.gif"}},
+						map[string]interface{}{"type": "text", "data": map[string]interface{}{"text": "hi"}},
+						map[string]interface{}{"type": "image", "data": map[string]interface{}{
+							"sub_type": float64(0), "url": "http://" + r.Host + "/cdn/plain.jpg"}},
+					},
+				},
+			})
+		case "add_custom_face":
+			var body map[string]interface{}
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			f, _ := body["file"].(string)
+			mu.Lock()
+			addFiles = append(addFiles, f)
+			mu.Unlock()
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"status": "ok", "retcode": 0,
+				"data": map[string]interface{}{"result": 0, "isExist": 0},
+			})
+		default:
+			// 图片 CDN：返回 1x1 PNG 字节
+			w.Header().Set("Content-Type", "image/png")
+			w.Write([]byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a})
+		}
+	}))
+	defer srv.Close()
+
+	inst, err := NewPluginFactory("qq", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := inst.(*Plugin)
+	p.httpClient = &http.Client{Timeout: 5 * time.Second}
+	p.napcatURL = srv.URL
+	p.remoteDir = t.TempDir()
+
+	res, err := p.handleAddSticker(map[string]interface{}{"message_id": float64(123)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.(map[string]interface{})["total"].(int) != 1 {
+		t.Fatalf("只应收录 sub_type=1 的表情: %v", res)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(addFiles) != 1 || !strings.HasPrefix(addFiles[0], "/app/files/") {
+		t.Fatalf("add_custom_face 应收到 /app/files 路径: %v", addFiles)
+	}
+}
