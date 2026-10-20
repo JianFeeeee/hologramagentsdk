@@ -141,13 +141,24 @@ func authFromMap(m map[string]interface{}) (qqAuthContext, bool) {
 	return a, true
 }
 
+// defaultHardPrivateTools 是**旧写死清单的等价默认值**（行为不变），
+// 但改成配置项 hard_private_tools，用户可增删或清空。
+//
+// 为什么改成可配置：群里/朋友对话中「下载我刚发的图」「读一下这个文档」
+// 这类请求本身不涉及私人资源，旧清单把 qq_download_file 之外的通用能力
+// （files_/terminal_/cmd_）整块封死，正常交流也被打断；而各部署的信任边界
+// 并不相同 —— 由部署者决定，而不是写死在代码里。
+var defaultHardPrivateParsed = parseToolAllowlist(defaultHardPrivateTools)
+
+const defaultHardPrivateTools = `["calendar_*","email_*","mail_*","agentmail_*","memory_*","knowledge_*","device_*","devicectl_*","terminal_*","shell_*","command_*","exec_*","filesystem_*","agentfs_*","config_*","settings_*","plugin_*","plugins_*","read_file","write_file","edit_file","delete_file","list_files","run_command","homeagent_config","homeagent_restart","output_send__email","output_send__mail"]`
+
 var qqMessageIDRe = regexp.MustCompile(`message_id=(-?\d+)`)
 
 // 默认只开放公共信息与当前 QQ 会话所需能力。日历、邮件、记忆、知识库、
 // 主机文件/命令、设备、配置、插件管理及 QQ 联系人/跨会话列表均不在白名单中。
-const defaultPublicToolAllowlist = `["output_send__qq","output_list_channels","qq_get_message","qq_get_history","qq_mark_read","qq_get_group_member_info","qq_get_group_files","qq_video_download","weather_*","browser_search","browser_fetch","browser_render","ocr_*","multimodal_*","bili_*","music_*","ai_image_*"]`
+const defaultPublicToolAllowlist = `["output_send__qq","output_list_channels","qq_get_message","qq_get_history","qq_mark_read","qq_get_group_member_info","qq_get_group_files","qq_video_download","weather_*","browser_search","browser_fetch","browser_render","ocr_*","multimodal_*","qq_download_file","qq_read_document","qq_get_download_tasks","qq_list_stickers","qq_send_sticker","qq_get_groups","qq_resolve_name","seemedia_*","see_image","see_video","hear_audio","bili_*","music_*","ai_image_*"]`
 
-const defaultGroupToolAllowlists = `{"*":["output_send__qq","output_list_channels","qq_get_message","qq_get_history","qq_mark_read","qq_get_group_member_info","qq_get_group_files","qq_video_download","weather_*","browser_search","browser_fetch","browser_render","ocr_*","multimodal_*","bili_*","music_*","ai_image_*"]}`
+const defaultGroupToolAllowlists = `{"*":["output_send__qq","output_list_channels","qq_get_message","qq_get_history","qq_mark_read","qq_get_group_member_info","qq_get_group_files","qq_video_download","weather_*","browser_search","browser_fetch","browser_render","ocr_*","multimodal_*","qq_download_file","qq_read_document","qq_get_download_tasks","qq_list_stickers","qq_send_sticker","qq_get_groups","qq_resolve_name","seemedia_*","see_image","see_video","hear_audio","bili_*","music_*","ai_image_*"]}`
 
 const (
 	// 单轮 QQ 触发的工具调用总数上限（0 = 不限制）。只作跑飞兜底，
@@ -227,6 +238,13 @@ type Plugin struct {
 	maxDuplicateSend     int
 	groupToolAllowlists  map[int64][]string // 0 表示通配配置 "*"
 	privateToolAllowlist []string
+
+	// 权限门策略（均可配置）。字段用**反向**命名，让零值 = 旧行为（严格）：
+	// 单测/未初始化时不至于把门悄悄放开 —— 这是安全默认。
+	groupRequireAtOff     bool     // true = 群里不 @ 也响应
+	hardPrivateTools      []string // 非所有者即使白名单也拦的工具（精确名 / 前缀*）
+	hardPrivateToolsSet   bool     // 是否显式配置过（未配置 ⇒ 用内置默认清单）
+	sessionScopeUnlimited bool     // true = 非所有者可跨会话读
 
 	// msg_id → peer 映射 + 会话最新状态（<7 天兜底 get_history + list_chats）
 	msgMu  sync.Mutex
@@ -428,6 +446,12 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "max_duplicate_qq_send", Default: defaultMaxDuplicateSend, Type: "int", DisplayName: "单轮相同 QQ 发送上限", Description: "单轮内参数完全相同的 output_send__qq 允许重复的次数（0=不限制）；这才是循环保险的真正触发条件", Category: "qq"})
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "dm_policy", Default: "open", Type: "string", DisplayName: "私聊策略", Description: "open / allowlist / disabled", Category: "qq", Options: []string{"open", "allowlist", "disabled"}})
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "allow_from", Default: "", Type: "string", DisplayName: "私聊白名单", Description: "允许私聊机器人的 QQ 号列表，逗号分隔", Category: "qq"})
+	s.Settings().RegisterDef(sdk.ConfigDef{Key: "group_require_at", Default: "true", Type: "bool", DisplayName: "群聊必须 @ 才响应",
+		Description: "true=群里只有 @ 机器人才回应（默认，避免乱插话）；false=群里所有消息都回应。群多、想让机器人自然搭话时关闭", Category: "qq"})
+	s.Settings().RegisterDef(sdk.ConfigDef{Key: "hard_private_tools", Default: defaultHardPrivateTools, Type: "string", DisplayName: "硬性私人工具限制",
+		Description: "JSON 数组：非所有者即使白名单放行也会被拦的工具，支持精确名与尾部 * 前缀（如 files_*）。清空 [] = 不做硬性拦截，完全交给白名单", Category: "qq"})
+	s.Settings().RegisterDef(sdk.ConfigDef{Key: "session_scope_enforce", Default: "true", Type: "bool", DisplayName: "非所有者只能读当前会话",
+		Description: "true=非所有者只能读本会话消息（默认，防跨会话翻别人聊天记录）；false=允许按会话 ID 读其它会话", Category: "qq"})
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "group_policy", Default: "open", Type: "string", DisplayName: "群聊策略", Description: "open / allowlist / disabled", Category: "qq", Options: []string{"open", "allowlist", "disabled"}})
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "group_allow_from", Default: "", Type: "string", DisplayName: "群聊白名单", Description: "允许接入的群号列表，逗号分隔", Category: "qq"})
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "forward_rules", Default: "[]", Type: "string", DisplayName: "转发规则", Description: "JSON 数组，每项 {group_id,host,port,password,template}。匹配的群消息通过 RCON 转发到 Minecraft。template 支持 {nickname} {message} 占位", Category: "qq"})
@@ -459,6 +483,10 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	p.ownerIDs = parseIDList(ownerRaw)
 	p.groupToolAllowlists = parseGroupToolAllowlists(getSetting[string](settings, "group_tool_allowlists", defaultGroupToolAllowlists))
 	p.privateToolAllowlist = parseToolAllowlist(getSetting[string](settings, "private_tool_allowlist", defaultPublicToolAllowlist))
+	p.groupRequireAtOff = !strings.EqualFold(getSetting[string](settings, "group_require_at", "true"), "true")
+	p.hardPrivateTools = parseToolAllowlist(getSetting[string](settings, "hard_private_tools", defaultHardPrivateTools))
+	p.hardPrivateToolsSet = true
+	p.sessionScopeUnlimited = !strings.EqualFold(getSetting[string](settings, "session_scope_enforce", "true"), "true")
 	p.maxQQToolCalls = nonNegativeOrDefault(int(getSetting[int64](settings, "max_qq_tool_calls", int64(defaultMaxQQToolCalls))), defaultMaxQQToolCalls)
 	p.maxQQOutputCalls = nonNegativeOrDefault(int(getSetting[int64](settings, "max_qq_output_calls", int64(defaultMaxQQOutputCalls))), defaultMaxQQOutputCalls)
 	p.maxDuplicateSend = nonNegativeOrDefault(int(getSetting[int64](settings, "max_duplicate_qq_send", int64(defaultMaxDuplicateSend))), defaultMaxDuplicateSend)
@@ -1255,20 +1283,20 @@ func nonNegativeOrDefault(value, fallback int) int {
 
 // isHardPrivateTool 是不可由群/私聊白名单覆盖的私人资源边界。
 // output_send__qq 及 QQ 当前会话工具在参数级另行约束，不在此处按名称误杀。
-func isHardPrivateTool(name string) bool {
-	for _, prefix := range []string{
-		"calendar_", "email_", "mail_", "agentmail_", "memory_", "knowledge_",
-		"device_", "devicectl_", "terminal_", "shell_", "command_", "exec_",
-		"filesystem_", "agentfs_", "config_", "settings_", "plugin_", "plugins_",
-	} {
-		if strings.HasPrefix(name, prefix) {
-			return true
-		}
+// isHardPrivateTool 判断工具是否属于「硬性私人资源」。
+//
+// 判据来自配置 hard_private_tools（默认值与旧的写死清单等价）；条目支持
+// 精确名与尾部 * 前缀。清空配置即不再做硬性拦截（完全交给 allowlist）。
+func (p *Plugin) isHardPrivateTool(name string) bool {
+	patterns := p.hardPrivateTools
+	if !p.hardPrivateToolsSet {
+		// 未初始化（单测/异常路径）按内置默认判：安全默认，不放开。
+		patterns = defaultHardPrivateParsed
 	}
-	return matchesToolAllowlist(name, []string{
-		"read_file", "write_file", "edit_file", "delete_file", "list_files", "run_command",
-		"homeagent_config", "homeagent_restart", "output_send__email", "output_send__mail",
-	})
+	if len(patterns) == 0 {
+		return false // 显式配置成 [] 才是"不拦"
+	}
+	return matchesToolAllowlist(name, patterns)
 }
 
 func argInt64(args map[string]interface{}, key string) (int64, bool) {
@@ -1300,6 +1328,10 @@ func argPeerID(args map[string]interface{}, key string) (int64, bool) {
 
 func (p *Plugin) sessionToolArgsAllowed(name string, args map[string]interface{}, auth qqAuthContext) (bool, string) {
 	if !auth.Active || auth.Owner {
+		return true, ""
+	}
+	// 可配置：session_scope_enforce=false 时不限制读取的会话范围
+	if p.sessionScopeUnlimited {
 		return true, ""
 	}
 	// 输出工具**不受"当前会话"身份限制**（先于身份判据返回）。
@@ -1788,7 +1820,7 @@ func (p *Plugin) beforeToolcall(ctx *sdk.StageContext) error {
 		p.setDenial(ctx, msg)
 		return nil
 	}
-	if !auth.Owner && isHardPrivateTool(tc.Name) {
+	if !auth.Owner && p.isHardPrivateTool(tc.Name) {
 		p.authMu.Lock()
 		p.denialLocked = true
 		p.authMu.Unlock()
@@ -2119,11 +2151,15 @@ func (p *Plugin) handleWebhook(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !p.isAtBot(evt.Message) {
-			// 诊断：@ 解析失败时打印 at 段原文与 botID，定位漏报问题
-			log.Printf("[qq] group msg from %d/%d not @bot (botID=%d, raw=%.120s)",
-				evt.GroupID, evt.UserID, p.botID, rawCQ)
-			w.WriteHeader(http.StatusOK)
-			return
+			// 默认必须 @bot；group_require_at=false 时改为"群里所有消息都响应"
+			// （由部署者按群规模/使用习惯决定，而不是写死在代码里）。
+			if !p.groupRequireAtOff {
+				// 诊断：@ 解析失败时打印 at 段原文与 botID，定位漏报问题
+				log.Printf("[qq] group msg from %d/%d not @bot (botID=%d, raw=%.120s)",
+					evt.GroupID, evt.UserID, p.botID, rawCQ)
+				w.WriteHeader(http.StatusOK)
+				return
+			}
 		}
 	}
 
