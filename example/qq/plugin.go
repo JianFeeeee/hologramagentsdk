@@ -2494,7 +2494,7 @@ func (p *Plugin) handleChannelOutput(args map[string]interface{}) (interface{}, 
 	var sendErr error
 	switch rawType {
 	case "text":
-		text := p.sensitiveFilter(payload)
+		text := normalizeIMText(p.sensitiveFilter(payload))
 		message := interface{}(text)
 		if groupID != 0 && userID != 0 {
 			message = messageWithMention(userID, map[string]interface{}{"type": "text", "data": map[string]interface{}{"text": text}})
@@ -2646,6 +2646,29 @@ func (p *Plugin) ttsToFile(text string) (string, error) {
 		return "", fmt.Errorf("edge-tts 未生成输出文件")
 	}
 	return tmpFile, nil
+}
+
+// normalizeIMText 把模型输出整理成**聊天消息**的样子。
+//
+// 为什么需要：模型习惯用空行分段（"\n\n"），在 Markdown 里是段落，在 QQ
+// 气泡里就是突兀的空行 —— 用户实测反馈「发qq消息还是有空行」。提示词里已经
+// 要求「一条消息内不空行、要分段就分条发」，但模型遵循度不是 100%，所以在
+// 通道出口再做一次确定性收敛：
+//
+//	· 连续空行（2 个以上换行）压成一个换行 —— 保留分行，去掉空行
+//	· 去掉首尾空白（消息气泡不该以空行开头/结尾）
+//	· 三个以上连续换行同样压成一个
+//
+// 只在 text 类型上做：image/file/voice 的 payload 是 URL/路径，不能动。
+func normalizeIMText(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return s
+	}
+	for strings.Contains(s, "\n\n") {
+		s = strings.ReplaceAll(s, "\n\n", "\n")
+	}
+	return s
 }
 
 func (p *Plugin) handleSendFile(args map[string]interface{}) (interface{}, error) {
