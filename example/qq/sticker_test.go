@@ -227,3 +227,62 @@ func TestAddStickerFromMessage(t *testing.T) {
 		t.Fatalf("add_custom_face 应收到 /app/files 路径: %v", addFiles)
 	}
 }
+
+// delete_custom_face 只认**路径段**作 res_id；裸 HASH / 完整 URL 会返回成功但
+// 收藏不变（2026-10-20 实测的"假成功"）。这条钉住解析。
+func TestStickerResIDFromURL(t *testing.T) {
+	url := "https://p.qpic.cn/qq_expression/1456128421/1456128421_0_0_0_715B05B6C89FCE0DCFF28DD17B7FDE07_0_0/0"
+	want := "1456128421_0_0_0_715B05B6C89FCE0DCFF28DD17B7FDE07_0_0"
+	if got := stickerResID(url); got != want {
+		t.Fatalf("res_id = %q, want %q", got, want)
+	}
+	if got := stickerResID("https://example.com/a.jpg"); got != "" {
+		t.Fatalf("非收藏 URL 应返回空: %q", got)
+	}
+}
+
+func TestRemoveStickerByIndex(t *testing.T) {
+	var mu sync.Mutex
+	var deleted []map[string]interface{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		action := strings.TrimPrefix(r.URL.Path, "/")
+		if action == "fetch_custom_face" {
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"status": "ok", "retcode": 0,
+				"data": []string{"https://p.qpic.cn/qq_expression/1/1_0_0_0_ABCDEF0123456789ABCDEF0123456789_0_0/0"},
+			})
+			return
+		}
+		var body map[string]interface{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		mu.Lock()
+		deleted = append(deleted, body)
+		mu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"status": "ok", "retcode": 0,
+			"data": map[string]interface{}{"result": 0, "errMsg": "操作成功"},
+		})
+	}))
+	defer srv.Close()
+
+	inst, err := NewPluginFactory("qq", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := inst.(*Plugin)
+	p.httpClient = &http.Client{Timeout: 5 * time.Second}
+	p.napcatURL = srv.URL
+	p.remoteDir = t.TempDir()
+
+	if _, err := p.handleRemoveSticker(map[string]interface{}{"index": float64(1)}); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(deleted) != 1 {
+		t.Fatalf("delete_custom_face 应被调用一次: %v", deleted)
+	}
+	if deleted[0]["res_id"] != "1_0_0_0_ABCDEF0123456789ABCDEF0123456789_0_0" {
+		t.Fatalf("res_id 传错: %v", deleted[0])
+	}
+}

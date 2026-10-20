@@ -156,9 +156,9 @@ var qqMessageIDRe = regexp.MustCompile(`message_id=(-?\d+)`)
 
 // 默认只开放公共信息与当前 QQ 会话所需能力。日历、邮件、记忆、知识库、
 // 主机文件/命令、设备、配置、插件管理及 QQ 联系人/跨会话列表均不在白名单中。
-const defaultPublicToolAllowlist = `["output_send__qq","output_list_channels","qq_get_message","qq_get_history","qq_mark_read","qq_get_group_member_info","qq_get_group_files","qq_video_download","weather_*","browser_search","browser_fetch","browser_render","ocr_*","multimodal_*","qq_download_file","qq_read_document","qq_get_download_tasks","qq_list_stickers","qq_send_sticker","qq_get_groups","qq_resolve_name","seemedia_*","see_image","see_video","hear_audio","bili_*","music_*","ai_image_*"]`
+const defaultPublicToolAllowlist = `["output_send__qq","output_list_channels","qq_get_message","qq_get_history","qq_mark_read","qq_get_group_member_info","qq_get_group_files","qq_video_download","weather_*","browser_search","browser_fetch","browser_render","ocr_*","multimodal_*","qq_download_file","qq_read_document","qq_get_download_tasks","qq_list_stickers","qq_send_sticker","qq_add_sticker","qq_describe_sticker","qq_get_groups","qq_resolve_name","seemedia_*","see_image","see_video","hear_audio","bili_*","music_*","ai_image_*"]`
 
-const defaultGroupToolAllowlists = `{"*":["output_send__qq","output_list_channels","qq_get_message","qq_get_history","qq_mark_read","qq_get_group_member_info","qq_get_group_files","qq_video_download","weather_*","browser_search","browser_fetch","browser_render","ocr_*","multimodal_*","qq_download_file","qq_read_document","qq_get_download_tasks","qq_list_stickers","qq_send_sticker","qq_get_groups","qq_resolve_name","seemedia_*","see_image","see_video","hear_audio","bili_*","music_*","ai_image_*"]}`
+const defaultGroupToolAllowlists = `{"*":["output_send__qq","output_list_channels","qq_get_message","qq_get_history","qq_mark_read","qq_get_group_member_info","qq_get_group_files","qq_video_download","weather_*","browser_search","browser_fetch","browser_render","ocr_*","multimodal_*","qq_download_file","qq_read_document","qq_get_download_tasks","qq_list_stickers","qq_send_sticker","qq_add_sticker","qq_describe_sticker","qq_get_groups","qq_resolve_name","seemedia_*","see_image","see_video","hear_audio","bili_*","music_*","ai_image_*"]}`
 
 const (
 	// 单轮 QQ 触发的工具调用总数上限（0 = 不限制）。只作跑飞兜底，
@@ -674,6 +674,18 @@ type 枚举: text（文字）/ voice（语音转文字后发送）/ image（图�
 		},
 		NoMemory: true,
 	}, p.handleAddSticker)
+
+	p.regTool(s, sdk.ToolDef{
+		Name: tp + "remove_sticker", Description: "从我的收藏表情里**删除**一个（NapCat delete_custom_face）。" +
+			"传 index（来自 qq_list_stickers）或 url。用于清理误收藏/过期表情。",
+		Parameters: map[string]interface{}{
+			"type": "object", "properties": map[string]interface{}{
+				"url":   map[string]interface{}{"type": "string", "description": "表情地址（收藏列表里的 url）"},
+				"index": map[string]interface{}{"type": "integer", "description": "收藏表情序号（1 开始）"},
+			},
+		},
+		NoMemory: true,
+	}, p.handleRemoveSticker)
 
 	p.regTool(s, sdk.ToolDef{
 		Name: tp + "get_history", Description: "获取QQ群聊/私聊最近历史消息。当收到引用回复消息或需要了解对话上下文时应优先调用此工具查看前后文。返回值每条格式为 [时间] 发送者: 消息内容。如果消息包含文件，会额外返回 files 字段（含 file_id 和 name），可用 qq_download_file 工具下载。",
@@ -1833,7 +1845,11 @@ func (p *Plugin) beforeToolcall(ctx *sdk.StageContext) error {
 		if auth.IsGroup {
 			scope = fmt.Sprintf("群聊 %d", auth.GroupID)
 		}
-		msg := fmt.Sprintf("QQ 权限策略拒绝工具 %s：%s 的工具白名单未包含该工具；请不要重试，改为直接说明权限限制", tc.Name, scope)
+		// 措辞很重要：旧文案只说"白名单未包含"，模型转述成"我没有这个接口"
+		// （2026-10-20 现场：群友要收藏表情，bot 回"没有添加表情的接口"）。
+		// 工具是**存在但未对该来源开放**，必须让模型如实说"权限没开"。
+		msg := fmt.Sprintf("QQ 权限策略拒绝工具 %s：%s 的工具白名单未包含它（工具本身存在，只是没对这个来源开放）。"+
+			"请如实告诉用户「这个操作需要管理员在 QQ 插件设置里开放权限」，**不要声称自己没有这个工具**，也不要重试", tc.Name, scope)
 		p.setDenial(ctx, msg)
 		return nil
 	}
@@ -3128,6 +3144,84 @@ func (p *Plugin) stickerURLsFromMessage(messageID int64) ([]string, error) {
 		}
 	}
 	return urls, nil
+}
+
+// stickerResID 从收藏表情 URL 里取出 NapCat 需要的 res_id。
+//
+// 格式（fetch_custom_face 返回）：
+//
+//	https://p.qpic.cn/qq_expression/<uin>/<uin>_0_0_0_<HASH>_0_0/0
+//	                                         ^^^^^^^^^^^^^^^^^^^^^^^ 这一段才是 res_id
+//
+// ★ 实测（2026-10-20）：传裸 HASH 或完整 URL 都会返回 {"retcode":0,"errMsg":"操作成功"}，
+// 但收藏数量不变 —— 那是**假成功**。只有传这段路径段才真的删掉。
+func stickerResID(url string) string {
+	re := regexp.MustCompile(`(\d+_\d+_\d+_\d+_[0-9A-Fa-f]+_\d+_\d+)`)
+	if m := re.FindStringSubmatch(url); len(m) == 2 {
+		return m[1]
+	}
+	return ""
+}
+
+// handleRemoveSticker 从收藏里删除一个表情（按 url 或 index）。
+func (p *Plugin) handleRemoveSticker(args map[string]interface{}) (interface{}, error) {
+	url, _ := args["url"].(string)
+	if url == "" {
+		idx64, err := convInt64(args["index"])
+		if err != nil || idx64 < 1 {
+			return nil, fmt.Errorf("需要 url 或 index（1 开始，来自 qq_list_stickers）")
+		}
+		count := int(idx64)
+		if c, e := convInt64(args["count"]); e == nil && int(c) > count {
+			count = int(c)
+		}
+		faces, err := p.fetchCustomFaces(count)
+		if err != nil {
+			return nil, err
+		}
+		if int(idx64) > len(faces) {
+			return nil, fmt.Errorf("表情序号 %d 超出范围（当前收藏 %d 个）", idx64, len(faces))
+		}
+		url = faces[idx64-1]
+	}
+	resID := stickerResID(url)
+	if resID == "" {
+		return nil, fmt.Errorf("无法从表情地址解析 res_id: %q", url)
+	}
+	raw, err := p.napcat("delete_custom_face", map[string]interface{}{"res_id": resID})
+	if err != nil {
+		return nil, err
+	}
+	var rawData []byte
+	switch v := raw.(type) {
+	case json.RawMessage:
+		rawData = v
+	case []byte:
+		rawData = v
+	default:
+		rawData, _ = json.Marshal(v)
+	}
+	var resp struct {
+		Data struct {
+			Result int    `json:"result"`
+			ErrMsg string `json:"errMsg"`
+		} `json:"data"`
+	}
+	_ = json.Unmarshal(rawData, &resp)
+	if resp.Data.Result != 0 {
+		return nil, fmt.Errorf("delete_custom_face 失败: result=%d %s", resp.Data.Result, resp.Data.ErrMsg)
+	}
+
+	// 同步清掉描述缓存，避免以后同 URL 复活时带旧描述
+	p.stickerMu.Lock()
+	if _, ok := p.stickerDescs[url]; ok {
+		delete(p.stickerDescs, url)
+		p.stickerMu.Unlock()
+		_ = p.saveStickerDescs()
+	} else {
+		p.stickerMu.Unlock()
+	}
+	return map[string]interface{}{"status": "ok", "removed": url, "res_id": resID}, nil
 }
 
 // handleAddSticker 收藏表情：message_id 整条消息 / url 单张 / file 本机文件。

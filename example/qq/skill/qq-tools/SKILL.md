@@ -31,6 +31,7 @@ QQ 插件在 **HTTP 端口上监听 NapCat 推送**。用户发来的 QQ 消息*
 | `qq_send_sticker` | 发表情：传 `index`（来自 list_stickers）或直接传 `url` |
 | `qq_describe_sticker` | 给表情记录内容/情绪描述（先用 see_image 看，再记） |
 | `qq_add_sticker` | 把别人发的表情收藏到自己账号（message_id / url / file） |
+| `qq_remove_sticker` | 从收藏里删表情（index / url），清理误收 |
 
 ## ★★ 拉私聊历史：只传 user_id，**不要**传 group_id
 
@@ -117,6 +118,12 @@ qq_add_sticker file="/path/a.gif"   # 本机图片
 
 收藏后 `qq_list_stickers` 就能看到；新收藏的还没有描述，第一次发之前先 `see_image`
 看一眼再用 `qq_describe_sticker` 记下来（否则列表里只有 URL，挑不准）。
+
+收错了用 `qq_remove_sticker index=N` 删掉（内部走 NapCat delete_custom_face）。
+
+★ 如果用户说「你没有添加表情的接口」：先确认它是不是在**群/非 owner 私聊**里提的——
+`qq_add_sticker` 默认不在给外部用户的工具白名单里，会被权限门挡下。那种情况要
+如实说「需要管理员开放权限」，不要说工具不存在。
 
 ### 第一次用某张表情：先看再记，之后按情绪挑
 
