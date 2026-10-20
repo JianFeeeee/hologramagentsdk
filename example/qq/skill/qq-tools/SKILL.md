@@ -27,6 +27,9 @@ QQ 插件在 **HTTP 端口上监听 NapCat 推送**。用户发来的 QQ 消息*
 | `qq_list_chats` | 会话列表，按最新消息排序，带未读数与摘要 |
 | `qq_mark_read` | 清零某会话未读数 |
 | `output_send__qq` | 主动发消息（群/私聊由 meta 决定） |
+| `qq_list_stickers` | 列出收藏表情包（index + url + 已缓存的 desc/mood） |
+| `qq_send_sticker` | 发表情：传 `index`（来自 list_stickers）或直接传 `url` |
+| `qq_describe_sticker` | 给表情记录内容/情绪描述（先用 see_image 看，再记） |
 
 ## ★★ 拉私聊历史：只传 user_id，**不要**传 group_id
 
@@ -65,6 +68,31 @@ qq_get_history(group_id=0, user_id=2198972886) ❌ 报「消息undefined不存�
 - 依赖 **NapCat** 服务在运行且已登录。
 - 消息可能过期（NapCat 侧有时效），发送失败时会明确报错。
 - **不要在群里 @全体成员**、不要连续刷屏。
+
+## 表情包
+
+NapCat 的表情接口是 `fetch_custom_face`（收藏表情，返回的是**图片 URL**，
+不是 mface 的 emoji_id/key —— 后者只有收到别人发表情时才带）。所以发收藏表情
+走 image 段：QQ 会渲染成表情图。
+
+```
+qq_list_stickers count=20
+  → [{index:1, url:"https://p.qpic.cn/...", desc:"猫翻白眼", mood:"无语"}, ...]
+qq_send_sticker user_id=2198972886 index=1
+```
+
+也可以 `output_send__qq` 用 `type=sticker` + 表情 URL 直接发。
+
+### 第一次用某张表情：先看再记，之后按情绪挑
+
+NapCat 只给图片 URL，没有名称/情绪。所以列表里 `desc`/`mood` **是模型自己
+看过后缓存的**（存在插件配置 `sticker_descs`，重启不丢）：
+
+1. `qq_list_stickers` 看到某张没有 desc ⇒ `see_image(url)` 亲自看；
+2. `qq_describe_sticker(url="…", desc="画面内容", mood="无语/开心/嘲讽…")` 记下来；
+3. 之后每次 list 都自带描述，直接按 mood 挑 `index` 发送即可。
+
+描述要写**能帮你在别的场合挑图**的信息：画的是什么、什么梗、什么情绪下合适。
 
 ## ★ 用 plugin_stop / plugin_start，不要用 plugin_disable / plugin_enable
 

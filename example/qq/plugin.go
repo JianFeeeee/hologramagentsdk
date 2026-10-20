@@ -172,6 +172,8 @@ type Plugin struct {
 	botNickname  string
 	dmPolicy     string
 	groupPolicy  string
+	stickerMu    sync.RWMutex
+	stickerDescs map[string]stickerDesc // url -> 描述（模型看过之后记录，见 qq_describe_sticker）
 	httpClient   *http.Client
 	// sendClient 专用于**发送类**端点（send_private_msg / send_group_msg）。
 	//
@@ -415,6 +417,8 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	// 默认关的理由：它对外可见（好友会看到状态在跳），属于
 	// "内核替用户做决定"——与 offload 同一类，必须显式打开。
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "status_auto", Default: "false", Type: "bool", DisplayName: "随阶段切在线状态", Description: "开启后：调工具时切「搬砖中」、生成回复时切「学习中」、一轮结束切回「在线」。失败不影响工具调用", Category: "qq"})
+	s.Settings().RegisterDef(sdk.ConfigDef{Key: "sticker_descs", Default: "", Type: "text", DisplayName: "表情包描述缓存",
+		Description: "收藏表情的内容/情绪描述（JSON，url → {desc,mood}）。由 qq_describe_sticker 自动写入，一般不用手改；清空后 loss 描述，表情仍可发。", Category: "qq"})
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "owner", Default: "", Type: "string", DisplayName: "Bot 所有者 QQ", Description: "Bot 所有者 QQ 号列表，逗号分隔。所有者无论私聊或群聊均拥有完整工具权限", Category: "qq"})
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "admin", Default: "", Type: "string", DisplayName: "Bot 所有者 QQ（旧配置）", Description: "兼容旧版 admin 配置；owner 为空时作为 Bot 所有者列表", Category: "qq"})
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "group_tool_allowlists", Default: defaultGroupToolAllowlists, Type: "string", DisplayName: "群聊工具白名单", Description: "JSON 对象：群号到允许工具名/前缀*的数组；* 为未单独配置群的默认白名单。Bot 所有者不受限制", Category: "qq"})
@@ -471,6 +475,7 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 		p.batchWindow = 0
 	}
 	os.MkdirAll(p.remoteDir, 0755)
+	p.loadStickerDescs()
 
 	p.httpClient = &http.Client{Timeout: 30 * time.Second}
 
@@ -519,7 +524,7 @@ meta JSON 格式：
   "reply_to": 12345         // 可选，回复指定消息 ID
 }
 路由规则：仅 group_id 发群；仅 user_id 发私聊；两者同时存在时发到 group_id，并在消息头 @user_id。
-type 枚举: text（文字）/ voice（语音转文字后发送）/ image（图片URL）/ file（文件URL）`,
+type 枚举: text（文字）/ voice（语音转文字后发送）/ image（图片URL）/ sticker（表情包URL，见 qq_list_stickers）/ file（文件URL）`,
 		sdk.ChannelDef{}, p.handleChannelOutput)
 
 	// ---- 注册输入通道（记忆计算层行为） ----
@@ -586,6 +591,47 @@ type 枚举: text（文字）/ voice（语音转文字后发送）/ image（图�
 		},
 		NoMemory: true,
 	}, p.handleSendFile)
+
+	p.regTool(s, sdk.ToolDef{
+		Name: tp + "list_stickers", Description: "列出我收藏的QQ表情包（NapCat fetch_custom_face）。返回表情图片地址列表，" +
+			"可用 qq_send_sticker 发送。表情是'图'不是'文件'——发出去在 QQ 里显示为表情图。",
+		Parameters: map[string]interface{}{
+			"type": "object", "properties": map[string]interface{}{
+				"count": map[string]interface{}{"type": "integer", "description": "拉取数量（默认 20，最多 100）"},
+			},
+		},
+		NoMemory: true,
+	}, p.handleListStickers)
+
+	p.regTool(s, sdk.ToolDef{
+		Name: tp + "send_sticker", Description: "发送QQ表情包（私聊或群聊）。表情来源两种：传 url 直接发指定表情图；" +
+			"或传 index 按 qq_list_stickers 列表里的序号发（1 开始）。表情按图片段发送，QQ 会渲染成表情。",
+		Parameters: map[string]interface{}{
+			"type": "object", "properties": map[string]interface{}{
+				"group_id": map[string]interface{}{"type": "integer", "description": "目标群号（与 user_id 二选一）"},
+				"user_id":  map[string]interface{}{"type": "integer", "description": "目标QQ号（与 group_id 二选一）"},
+				"url":      map[string]interface{}{"type": "string", "description": "表情图片地址（qq_expression URL）"},
+				"index":    map[string]interface{}{"type": "integer", "description": "从 list_stickers 结果里选的序号（1 开始）"},
+				"count":    map[string]interface{}{"type": "integer", "description": "按 index 取时先拉取的表情数量（默认 20）"},
+			},
+		},
+		NoMemory: true,
+	}, p.handleSendSticker)
+
+	p.regTool(s, sdk.ToolDef{
+		Name: tp + "describe_sticker", Description: "给收藏表情记录**内容与情绪描述**（缓存到插件配置，之后 qq_list_stickers 会带出来）。" +
+			"用法：先用 see_image(url) 看清这幅图，再用本工具写下画的是什么、适合什么情绪/场合。" +
+			"描述写给人看也写给模型看：desc=画面内容，mood=情绪场合（开心/无语/嘲讽/撒娇…）。",
+		Parameters: map[string]interface{}{
+			"type": "object", "properties": map[string]interface{}{
+				"url":   map[string]interface{}{"type": "string", "description": "表情地址（也可传 index 让插件自己查）"},
+				"index": map[string]interface{}{"type": "integer", "description": "收藏表情序号（1 开始，来自 qq_list_stickers）"},
+				"desc":  map[string]interface{}{"type": "string", "description": "画面内容：画的是什么、什么梗"},
+				"mood":  map[string]interface{}{"type": "string", "description": "情绪/场合：开心、无语、嘲讽、撒娇…"},
+			},
+		},
+		NoMemory: true,
+	}, p.handleDescribeSticker)
 
 	p.regTool(s, sdk.ToolDef{
 		Name: tp + "get_history", Description: "获取QQ群聊/私聊最近历史消息。当收到引用回复消息或需要了解对话上下文时应优先调用此工具查看前后文。返回值每条格式为 [时间] 发送者: 消息内容。如果消息包含文件，会额外返回 files 字段（含 file_id 和 name），可用 qq_download_file 工具下载。",
@@ -2548,7 +2594,7 @@ func (p *Plugin) handleChannelOutput(args map[string]interface{}) (interface{}, 
 			_, sendErr = p.napcat("send_private_msg", msg)
 		}
 
-	case "image", "file":
+	case "image", "file", "sticker":
 		uri := payload
 		if !strings.HasPrefix(payload, "http://") && !strings.HasPrefix(payload, "https://") &&
 			!strings.HasPrefix(payload, "file://") {
@@ -2567,7 +2613,8 @@ func (p *Plugin) handleChannelOutput(args map[string]interface{}) (interface{}, 
 			uri = "file:///app/files/" + filepath.Base(dest)
 		}
 		cqTag := "file"
-		if rawType == "image" {
+		// sticker 与 image 同为图片段：QQ 按 URL 渲染成表情图（见 qq_list_stickers 注释）
+		if rawType == "image" || rawType == "sticker" {
 			cqTag = "image"
 		}
 		message := interface{}(fmt.Sprintf("[CQ:%s,file=%s]", cqTag, uri))
@@ -2587,7 +2634,7 @@ func (p *Plugin) handleChannelOutput(args map[string]interface{}) (interface{}, 
 		}
 
 	default:
-		return nil, fmt.Errorf("不支持的 type: %s（枚举值: text/voice/image/file）", rawType)
+		return nil, fmt.Errorf("不支持的 type: %s（枚举值: text/voice/image/sticker/file）", rawType)
 	}
 
 	if sendErr != nil {
@@ -2718,6 +2765,226 @@ func (p *Plugin) handleSendFile(args map[string]interface{}) (interface{}, error
 	}
 	params["user_id"] = uid
 	return p.napcat("send_private_msg", params)
+}
+
+// ======== 表情包（NapCat fetch_custom_face） ========
+//
+// NapCat 的表情接口只有一个：`fetch_custom_face` —— 拉取账号**收藏的表情**，
+// 返回的是表情图片地址（https://p.qpic.cn/qq_expression/...），不含 mface 的
+// emoji_id / key（那两个只在收到别人发表情时才有，是客户端私有字段）。
+// 所以发送走 **image 段**带 URL：QQ 会按表情图渲染，不是普通图片气泡。
+
+// stickerDesc 是**模型看过表情之后**记录下来的语义标签。
+//
+// 为什么需要：NapCat 的 fetch_custom_face 只返回图片 URL，没有任何名称/情绪
+// 信息 —— 模型无从判断"哪张适合现在发"。方案是把判断结果**缓存**下来：
+// 第一次由模型用 see_image(url) 看，再调 qq_describe_sticker 记录 desc/mood；
+// 之后每次 list 都自带描述，模型可直接按情绪挑选。
+type stickerDesc struct {
+	Desc string `json:"desc"` // 画面内容：画的是什么、什么梗
+	Mood string `json:"mood"` // 情绪/场合：开心、无语、嘲讽、撒娇…
+}
+
+// loadStickerDescs 从插件配置读缓存；坏数据按空处理，不影响表情功能。
+func (p *Plugin) loadStickerDescs() {
+	p.stickerMu.Lock()
+	defer p.stickerMu.Unlock()
+	p.stickerDescs = map[string]stickerDesc{}
+	if p.sdk == nil {
+		return
+	}
+	raw, err := p.sdk.Settings().Get("sticker_descs")
+	if err != nil {
+		return
+	}
+	str, _ := raw.(string)
+	if strings.TrimSpace(str) == "" {
+		return
+	}
+	var m map[string]stickerDesc
+	if json.Unmarshal([]byte(str), &m) == nil && m != nil {
+		p.stickerDescs = m
+	}
+}
+
+// saveStickerDescs 把缓存写回插件配置（json 字符串）。
+func (p *Plugin) saveStickerDescs() error {
+	p.stickerMu.RLock()
+	data, err := json.Marshal(p.stickerDescs)
+	p.stickerMu.RUnlock()
+	if err != nil {
+		return err
+	}
+	if p.sdk == nil {
+		return nil
+	}
+	return p.sdk.Settings().Set("sticker_descs", string(data))
+}
+
+// stickerDescOf 读单个表情的描述（无描述返回零值）。
+func (p *Plugin) stickerDescOf(url string) stickerDesc {
+	p.stickerMu.RLock()
+	defer p.stickerMu.RUnlock()
+	return p.stickerDescs[url]
+}
+
+// maxStickers 是单次拉取上限（NapCat 侧过多无意义，展示也放不下）。
+const maxStickers = 100
+
+// fetchCustomFaces 调 fetch_custom_face 并解析出表情 URL 列表。
+func (p *Plugin) fetchCustomFaces(count int) ([]string, error) {
+	if count <= 0 {
+		count = 20
+	}
+	if count > maxStickers {
+		count = maxStickers
+	}
+	raw, err := p.napcat("fetch_custom_face", map[string]interface{}{"count": count})
+	if err != nil {
+		return nil, err
+	}
+	// napcat() 原样透传响应体（json.RawMessage），这里按 OneBot 信封解析 data。
+	// 兼容 RawMessage / []byte / 已解析对象三种形态，避免调用方假设返回类型。
+	var rawData []byte
+	switch v := raw.(type) {
+	case json.RawMessage:
+		rawData = v
+	case []byte:
+		rawData = v
+	default:
+		rawData, _ = json.Marshal(v)
+	}
+	var resp struct {
+		Data []string `json:"data"`
+	}
+	if err := json.Unmarshal(rawData, &resp); err != nil {
+		return nil, fmt.Errorf("解析表情列表失败: %w", err)
+	}
+	return resp.Data, nil
+}
+
+// handleListStickers 列出收藏表情。
+func (p *Plugin) handleListStickers(args map[string]interface{}) (interface{}, error) {
+	count := 20
+	if c, err := convInt64(args["count"]); err == nil && c > 0 {
+		count = int(c)
+	}
+	faces, err := p.fetchCustomFaces(count)
+	if err != nil {
+		return nil, err
+	}
+	stickers := make([]map[string]interface{}, 0, len(faces))
+	undescribed := 0
+	for i, u := range faces {
+		// index 从 1 开始：模型按序号发送时与人的直觉一致
+		item := map[string]interface{}{"index": i + 1, "url": u}
+		d := p.stickerDescOf(u)
+		if d.Desc == "" && d.Mood == "" {
+			undescribed++
+		} else {
+			// 只带非空字段：空字符串会让模型误以为"描述就是空"
+			if d.Desc != "" {
+				item["desc"] = d.Desc
+			}
+			if d.Mood != "" {
+				item["mood"] = d.Mood
+			}
+		}
+		stickers = append(stickers, item)
+	}
+	hint := "用 qq_send_sticker(index=N) 发送第 N 个，或直接传 url"
+	if undescribed > 0 {
+		hint += fmt.Sprintf("；还有 %d 个表情没有描述：先用 see_image(url) 看一眼，"+
+			"再调 qq_describe_sticker 把内容与情绪记下来（只需一次，之后列表自带 desc/mood）", undescribed)
+	}
+	return map[string]interface{}{
+		"stickers": stickers,
+		"total":    len(stickers),
+		"hint":     hint,
+	}, nil
+}
+
+// handleSendSticker 发表情：url 直发，或按 index 从收藏里挑。
+func (p *Plugin) handleSendSticker(args map[string]interface{}) (interface{}, error) {
+	gid, hasGroup := argPeerID(args, "group_id")
+	uid, hasUser := argPeerID(args, "user_id")
+	if !hasGroup && !hasUser {
+		return nil, fmt.Errorf("需要 group_id（群）或 user_id（私聊）：私聊请只传 user_id，不要传 group_id=0")
+	}
+	if hasGroup && hasUser {
+		return nil, fmt.Errorf("group_id 与 user_id 只能二选一")
+	}
+
+	url, _ := args["url"].(string)
+	if url == "" {
+		idx64, err := convInt64(args["index"])
+		if err != nil || idx64 < 1 {
+			return nil, fmt.Errorf("需要 url 或 index（1 开始，来自 qq_list_stickers）")
+		}
+		count := int(idx64)
+		if c, e := convInt64(args["count"]); e == nil && int(c) > count {
+			count = int(c)
+		}
+		faces, err := p.fetchCustomFaces(count)
+		if err != nil {
+			return nil, err
+		}
+		if int(idx64) > len(faces) {
+			return nil, fmt.Errorf("表情序号 %d 超出范围（当前收藏 %d 个）", idx64, len(faces))
+		}
+		url = faces[idx64-1]
+	}
+	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+		return nil, fmt.Errorf("表情地址必须是 http(s) URL，收到 %q", url)
+	}
+
+	msg := map[string]interface{}{"message": fmt.Sprintf("[CQ:image,file=%s]", url)}
+	if hasGroup {
+		msg["group_id"] = gid
+		return p.napcat("send_group_msg", msg)
+	}
+	msg["user_id"] = uid
+	return p.napcat("send_private_msg", msg)
+}
+
+// handleDescribeSticker 记录一个表情的内容/情绪描述（按 url 缓存）。
+func (p *Plugin) handleDescribeSticker(args map[string]interface{}) (interface{}, error) {
+	url, _ := args["url"].(string)
+	if url == "" {
+		idx64, err := convInt64(args["index"])
+		if err != nil || idx64 < 1 {
+			return nil, fmt.Errorf("需要 url 或 index（1 开始，来自 qq_list_stickers）")
+		}
+		count := int(idx64)
+		if c, e := convInt64(args["count"]); e == nil && int(c) > count {
+			count = int(c)
+		}
+		faces, err := p.fetchCustomFaces(count)
+		if err != nil {
+			return nil, err
+		}
+		if int(idx64) > len(faces) {
+			return nil, fmt.Errorf("表情序号 %d 超出范围（当前收藏 %d 个）", idx64, len(faces))
+		}
+		url = faces[idx64-1]
+	}
+	desc, _ := args["desc"].(string)
+	mood, _ := args["mood"].(string)
+	if strings.TrimSpace(desc) == "" && strings.TrimSpace(mood) == "" {
+		return nil, fmt.Errorf("desc 与 mood 至少写一个（内容/情绪）")
+	}
+
+	p.stickerMu.Lock()
+	if p.stickerDescs == nil {
+		p.stickerDescs = map[string]stickerDesc{}
+	}
+	p.stickerDescs[url] = stickerDesc{Desc: strings.TrimSpace(desc), Mood: strings.TrimSpace(mood)}
+	p.stickerMu.Unlock()
+
+	if err := p.saveStickerDescs(); err != nil {
+		return nil, fmt.Errorf("保存表情描述失败: %w", err)
+	}
+	return map[string]interface{}{"status": "ok", "url": url, "desc": desc, "mood": mood}, nil
 }
 
 func (p *Plugin) handleListChats(args map[string]interface{}) (interface{}, error) {

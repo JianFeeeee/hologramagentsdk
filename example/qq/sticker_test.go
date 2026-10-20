@@ -1,0 +1,163 @@
+package main
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+)
+
+// NapCat 的表情接口只有 fetch_custom_face（收藏表情 URL 列表）+ 消息段发送，
+// 没有"按 id 发表情"的独立 action。这两条用例钉住：
+//   ① list 能把 fetch_custom_face 的 data[] 解析成带 index 的列表
+//   ② send 能按 index 取到 URL，并以 image 段发到正确端点
+type stickerNapCat struct {
+	mu      sync.Mutex
+	actions []string
+	bodies  map[string]map[string]interface{}
+	srv     *httptest.Server
+}
+
+func newStickerNapCat(t *testing.T) *stickerNapCat {
+	t.Helper()
+	f := &stickerNapCat{bodies: map[string]map[string]interface{}{}}
+	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		action := strings.TrimPrefix(r.URL.Path, "/")
+		var body map[string]interface{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		f.mu.Lock()
+		f.actions = append(f.actions, action)
+		f.bodies[action] = body
+		f.mu.Unlock()
+
+		var resp interface{}
+		if action == "fetch_custom_face" {
+			resp = map[string]interface{}{
+				"status": "ok", "retcode": 0,
+				"data": []string{
+					"https://p.qpic.cn/qq_expression/1/a/0",
+					"https://p.qpic.cn/qq_expression/1/b/0",
+				},
+			}
+		} else {
+			resp = map[string]interface{}{"status": "ok", "retcode": 0, "data": map[string]interface{}{"message_id": 99}}
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	t.Cleanup(f.srv.Close)
+	return f
+}
+
+func newStickerPlugin(t *testing.T) (*Plugin, *stickerNapCat) {
+	t.Helper()
+	f := newStickerNapCat(t)
+	inst, err := NewPluginFactory("qq", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := inst.(*Plugin)
+	p.httpClient = &http.Client{Timeout: 5 * time.Second}
+	p.napcatURL = f.srv.URL
+	return p, f
+}
+
+func TestListStickersParsesURLsWithOneBasedIndex(t *testing.T) {
+	p, _ := newStickerPlugin(t)
+	res, err := p.handleListStickers(map[string]interface{}{"count": float64(10)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := res.(map[string]interface{})
+	if m["total"].(int) != 2 {
+		t.Fatalf("total = %v, want 2", m["total"])
+	}
+	list := m["stickers"].([]map[string]interface{})
+	if list[0]["index"].(int) != 1 || list[1]["index"].(int) != 2 {
+		t.Fatalf("index 必须从 1 开始: %v", list)
+	}
+	if !strings.Contains(list[1]["url"].(string), "/b/") {
+		t.Fatalf("url 解析错位: %v", list[1])
+	}
+}
+
+func TestSendStickerByIndexUsesImageSegment(t *testing.T) {
+	p, f := newStickerPlugin(t)
+	if _, err := p.handleSendSticker(map[string]interface{}{
+		"user_id": float64(2198972886),
+		"index":   float64(2),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	body, ok := f.bodies["send_private_msg"]
+	if !ok {
+		t.Fatalf("私聊表情应走 send_private_msg，实际命中 %v", f.actions)
+	}
+	msg, _ := body["message"].(string)
+	// 表情按 image 段发送（NapCat 无独立表情发送 action）
+	if !strings.HasPrefix(msg, "[CQ:image,file=") || !strings.Contains(msg, "/b/") {
+		t.Fatalf("发送内容 = %q，应是把第 2 个收藏表情作为 image 段", msg)
+	}
+	if body["user_id"] == nil {
+		t.Fatalf("缺 user_id: %v", body)
+	}
+}
+
+func TestSendStickerRejectsMissingTarget(t *testing.T) {
+	p, _ := newStickerPlugin(t)
+	if _, err := p.handleSendSticker(map[string]interface{}{"url": "https://x/y"}); err == nil {
+		t.Fatal("没有 group_id/user_id 时应报错")
+	}
+}
+
+func TestSendStickerRejectsIndexOutOfRange(t *testing.T) {
+	p, _ := newStickerPlugin(t)
+	if _, err := p.handleSendSticker(map[string]interface{}{
+		"user_id": float64(1), "index": float64(9),
+	}); err == nil {
+		t.Fatal("序号越界时应报错")
+	}
+}
+
+// 描述缓存：模型看过表情后记录 desc/mood，下次 list 直接带出来，
+// 这样它才能真正"按情绪挑表情"——NapCat 的 fetch_custom_face 只给 URL。
+func TestStickerDescriptionsRoundTrip(t *testing.T) {
+	p, _ := newStickerPlugin(t)
+	p.stickerDescs = map[string]stickerDesc{}
+	base := "https://p.qpic.cn/qq_expression/1/a/0"
+
+	if _, err := p.handleDescribeSticker(map[string]interface{}{
+		"url":  base,
+		"desc": "一只猫翻白眼",
+		"mood": "无语",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := p.handleListStickers(map[string]interface{}{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list := res.(map[string]interface{})["stickers"].([]map[string]interface{})
+	if list[0]["desc"] != "一只猫翻白眼" || list[0]["mood"] != "无语" {
+		t.Fatalf("描述未带出: %v", list[0])
+	}
+	// 第二个表情没有描述 ⇒ 不能出现空字符串字段，且 hint 要提示去描述
+	if _, ok := list[1]["desc"]; ok {
+		t.Fatalf("未描述的表情不应带空 desc: %v", list[1])
+	}
+	if !strings.Contains(res.(map[string]interface{})["hint"].(string), "see_image") {
+		t.Fatalf("hint 应提示用 see_image 补描述: %v", res.(map[string]interface{})["hint"])
+	}
+}
+
+func TestDescribeStickerRequiresContent(t *testing.T) {
+	p, _ := newStickerPlugin(t)
+	if _, err := p.handleDescribeSticker(map[string]interface{}{"url": "https://x/y"}); err == nil {
+		t.Fatal("desc/mood 都为空时应报错")
+	}
+}
