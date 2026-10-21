@@ -15,6 +15,19 @@ package main
 // 所以每条判据都配了**变异**：把实现改坏一处，判据必须变红。判据的注释里
 // 写明"变异点"，便于以后有人重构时知道这条判据在守什么。
 //
+// ## ★ 缺 sha256 的两道守卫与各自变异（复核前必读）
+//
+// 缺 sha256 由**两道守卫**把守（语义文案 + 格式校验，见 rawfiles_fetch.go
+// 里那两段 if 上方的注释）。它们不能合并，否则要么对没写字段的人说"格式错"，
+// 要么让 `sha256: "abc"` 静默通过。实测三种变异：
+//
+//	A. 只短路空串守卫   → TestURLRawFileRequiresSha256 **红**（文案断言命中）
+//	B. 只短路格式守卫   → TestRawFileDeclStaticValidation **红**（长度/hex 用例）
+//	A+B 同时短路       → 两条都红
+//
+// 所以两个守卫都有判据。但**只看 TestURLRawFileRequiresSha256 施加单点变异 B
+// 会看到绿** —— 那不是判据漏了，而是该判据造的是空串，走不到格式分支。
+//
 // 全部判据用 httptest 起本地服务器 + t.Setenv 把缓存指到 t.TempDir()：
 // 不依赖外网、不在开发者机器上留缓存、可并发跑。
 
@@ -243,6 +256,18 @@ func TestURLRawFileRequiresSha256(t *testing.T) {
 	if !strings.Contains(err.Error(), "sha256") {
 		t.Errorf("报错信息应点名 sha256，实际: %v", err)
 	}
+	// ★ 必须钉住**语义文案**，不能只要求"含 sha256"。
+	//
+	// 为什么：缺 sha256 有**两道守卫**（空串判定给语义文案；normalizeSHA256
+	// 给格式校验），两道都含 "sha256"。只断言 `Contains(err, "sha256")` 的
+	// 时候，短路掉空串守卫，归一点器的"必须是 64 位 hex（实际 0 位）"也能
+	// 满足它 —— 复核时就会误以为判据没咬住（实测发生）。
+	//
+	// 这条断言守的是：对着一个**根本没写字段**的人，绝对不能回一句
+	// "你的格式不对"。那句话会把人引到去数 hex 位数，而不是去补字段。
+	if !strings.Contains(err.Error(), "必须") || !strings.Contains(err.Error(), "声明") {
+		t.Errorf("★ 缺 sha256 的报错必须点明\"必须声明\"（而不是归一点器的长度错），实际: %v", err)
+	}
 	// 校验必须发生在下载**之前**
 	if srv.Hits() != 0 {
 		t.Errorf("★ 缺 sha256 时报错前不该发请求（实际 %d 次）", srv.Hits())
@@ -251,7 +276,40 @@ func TestURLRawFileRequiresSha256(t *testing.T) {
 	if ents, _ := os.ReadDir(cacheDir); len(ents) != 0 {
 		t.Errorf("校验失败不该在缓存里留东西: %v", ents)
 	}
-	// 变异点：把缺 sha256 从 return err 改成 fmt.Printf("warn") + continue → 红。
+	// 显式空串（写了字段但值是 ""）与全角空格走同一条守卫，避免"我写了呀"
+	// 这种歧义：`"sha256": ""` 与不写字段必须得到**同一句**报错。
+	for _, blank := range []string{"", "   "} {
+		err := validateRawFileDecls([]RawFileDecl{{Name: "a.txt", URL: srv.URL + "/a", SHA256: blank}})
+		if err == nil {
+			t.Errorf("★ sha256=%q 未被拒绝", blank)
+			continue
+		}
+		if !strings.Contains(err.Error(), "必须") || !strings.Contains(err.Error(), "声明") {
+			t.Errorf("sha256=%q 应走\"必须声明\"文案（与未写字段一致），实际: %v", blank, err)
+		}
+	}
+	if srv.Hits() != 0 {
+		t.Errorf("★ 空 sha256 也不该发请求（实际 %d 次）", srv.Hits())
+	}
+
+	// ## 变异说明（给下一个复核的人）
+	//
+	// 缺 sha256 由**两道守卫**把守（语义文案 + 格式校验，见 rawfiles_fetch.go
+	// 里那两段 if 上方的注释）。实测三种变异的真实结果：
+	//
+	//	A. 只短路 `if TrimSpace(d.SHA256) == ""`   → **红**（文案断言命中：
+	//	   "必须是 64 位 hex（实际 0 位）"—— 对没写字段的人说格式错）
+	//	B. 只短路 `normalizeSHA256` 的报错            → **绿**（空串守卫已挡住，
+	//	   本条不感知；但 `TestRawFileDeclStaticValidation` 会红，见下面的分注）
+	//	A+B. 两道同时短路                           → **红**（err == nil，t.Fatal）
+	//
+	// 即：单点变异 A 已被咬住，单点变异 B 由另一条判据咬住。两条一起看，
+	// 每个守卫都有判据，不存在无人把守的分支。
+	//
+	// ★ B 为何不在本条里红：本条造的是**空串**，空串先被语义守卫挡下，
+	// 根本走不到格式校验。要观察 B，需要造一个"写了但格式错"的 sha256
+	// （那正是 TestRawFileDeclStaticValidation 的 "sha256 不是 64 位" /
+	// "sha256 非 hex" 两个子用例）。
 }
 
 // ---------------------------------------------------------------------------
@@ -678,6 +736,12 @@ func TestURLRawFileNameRejected(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRawFileDeclStaticValidation(t *testing.T) {
+	// ★ 本判据是「格式守卫」的唯一把守人：`sha256: "abc"` / 64 位非 hex
+	// 只有到这里才会被拒（空串先被 rawfiles_fetch.go 的语义守卫挡下，
+	// 那一条在 TestURLRawFileRequiresSha256 里验）。
+	//
+	// 变异：删掉 validateRawFileDecls 里的 normalizeSHA256 调用
+	//   → 下面「sha256 不是 64 位」与「sha256 非 hex」两个子用例红。
 	sha := strings.Repeat("d", 64)
 	cases := []struct {
 		name string
