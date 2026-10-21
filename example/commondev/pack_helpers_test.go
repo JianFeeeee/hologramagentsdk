@@ -110,9 +110,14 @@ func buildHostHmapdevForTest(t *testing.T) string {
 	cmd.Dir = srcDir
 	cmd.Env = append(os.Environ(), "GOFLAGS=-buildvcs=false")
 	if b, err := cmd.CombinedOutput(); err != nil {
-		// 构建工具链失败是**环境**问题（无 go / 无网络），不是判据失败。
-		// 但必须打印为什么，且不能静默当成通过。
-		t.Fatalf("构建 hmapdev 失败: %v\n%s", err, b)
+		// 构建工具链失败多半是**环境**问题（无网 / 无模块缓存，拉不到 yaegi 之类）。
+		// 但那不是"可以跳过"的理由：本判据守的是"随包资源到底进没进包"，
+		// 跳过它等于把 rawfile 通道的守卫撤了（本仓曾以"skip 而非零退"丢过一次守卫）。
+		// ⇒ 响亮失败，并把**怎么解决**写进文案。
+		t.Fatalf("构建 hmapdev 失败: %v\n%s\n"+
+			"这通常是环境问题（拉不到 tools/hmapdev 的依赖）。"+
+			"解法：设 GOPROXY（如 GOPROXY=https://goproxy.cn,direct）"+
+			"或先 `cd tools/hmapdev && go mod download`。", err, b)
 	}
 	if _, err := os.Stat(out); err != nil {
 		t.Fatalf("hmapdev 未产出: %v", err)

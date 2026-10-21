@@ -86,7 +86,7 @@ func TestZcodeFullPipeline(t *testing.T) {
 	}
 
 	// ★ 用**随包分发**的 driver.json 解析描述（不是测试里手拼参数）
-	//   夹具：把跟踪的 driver.json / sidecar.mjs 摆成解包后的布局 —— 
+	//   夹具：把跟踪的 driver.json / sidecar.mjs 摆成解包后的布局 ——
 	//   rawfile/ 不进版本库，直接读它会让这条 e2e 在干净克隆上假红。
 	rawRoot := stageShippedRuntime(t)
 	pz := newTestPluginWithRawfiles(t, rawRoot)

@@ -297,7 +297,15 @@ func (t *testRawFiles) WorkDir() string {
 // 这才是 "随包分发" 的可验证形式。
 //
 // ★ 不允许在测试里往**真** rawfile/ 写假文件—— 那是造假通过且污染工作区。
-//   一切都在 t.TempDir() / 临时目录里做。
+//
+//	一切都在 t.TempDir() / 临时目录里做。
+//
+// ★ 夹具需要**能构建 hmapdev**（拉 tools/hmapdev 的依赖，如 yaegi）。
+//
+//	没网且没有模块缓存时这条会红 —— 那是**环境**限制，但仍然要红而不是
+//	skip：本判据守的正是“资源到底有没有进包”，静默跳过它等于把整个
+//	rawfile 通道的守卫撤了（本仓历史上就是以“skip 而非零退”丢过一次守卫）。
+//	解法写在失败文案里（设 GOPROXY 或预先 `go mod download`）。
 func TestPackageShipsSidecarScript(t *testing.T) {
 	dev := buildHostHmapdevForTest(t)
 
