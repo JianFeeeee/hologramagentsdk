@@ -1,6 +1,6 @@
-# hmapdev — HomeAgent 插件开发 VSCode 扩展
+# hmapdev — HologramAgent 插件开发 VSCode 扩展
 
-调试与构建 HomeAgent 插件工程的 IDE 支持：**plg.json 校验、SDK 版本解析、构建/运行、内核日志跟随**。
+调试与构建 HologramAgent 插件工程的 IDE 支持：**plg.json 校验、SDK 版本解析、构建/运行、内核日志跟随**。
 
 ## 为什么需要它
 

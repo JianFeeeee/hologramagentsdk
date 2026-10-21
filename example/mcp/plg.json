@@ -4,7 +4,7 @@
   "name_en": "mcp",
   "version": "1.0.0",
   "description": "MCP (Model Context Protocol) 客户端：接入外部 MCP 服务器，透传其工具",
-  "author": "HomeAgent",
+  "author": "HologramAgent",
   "entry": "plugin.so",
   "tags": [
     "mcp",

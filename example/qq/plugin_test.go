@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/JianFeeeee/homeagentsdk/sdk"
+	"github.com/JianFeeeee/hologramagentsdk/sdk"
 )
 
 func newPermissionTestPlugin(t *testing.T) *Plugin {

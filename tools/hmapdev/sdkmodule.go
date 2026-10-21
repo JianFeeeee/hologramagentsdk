@@ -2,20 +2,28 @@ package main
 
 import "strings"
 
-// sdkModulePath 报告 mod 是否为 HomeAgent SDK 的 module path，
-// 是则返回规范化的模块名。
+// sdkModuleNames 是「什么算 SDK 模块」的唯一事实源：**三个名字都认**。
 //
-// # 为何要同时认两个名字（2026-10-08）
+//  1. `gitcode.com/JianFeeeee/homeagent-sdk`   —— 最初（gitcode 时代）
+//  2. `github.com/JianFeeeee/homeagentsdk`     —— 2026-10-08 迁到 GitHub
+//  3. `github.com/JianFeeeee/hologramagentsdk` —— 2026-10 产品改名
 //
-// SDK 仓已从 gitcode 迁到 GitHub，module 路径随之变成
-// `github.com/JianFeeeee/homeagentsdk`。但**存量插件的 go.mod 里写的仍是旧路径**
-// `gitcode.com/JianFeeeee/homeagent-sdk` —— 本机实测 qq / vanblog / mcquery /
-// fileproc / homeagent-mail-bridge 五个插件工作区全部如此（用户已创建的项目
-// 不可能因为我们改了仓就自动更新）。
+// ❗旧名必须继续被认出：存量插件的 go.mod 里写的仍是 1 或 2（本机实测仍有
+// 工作区在用第 2 个）。只认新名 ⇒ 旧插件被当成「这不是 SDK 依赖」⇒
+// **静默**走错分支（不写 replace、认不出 SDK 仓、yaegi 找不到 SDK 源码路径）。
+var sdkModuleNames = []string{
+	"github.com/JianFeeeee/hologramagentsdk",
+	"github.com/JianFeeeee/homeagentsdk",
+	"gitcode.com/JianFeeeee/homeagent-sdk",
+}
+
+// sdkModulePath 报告 mod 是否为 HologramAgent SDK 的 module path，
+// 是则返回命中的那个规范名。
 //
-// 所以任何「识别 SDK 模块」的判定都必须**两种都接受**：
-// 只认新名 ⇒ 旧插件被当成「这不是 SDK 依赖」⇒ 静默走错分支
-// （不写 replace、认不出 SDK 仓、yaegi 找不到 SDK 源码路径）。
+// # 为何要同时认三个名字
+//
+// 见 sdkModuleNames 的注释。要点：每次改名都留下一批「go.mod 里写着旧名」的
+// 存量插件工作区（用户已创建的项目不可能因为我们改了仓就自动更新）。
 //
 // 这类失效**不报错**，正是最危险的一种：迁移代码路径改完了，
 // 逻辑判定漏改，功能悄悄坏掉而测试仍然绿。
@@ -27,10 +35,7 @@ func sdkModulePath(mod string) (string, bool) {
 	if mod == "" {
 		return "", false
 	}
-	for _, name := range []string{
-		"github.com/JianFeeeee/homeagentsdk",
-		"gitcode.com/JianFeeeee/homeagent-sdk",
-	} {
+	for _, name := range sdkModuleNames {
 		if strings.Contains(mod, name) {
 			return name, true
 		}
@@ -49,10 +54,7 @@ func isSDKModule(mod string) bool {
 // 与 isSDKModule 分开：那个判「单个 module path 是不是 SDK」，
 // 这个判「整份文件里有没有引用 SDK」——用途不同，别合并。
 func containsSDKModule(text string) bool {
-	for _, name := range []string{
-		"github.com/JianFeeeee/homeagentsdk",
-		"gitcode.com/JianFeeeee/homeagent-sdk",
-	} {
+	for _, name := range sdkModuleNames {
 		if strings.Contains(text, name) {
 			return true
 		}

@@ -3,7 +3,7 @@ module browser
 go 1.25.0
 
 require (
-	github.com/JianFeeeee/homeagentsdk v0.0.0
+	github.com/JianFeeeee/hologramagentsdk v0.0.0
 	github.com/chromedp/cdproto v0.157.8
 	github.com/chromedp/chromedp v0.20.1
 	github.com/chromedp/chromedp/remote v0.2.0
@@ -20,4 +20,4 @@ require (
 
 require github.com/go-json-experiment/json v0.0.0-20260213210345-44df1a37e875 // indirect
 
-replace github.com/JianFeeeee/homeagentsdk => ../../
+replace github.com/JianFeeeee/hologramagentsdk => ../../

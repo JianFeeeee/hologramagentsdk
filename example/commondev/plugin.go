@@ -48,7 +48,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/JianFeeeee/homeagentsdk/sdk"
+	"github.com/JianFeeeee/hologramagentsdk/sdk"
 )
 
 const (
@@ -891,7 +891,7 @@ func (p *Plugin) registerTools() {
 	// 不另建存储 —— pi 本身就有完整的配置系统。
 	p.sdk.RegisterTool("commondev_pi_source_import", sdk.ToolDef{
 		Name: "commondev_pi_source_import",
-		Description: "把 HomeAgent 内核已配的 LLM 源导入内置 pi（写它的 models.json/auth.json，" +
+		Description: "把 HologramAgent 内核已配的 LLM 源导入内置 pi（写它的 models.json/auth.json，" +
 			"默认源写 settings.json）。★ 不导入的话内置 pi 会报 'No API key found'。",
 		Parameters: map[string]interface{}{"type": "object", "properties": map[string]interface{}{}},
 		NoMemory:   true,

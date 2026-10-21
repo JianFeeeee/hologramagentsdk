@@ -1,6 +1,6 @@
-# Vikunja 插件（HomeAgent）
+# Vikunja 插件（HologramAgent）
 
-把 [Vikunja](https://vikunja.io) 待办/任务管理接入 HomeAgent：用自然语言查任务、建任务、改期、完成、看板拖动、指派、评论、时间跟踪、导入数据等。
+把 [Vikunja](https://vikunja.io) 待办/任务管理接入 HologramAgent：用自然语言查任务、建任务、改期、完成、看板拖动、指派、评论、时间跟踪、导入数据等。
 
 ## 配置项（全部可在插件配置界面修改）
 
@@ -70,7 +70,7 @@ hmapdev build                  # 产出 dist/vikunja_bundle.hmap
 ```bash
 unzip -o dist/vikunja_bundle.hmap -d /home/newqqagent/plugins/vikunja
 cd /home/newqqagent/plugins/vikunja && mv plugin.bin.linux.amd64 plugin.bin
-# 然后重载插件（或重启 homeagent.service）
+# 然后重载插件（或重启 hologramagent.service）
 ```
 
 ## 已知边界

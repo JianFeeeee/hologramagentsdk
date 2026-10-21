@@ -7,7 +7,7 @@ import "testing"
 // # 为何这条判据重要（2026-10-08）
 //
 // SDK 仓从 gitcode 迁到 GitHub 后 module 路径变成
-// `github.com/JianFeeeee/homeagentsdk`。我（AI）做迁移时只替换了 import 路径，
+// `github.com/JianFeeeee/hologramagentsdk`。我（AI）做迁移时只替换了 import 路径，
 // **漏了用旧名做逻辑判定的地方**——`cmd_build.go` 用
 // `strings.Contains(mod, "homeagent-sdk")` 判断「这是不是 SDK 依赖」，
 // 迁移后恒为假。
@@ -24,15 +24,15 @@ func TestSDKModulePathAcceptsBothNames(t *testing.T) {
 		want bool
 	}{
 		// 当前名
-		{"github.com/JianFeeeee/homeagentsdk", true},
-		{"github.com/JianFeeeee/homeagentsdk/sdk", true},
+		{"github.com/JianFeeeee/hologramagentsdk", true},
+		{"github.com/JianFeeeee/hologramagentsdk/sdk", true},
 		// 迁移前旧名（存量插件仍在用，必须继续认）
 		{"gitcode.com/JianFeeeee/homeagent-sdk", true},
 		{"gitcode.com/JianFeeeee/homeagent-sdk/sdk", true},
 		{"gitcode.com/JianFeeeee/homeagent-sdk v1.3.0", true},
 		// 不应误判
 		{"", false},
-		{"github.com/JianFeeeee/HomeAgent", false}, // 核心仓，不是 SDK
+		{"github.com/JianFeeeee/HologramAgent", false}, // 核心仓，不是 SDK
 		{"github.com/other/sdk", false},
 		{"  ", false},
 	}
@@ -46,7 +46,7 @@ func TestSDKModulePathAcceptsBothNames(t *testing.T) {
 }
 
 func TestContainsSDKModuleAcceptsBothNames(t *testing.T) {
-	if !containsSDKModule("module foo\nrequire github.com/JianFeeeee/homeagentsdk v0.0.0\n") {
+	if !containsSDKModule("module foo\nrequire github.com/JianFeeeee/hologramagentsdk v0.0.0\n") {
 		t.Error("containsSDKModule 必须认当前名")
 	}
 	if !containsSDKModule("require gitcode.com/JianFeeeee/homeagent-sdk v0.0.0\n") {

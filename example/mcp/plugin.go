@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	sdk "github.com/JianFeeeee/homeagentsdk/sdk"
+	sdk "github.com/JianFeeeee/hologramagentsdk/sdk"
 )
 
 // MCP 服务器配置（来自 config_mcp 表或 skill.json）

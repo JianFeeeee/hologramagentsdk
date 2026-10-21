@@ -22,7 +22,7 @@ controls which events are delivered.
 Subscribe(eventType EventType, handler EventHandler) func()
 ```
 
-<small>`plugin.go:378`</small>
+<small>`plugin.go:427`</small>
 
 ### `Event`
 
@@ -32,7 +32,7 @@ type Event struct { Type EventType `json:"type"` Source string `json:"source"` P
 
 Event represents a system event published by the kernel.
 
-<small>`plugin.go:364`</small>
+<small>`plugin.go:413`</small>
 
 ### `EventHandler`
 
@@ -42,7 +42,7 @@ type EventHandler func(evt *Event)
 
 EventHandler processes a system event.
 
-<small>`plugin.go:372`</small>
+<small>`plugin.go:421`</small>
 
 ### `EventType`
 
@@ -52,7 +52,7 @@ type EventType string
 
 EventType identifies the kind of system event.
 
-<small>`plugin.go:346`</small>
+<small>`plugin.go:395`</small>
 
 ### `PluginSDK.Events`
 
@@ -65,5 +65,5 @@ func (s *PluginSDK) Events() EventSubscriber
 
 Events returns the event subscriber for listening to kernel events (may be nil if not available).
 
-<small>`plugin.go:550`</small>
+<small>`plugin.go:639`</small>
 

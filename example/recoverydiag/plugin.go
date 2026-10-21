@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	sdk "github.com/JianFeeeee/homeagentsdk/sdk"
+	sdk "github.com/JianFeeeee/hologramagentsdk/sdk"
 )
 
 // Plugin 快速检查/崩溃取证工具集。全部确定性检出，返回结论而非原文，供 guard / failback 决策。

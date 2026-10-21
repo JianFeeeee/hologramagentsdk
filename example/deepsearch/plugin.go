@@ -1,6 +1,6 @@
 package main
 
-// 联网检索插件（HomeAgent）
+// 联网检索插件（HologramAgent）
 //
 // 解决的问题：原来 agent 只有 browser_* 那套「驱动浏览器抓页面」的能力，
 // 而 browser_search 是「抓 Bing HTML + 正则解析」——标题取错（拿到来源行）、
@@ -40,7 +40,7 @@ import (
 	"sync"
 	"time"
 
-	sdk "github.com/JianFeeeee/homeagentsdk/sdk"
+	sdk "github.com/JianFeeeee/hologramagentsdk/sdk"
 )
 
 const (

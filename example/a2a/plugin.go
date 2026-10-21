@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/JianFeeeee/homeagentsdk/sdk"
+	"github.com/JianFeeeee/hologramagentsdk/sdk"
 )
 
 type Plugin struct {
@@ -261,7 +261,7 @@ func (p *Plugin) startServer(addr string) error {
 func (p *Plugin) handleAgentCard(w http.ResponseWriter, r *http.Request) {
 	card := map[string]interface{}{
 		"name":        p.name,
-		"description": "HomeAgent A2A Agent - 支持多工具调用与记忆管理",
+		"description": "HologramAgent A2A Agent - 支持多工具调用与记忆管理",
 		"url":         r.Host,
 		"version":     "1.0.0",
 		"capabilities": []map[string]string{

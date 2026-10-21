@@ -4,7 +4,7 @@
   "name_en": "localuse",
   "version": "1.0.0",
   "description": "Device",
-  "author": "HomeAgent",
+  "author": "HologramAgent",
   "entry": "plugin.so",
   "tags": [
     "localuse"

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/JianFeeeee/homeagentsdk/sdk"
+	"github.com/JianFeeeee/hologramagentsdk/sdk"
 	"os"
 	"path/filepath"
 	"strings"

@@ -1,6 +1,6 @@
 # qq · QQ 消息桥接
 
-通过 [NapCat](https://github.com/NapNeko/NapCatQQ) 把 QQ 接成 HomeAgent 的一个 IO 通道：
+通过 [NapCat](https://github.com/NapNeko/NapCatQQ) 把 QQ 接成 HologramAgent 的一个 IO 通道：
 让 agent 收发 QQ 消息、读群/好友信息、传文件。
 
 > ⚠️ 这是**安全敏感**插件：它让外部 QQ 用户能触达 agent 的工具。
@@ -94,6 +94,9 @@ p.auth.owner = p.auth.owner && next.owner
 `config_`、`settings_`、`plugin_`、`plugins_`，
 外加 `read_file`、`write_file`、`edit_file`、`delete_file`、`list_files`、`run_command`、
 `homeagent_config`、`homeagent_restart`、`output_send__email`、`output_send__mail`。
+
+> ⚠️ `homeagent_config` / `homeagent_restart` 是**已注册的工具名**（见 `plugin.go` 的
+> 工具清单），属于对外协议面 —— 改名会让存量调用方失效，所以刻意保留旧名。
 
 ### 参数与会话一致性校验
 

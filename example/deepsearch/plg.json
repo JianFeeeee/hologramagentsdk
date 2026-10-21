@@ -4,7 +4,7 @@
   "name_en": "Deep Search",
   "version": "1.1.2",
   "description": "为 agent 提供真正的联网信息检索：本地 SearXNG 聚合多引擎（返回标题/URL/摘要/时间），支持新闻、时间范围、指定引擎；并提供网页正文抽取与「搜索+读前K篇」的深检索",
-  "author": "HomeAgent",
+  "author": "HologramAgent",
   "entry": "plugin.bin",
   "tags": [
     "search",

@@ -21,7 +21,7 @@ func (p *PlgConfig) ReplacesToSlice() []string {
 }
 
 // validateProxies 在打包前校验反代声明，让插件作者**本地**就发现写错，
-// 而不是装到 HomeAgent 上才看到「声明被拒」。
+// 而不是装到 HologramAgent 上才看到「声明被拒」。
 //
 // 校验规则与 SDK 的 sdk.ValidateProxyDef 保持一致（同一套 DNS label / auth /
 // target 规则）；工具链不 import SDK 是为了保持"打包机只需工具链"的独立性，
@@ -32,6 +32,8 @@ func validateProxies(list []ProxyConfig) error {
 		if strings.TrimSpace(p.Target) == "" {
 			return fmt.Errorf("proxies[%d] (%s): target 不能为空", i, p.Name)
 		}
+		// "homeagent" 是**协议值**，不是品牌文案：存量插件的 plg.json 里写的就是它，
+		// 核心仓以 pubsdk.ProxyAuthHomeAgent 别名引用同一常量。改它 = 存量插件静默失效。
 		switch p.Auth {
 		case "", "homeagent", "none":
 		default:
@@ -106,7 +108,7 @@ type PlgConfig struct {
 	// 补丁由工具链挑最新」（patch 只含工具链/打包修复，接口不变，见 README 版本语义）。
 	SDK string `json:"sdk,omitempty"`
 
-	// Proxies 声明本插件需要 HomeAgent 反代出去的服务（自带 Web UI / HTTP API）。
+	// Proxies 声明本插件需要 HologramAgent 反代出去的服务（自带 Web UI / HTTP API）。
 	//
 	// 为什么声明在 plugin.json 而不是运行期注册：静态可发现（插件没起来时
 	// 也能报「声明了 ui 但目标不可达」，而不是静默 404）、可版本化、旧内核无害。
@@ -271,7 +273,7 @@ func cmdInit(args []string) {
 			NameEn:      nameEn,
 			Version:     "0.1.0",
 			Description: name + " plugin",
-			Author:      "HomeAgent",
+			Author:      "HologramAgent",
 			Entry:       entry,
 			Tags:        []string{name},
 			Targets:     targets,
@@ -393,7 +395,7 @@ func copyCanonicalLuaSDK(dir string) bool {
 	return true
 }
 
-// detectSDKInfo reads the HomeAgent SDK's go.mod and meta to get module path, go version, and SDK version.
+// detectSDKInfo reads the HologramAgent SDK's go.mod and meta to get module path, go version, and SDK version.
 func detectSDKInfo() (modulePath, goVersion, sdkPath, sdkVersion string) {
 	root := activeSDKRoot()
 	gomodPath := filepath.Join(root, "go.mod")
@@ -440,7 +442,7 @@ func scaffoldRemoteDevice(name string) {
 			NameEn:      nameEn,
 			Version:     "0.1.0",
 			Description: name + " remote device adapter",
-			Author:      "HomeAgent",
+			Author:      "HologramAgent",
 			Entry:       name,
 			Tags:        []string{name, "remotedevice"},
 		},

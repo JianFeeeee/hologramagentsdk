@@ -1,6 +1,6 @@
-# HomeAgent 插件 SDK
+# HologramAgent 插件 SDK
 
-用 **Go** 或 **Lua** 为 HomeAgent 编写插件。插件跑在独立进程里，通过公开 SDK 与内核通信：
+用 **Go** 或 **Lua** 为 HologramAgent 编写插件。插件跑在独立进程里，通过公开 SDK 与内核通信：
 注册工具供模型调用、挂阶段钩子干预流程、读写三层记忆、注册输入输出通道、订阅事件。
 
 <div id="api-search"></div>

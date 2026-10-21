@@ -4,7 +4,7 @@
   "name_en": "Music Search",
   "version": "0.1.0",
   "description": "音乐搜索插件，支持搜索歌曲和查看歌词（基于网易云音乐）",
-  "author": "HomeAgent",
+  "author": "HologramAgent",
   "entry": "plugin.so",
   "tags": [
     "music",

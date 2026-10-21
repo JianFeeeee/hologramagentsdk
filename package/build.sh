@@ -56,7 +56,7 @@ build_hmapdev() {
 
   echo "[BUILD] hmapdev ${GOOS:-linux}/${GOARCH:-amd64} → $out"
   cd "$PROJECT_ROOT/$src"
-  "$GO" build -trimpath -ldflags "-X github.com/JianFeeeee/homeagentsdk/meta.Version=${VERSION}" \
+  "$GO" build -trimpath -ldflags "-X github.com/JianFeeeee/hologramagentsdk/meta.Version=${VERSION}" \
     -o "$out" .
   echo "  OK ($(du -h "$out" | cut -f1))"
   cd "$PROJECT_ROOT"

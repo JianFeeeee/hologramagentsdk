@@ -6,7 +6,7 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/JianFeeeee/homeagentsdk/meta"
+	"github.com/JianFeeeee/hologramagentsdk/meta"
 )
 
 func main() {
@@ -47,7 +47,7 @@ func printVersion() {
 // printVersionTo 把版本身份写到 w（抽出来是为了能被测试钉住）。
 func printVersionTo(w io.Writer) {
 	fmt.Fprintf(w, "hmapdev %s\n", meta.Version)
-	fmt.Fprintf(w, "  SDK 模块: %s\n", "github.com/JianFeeeee/homeagentsdk")
+	fmt.Fprintf(w, "  SDK 模块: %s\n", meta.SDKModule)
 	if meta.Commit != "" && meta.Commit != "unknown" {
 		fmt.Fprintf(w, "  构建提交: %s\n", meta.Commit)
 	}
@@ -59,7 +59,7 @@ func printVersionTo(w io.Writer) {
 }
 
 func help() {
-	fmt.Print(`HomeAgent Plugin Dev Tool
+	fmt.Print(`HologramAgent Plugin Dev Tool
 
 Usage:
   hmapdev version                Print toolchain version

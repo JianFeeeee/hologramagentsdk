@@ -23,9 +23,9 @@ import (
 //
 // 约定沿用 llms.txt 社区规范（Jeremy Howard 提出）：llms.txt 是给「读目录」
 // 用的精简索引，llms-full.txt 是给「一次读全」用的大文件。
-const llmsHeader = `# HomeAgent 插件 SDK
+const llmsHeader = `# HologramAgent 插件 SDK
 
-> 用 Go 或 Lua 为 HomeAgent 编写插件。插件跑在独立进程里，通过公开 SDK 与内核通信：
+> 用 Go 或 Lua 为 HologramAgent 编写插件。插件跑在独立进程里，通过公开 SDK 与内核通信：
 > 注册工具供模型调用、挂阶段钩子干预流程、读写三层记忆、注册输入输出通道、订阅事件。
 >
 > SDK 以 MIT 发布（插件可闭源、可商用，无需回馈）。内核本身是 AGPL-3.0-only。
@@ -85,7 +85,7 @@ func writeAgentEntrypoints(docsDir, siteDir string) (int, error) {
 		return entries[i].rel < entries[j].rel
 	})
 
-	base := "https://sdk.homeagent.jianfgit.xyz"
+	base := "https://sdk.hologramagent.jianfgit.xyz"
 	var idx strings.Builder
 	fmt.Fprintf(&idx, llmsHeader, base+"/llms-full.txt")
 	for _, e := range entries {
@@ -103,7 +103,7 @@ func writeAgentEntrypoints(docsDir, siteDir string) (int, error) {
 	}
 
 	var full strings.Builder
-	fmt.Fprintf(&full, "# HomeAgent 插件 SDK — 完整文档\n\n")
+	fmt.Fprintf(&full, "# HologramAgent 插件 SDK — 完整文档\n\n")
 	full.WriteString("（本文件由 tools/apidoc/gensite 从 docs/ 汇总生成，供 agent 一次读取。）\n\n")
 	full.WriteString("---\n\n")
 	for _, e := range entries {

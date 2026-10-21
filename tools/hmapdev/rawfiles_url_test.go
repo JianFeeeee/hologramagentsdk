@@ -1002,8 +1002,8 @@ func buildProbePlugin(t *testing.T, plgJSON string) string {
 	}
 	write("plugin.go", string(src))
 	write("go.mod", "module probe\n\ngo 1.25.0\n\n"+
-		"require github.com/JianFeeeee/homeagentsdk v0.0.0\n\n"+
-		"replace github.com/JianFeeeee/homeagentsdk => "+repoRoot+"\n")
+		"require github.com/JianFeeeee/hologramagentsdk v0.0.0\n\n"+
+		"replace github.com/JianFeeeee/hologramagentsdk => "+repoRoot+"\n")
 	write("plg.json", plgJSON)
 	return proj
 }

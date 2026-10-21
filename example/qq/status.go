@@ -40,7 +40,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/JianFeeeee/homeagentsdk/sdk"
+	"github.com/JianFeeeee/hologramagentsdk/sdk"
 )
 
 // QQ 在线状态（NapCat 权威取值）。

@@ -11,7 +11,7 @@ import (
 //
 // ## 为什么要有这个命令
 //
-// 2026-09-28：HomeAgent 插件开发的知识（hmapdev 工具链、SDK 版本坑、
+// 2026-09-28：HologramAgent 插件开发的知识（hmapdev 工具链、SDK 版本坑、
 // plg.json、plugin.bin 部署、内置 vs 独立二进制）只存在于**agent 的对话历史**里。
 // 本机四个 agent（pi / claude / codex / .agents）都不会开发插件，
 // 因为它们**没有任何渠道**拿到这些知识。
@@ -104,7 +104,7 @@ func TestSkillSourceHasValidLayout(t *testing.T) {
 	//   原先用 TempDir ⇒ 那个目录是空的，判据永远红，且红得毫无意义
 	//   （"文件不存在"是真的，但真实文件在 SDK 仓里，不在临时目录）。
 	src := repoSkillsDir(t)
-	for _, name := range []string{"homeagent-plugin-dev"} {
+	for _, name := range []string{"hologram-plugin-dev"} {
 		dir := filepath.Join(src, name)
 		if _, err := os.Stat(dir); os.IsNotExist(err) {
 			t.Fatalf("缺少 skill 目录 %s", dir)
@@ -140,7 +140,7 @@ func TestListSkillNamesIgnoresHidden(t *testing.T) {
 	home := t.TempDir()
 	src := skillsSourceDir(home)
 	// skill 目录
-	if err := os.MkdirAll(filepath.Join(src, "homeagent-plugin-dev"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(src, "hologram-plugin-dev"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	// 隐藏目录（.git 之类）不该被当成 skill
@@ -161,12 +161,12 @@ func TestListSkillNamesIgnoresHidden(t *testing.T) {
 	}
 	found := false
 	for _, n := range names {
-		if n == "homeagent-plugin-dev" {
+		if n == "hologram-plugin-dev" {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("listSkillNames 漏掉了 homeagent-plugin-dev，得到 %v", names)
+		t.Errorf("listSkillNames 漏掉了 hologram-plugin-dev，得到 %v", names)
 	}
 }
 
@@ -174,11 +174,11 @@ func TestListSkillNamesIgnoresHidden(t *testing.T) {
 func TestSkillInstallIsIdempotent(t *testing.T) {
 	home := t.TempDir()
 	src := skillsSourceDir(home)
-	dir := filepath.Join(src, "homeagent-plugin-dev")
+	dir := filepath.Join(src, "hologram-plugin-dev")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	body := "---\nname: homeagent-plugin-dev\ndescription: 开发 HomeAgent 插件的工具链手册\n---\n\n内容\n"
+	body := "---\nname: hologram-plugin-dev\ndescription: 开发 HologramAgent 插件的工具链手册\n---\n\n内容\n"
 	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +186,7 @@ func TestSkillInstallIsIdempotent(t *testing.T) {
 	install := func() map[string]string {
 		out := map[string]string{}
 		for _, tt := range knownSkillTargets {
-			dst := filepath.Join(home, tt.rel, "homeagent-plugin-dev")
+			dst := filepath.Join(home, tt.rel, "hologram-plugin-dev")
 			if err := copyDir(dir, dst); err != nil {
 				t.Fatalf("copy: %v", err)
 			}
@@ -215,15 +215,15 @@ func TestSkillInstallIsIdempotent(t *testing.T) {
 func TestSkillInstallOverwritesUserEdit(t *testing.T) {
 	home := t.TempDir()
 	src := skillsSourceDir(home)
-	dir := filepath.Join(src, "homeagent-plugin-dev")
+	dir := filepath.Join(src, "hologram-plugin-dev")
 	_ = os.MkdirAll(dir, 0o755)
-	want := "---\nname: homeagent-plugin-dev\ndescription: 工具链手册\n---\n原始内容\n"
+	want := "---\nname: hologram-plugin-dev\ndescription: 工具链手册\n---\n原始内容\n"
 	_ = os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(want), 0o644)
 
-	dst := filepath.Join(home, knownSkillTargets[0].rel, "homeagent-plugin-dev")
+	dst := filepath.Join(home, knownSkillTargets[0].rel, "hologram-plugin-dev")
 	_ = os.MkdirAll(dst, 0o755)
 	_ = os.WriteFile(filepath.Join(dst, "SKILL.md"),
-		[]byte("---\nname: homeagent-plugin-dev\ndescription: 用户改过\n---\n用户的版本\n"), 0o644)
+		[]byte("---\nname: hologram-plugin-dev\ndescription: 用户改过\n---\n用户的版本\n"), 0o644)
 
 	if err := copyDir(dir, dst); err != nil {
 		t.Fatalf("copy: %v", err)
@@ -242,12 +242,12 @@ func TestSkillInstallOverwritesUserEdit(t *testing.T) {
 func TestSkillInstallSkipsUnknownTargets(t *testing.T) {
 	home := t.TempDir()
 	src := skillsSourceDir(home)
-	dir := filepath.Join(src, "homeagent-plugin-dev")
+	dir := filepath.Join(src, "hologram-plugin-dev")
 	_ = os.MkdirAll(dir, 0o755)
 	_ = os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("---\nname: x\ndescription: yyy\n---\n"), 0o644)
 
 	// 模拟：只请求装到 pi（不装 claude）
-	_ = copyDir(dir, filepath.Join(home, knownSkillTargets[0].rel, "homeagent-plugin-dev"))
+	_ = copyDir(dir, filepath.Join(home, knownSkillTargets[0].rel, "hologram-plugin-dev"))
 	if _, err := os.Stat(filepath.Join(home, ".claude")); err == nil {
 		t.Error("不请�� claude 却创建了 ~/.claude")
 	}
@@ -265,11 +265,11 @@ func TestCmdSkillInstallOverwritesUserEdit(t *testing.T) {
 	store := filepath.Join(home, "sdkstore")
 	sdkRoot := filepath.Join(store, "v9.9.9")
 	src := skillsSourceDir(sdkRoot)
-	dir := filepath.Join(src, "homeagent-plugin-dev")
+	dir := filepath.Join(src, "hologram-plugin-dev")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	want := "---\nname: homeagent-plugin-dev\ndescription: 工具链手册，覆盖测试\n---\n原始内容\n"
+	want := "---\nname: hologram-plugin-dev\ndescription: 工具链手册，覆盖测试\n---\n原始内容\n"
 	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(want), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -285,11 +285,11 @@ func TestCmdSkillInstallOverwritesUserEdit(t *testing.T) {
 	if err := os.MkdirAll(piSkills, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	existing := filepath.Join(piSkills, "homeagent-plugin-dev")
+	existing := filepath.Join(piSkills, "hologram-plugin-dev")
 	if err := os.MkdirAll(existing, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	userVer := "---\nname: homeagent-plugin-dev\ndescription: 用户改过的描述文字\n---\n用户的版本\n"
+	userVer := "---\nname: hologram-plugin-dev\ndescription: 用户改过的描述文字\n---\n用户的版本\n"
 	if err := os.WriteFile(filepath.Join(existing, "SKILL.md"), []byte(userVer), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -316,7 +316,7 @@ func TestCmdSkillInstallRejectsUnknownSkill(t *testing.T) {
 	home := t.TempDir()
 	store := filepath.Join(home, "sdkstore")
 	src := skillsSourceDir(filepath.Join(store, "v9.9.9"))
-	if err := os.MkdirAll(filepath.Join(src, "homeagent-plugin-dev"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(src, "hologram-plugin-dev"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(store, 0o755); err != nil {

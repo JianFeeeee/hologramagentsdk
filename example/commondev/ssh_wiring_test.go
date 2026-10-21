@@ -19,7 +19,7 @@ import (
 	"strings"
 	"testing"
 
-	sdk "github.com/JianFeeeee/homeagentsdk/sdk"
+	sdk "github.com/JianFeeeee/hologramagentsdk/sdk"
 )
 
 // ★★★ 判据：`runtime=ssh` 被真正记进台账（不再被吞）。

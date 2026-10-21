@@ -1,6 +1,6 @@
 package main
 
-// Vikunja 插件（HomeAgent）
+// Vikunja 插件（HologramAgent）
 //
 // 设计要点：
 //   - 所有连接参数都是「插件配置项」（url / token / api_version / …），token 以 password 类型存储；
@@ -38,7 +38,7 @@ import (
 	"strings"
 	"time"
 
-	sdk "github.com/JianFeeeee/homeagentsdk/sdk"
+	sdk "github.com/JianFeeeee/hologramagentsdk/sdk"
 )
 
 // ======== 配置键 ========

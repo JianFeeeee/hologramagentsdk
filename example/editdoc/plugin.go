@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/JianFeeeee/homeagentsdk/sdk"
+	"github.com/JianFeeeee/hologramagentsdk/sdk"
 )
 
 // editDocPy 内嵌 Python 后端脚本。

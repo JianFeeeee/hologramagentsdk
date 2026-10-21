@@ -101,7 +101,7 @@ func TestPackagingScriptPicksTargetArchArtifact(t *testing.T) {
 	if err := os.Symlink(dev, filepath.Join(mirror, "build", "hmapdev_"+host)); err != nil {
 		t.Fatalf("symlink hmapdev: %v", err)
 	}
-	// 插件的 go.mod 里有 `replace github.com/JianFeeeee/homeagentsdk => ../../`，
+	// 插件的 go.mod 里有 `replace github.com/JianFeeeee/hologramagentsdk => ../../`，
 	// 它解析到**镜像根** ⇒ 镜像根必须有真实的 SDK Go 源码（go.mod + sdk/ + meta/…）。
 	// 不接上的话，交叉构建会以
 	//   `reading <mirror>/go.mod: no such file or directory` 失败 ——

@@ -4,7 +4,7 @@
   "name_en": "Document Editor",
   "version": "2.0.0",
   "description": "全能办公插件：新建/读取/编辑/转换 docx·xlsx·pptx·md·csv·txt（基于 python-docx / openpyxl / python-pptx / soffice / pandoc）",
-  "author": "HomeAgent",
+  "author": "HologramAgent",
   "entry": "plugin.bin",
   "tags": [
     "editdoc",

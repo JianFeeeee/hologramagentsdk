@@ -1,36 +1,36 @@
-# HomeAgent 插件 SDK
+# HologramAgent 插件 SDK
 
-> 用 Go 或 Lua 为 HomeAgent 编写插件。插件跑在独立进程里，通过公开 SDK 与内核通信：
+> 用 Go 或 Lua 为 HologramAgent 编写插件。插件跑在独立进程里，通过公开 SDK 与内核通信：
 > 注册工具供模型调用、挂阶段钩子干预流程、读写三层记忆、注册输入输出通道、订阅事件。
 >
 > SDK 以 MIT 发布（插件可闭源、可商用，无需回馈）。内核本身是 AGPL-3.0-only。
 >
 > 本文件是给 agent 的入口。下列每个链接都是**纯 Markdown 正文**，可直接读，
-> 不含 HTML 样板；也可以直接取 https://sdk.homeagent.jianfgit.xyz/llms-full.txt 一次读完全部文档。
+> 不含 HTML 样板；也可以直接取 https://sdk.hologramagent.jianfgit.xyz/llms-full.txt 一次读完全部文档。
 
-- [HomeAgent 插件 SDK](https://sdk.homeagent.jianfgit.xyz/index.md): 用 Go 或 Lua 为 HomeAgent 编写插件
-- [桥接装配点（Bridge）](https://sdk.homeagent.jianfgit.xyz/api/bridge.md): 以下方法不是给插件业务代码调的——它们由 hmapdev 生成的运行时在启动时调用，用来把内核能力注入到 SDK 实例
-- [仅内置插件可用的 API](https://sdk.homeagent.jianfgit.xyz/api/builtin-only.md): 这些 API 存在于公开 SDK 包里，但在外部（第三方）插件的运行路径上不可用：要么桥接运行时根本不注入它（拿到 nil），要么内核会拒绝/降级
-- [输入 / 输出通道](https://sdk.homeagent.jianfgit.xyz/api/channels.md): 通道是插件与外界（设备、其他 Agent、外部系统）交换消息的入口
-- [常量与枚举](https://sdk.homeagent.jianfgit.xyz/api/constants.md): SDK 里的取值枚举
-- [事件（Events）](https://sdk.homeagent.jianfgit.xyz/api/events.md): 订阅内核事件
-- [API 参考](https://sdk.homeagent.jianfgit.xyz/api/index.md): 本页所有内容从源码生成（tools/apidoc），签名与说明直接取自 sdk/*
-- [生命周期（Lifecycle）](https://sdk.homeagent.jianfgit.xyz/api/lifecycle.md): 插件的启动、停止与卸载回调
-- [LLM 调用](https://sdk.homeagent.jianfgit.xyz/api/llm.md): 让插件自己调用模型（而不是只等模型来调你）
-- [记忆（Memory）](https://sdk.homeagent.jianfgit.xyz/api/memory.md): 三层记忆的读写接口：图记忆（三元组关系）、文档记忆（带元数据的文档）、文本记忆（事件流水）
-- [其他类型](https://sdk.homeagent.jianfgit.xyz/api/misc.md): 剩余的类型与方法：PluginSDK 本体的访问器、StageContext 的并发控制，以及多模态辅助类型
-- [配置（Settings）](https://sdk.homeagent.jianfgit.xyz/api/settings.md): 声明插件自己的配置项，内核会把它渲染到 WebUI 的设置页，并为每个插件维护独立的配置表
-- [阶段钩子（Stages）](https://sdk.homeagent.jianfgit.xyz/api/stages.md): 在消息处理管道的固定点位插入自己的逻辑
-- [工具（Tools）](https://sdk.homeagent.jianfgit.xyz/api/tools.md): 注册 LLM 可调用的工具
-- [示例插件](https://sdk.homeagent.jianfgit.xyz/examples/index.md): SDK 仓 example/ 下有多个真实可编译的示例插件，覆盖工具注册、通道、记忆读写、LLM 调用、生命周期等常见形态
-- [能力边界：哪些 API 外部插件能用](https://sdk.homeagent.jianfgit.xyz/guide/capability-boundary.md): HomeAgent 有两类插件：
-- [第一个 Lua 插件](https://sdk.homeagent.jianfgit.xyz/guide/first-lua-plugin.md): Lua 插件适合轻量、快速原型：不需要 Go 编译环境，改完重启内核即可生效
-- [第一个 Go 插件](https://sdk.homeagent.jianfgit.xyz/guide/first-plugin.md): 以下是一个能直接跑起来的最小插件：注册一个工具、声明一项配置、处理停止与卸载
-- [环境与工具链](https://sdk.homeagent.jianfgit.xyz/guide/getting-started.md): hmapdev 是 SDK 仓提供的统一插件开发工具链，Go 与 Lua 两种插件都用它，
-- [多平台构建](https://sdk.homeagent.jianfgit.xyz/guide/multi-platform.md): hmapdev build 默认 bundle 模式，一次产出含三个平台的单个 
-- [打包与发布](https://sdk.homeagent.jianfgit.xyz/guide/packaging.md): hmapdev build 一次完成编译与打包，产出 
-- [工具并发声明：`ParallelSafe` / `Serial`](https://sdk.homeagent.jianfgit.xyz/guide/parallel-tool-declaration.md): > 对应 sdk
-- [场景记忆（Scene Memory）](https://sdk.homeagent.jianfgit.xyz/guide/scene-memory.md): > 场景式记忆是内核 v1
-- [受限 SDK 与安全](https://sdk.homeagent.jianfgit.xyz/guide/security.md): 外部插件与内置插件的区别不只是「能不能调某个函数」，还包含一层安全边界：
-- [流式多 `tool_call`：适配器必须透传 `index`](https://sdk.homeagent.jianfgit.xyz/guide/stream-tool-call-index.md): > 面向在 Lua 里写适配器（transform_stream_chunk）的插件作者
-- [版本与兼容](https://sdk.homeagent.jianfgit.xyz/versions.md): SDK 版本跟随内核的中版本，patch 位恒为 
+- [HologramAgent 插件 SDK](https://sdk.hologramagent.jianfgit.xyz/index.md): 用 Go 或 Lua 为 HologramAgent 编写插件
+- [桥接装配点（Bridge）](https://sdk.hologramagent.jianfgit.xyz/api/bridge.md): 以下方法不是给插件业务代码调的——它们由 hmapdev 生成的运行时在启动时调用，用来把内核能力注入到 SDK 实例
+- [仅内置插件可用的 API](https://sdk.hologramagent.jianfgit.xyz/api/builtin-only.md): 这些 API 存在于公开 SDK 包里，但在外部（第三方）插件的运行路径上不可用：要么桥接运行时根本不注入它（拿到 nil），要么内核会拒绝/降级
+- [输入 / 输出通道](https://sdk.hologramagent.jianfgit.xyz/api/channels.md): 通道是插件与外界（设备、其他 Agent、外部系统）交换消息的入口
+- [常量与枚举](https://sdk.hologramagent.jianfgit.xyz/api/constants.md): SDK 里的取值枚举
+- [事件（Events）](https://sdk.hologramagent.jianfgit.xyz/api/events.md): 订阅内核事件
+- [API 参考](https://sdk.hologramagent.jianfgit.xyz/api/index.md): 本页所有内容从源码生成（tools/apidoc），签名与说明直接取自 sdk/*
+- [生命周期（Lifecycle）](https://sdk.hologramagent.jianfgit.xyz/api/lifecycle.md): 插件的启动、停止与卸载回调
+- [LLM 调用](https://sdk.hologramagent.jianfgit.xyz/api/llm.md): 让插件自己调用模型（而不是只等模型来调你）
+- [记忆（Memory）](https://sdk.hologramagent.jianfgit.xyz/api/memory.md): 三层记忆的读写接口：图记忆（三元组关系）、文档记忆（带元数据的文档）、文本记忆（事件流水）
+- [其他类型](https://sdk.hologramagent.jianfgit.xyz/api/misc.md): 剩余的类型与方法：PluginSDK 本体的访问器、StageContext 的并发控制，以及多模态辅助类型
+- [配置（Settings）](https://sdk.hologramagent.jianfgit.xyz/api/settings.md): 声明插件自己的配置项，内核会把它渲染到 WebUI 的设置页，并为每个插件维护独立的配置表
+- [阶段钩子（Stages）](https://sdk.hologramagent.jianfgit.xyz/api/stages.md): 在消息处理管道的固定点位插入自己的逻辑
+- [工具（Tools）](https://sdk.hologramagent.jianfgit.xyz/api/tools.md): 注册 LLM 可调用的工具
+- [示例插件](https://sdk.hologramagent.jianfgit.xyz/examples/index.md): SDK 仓 example/ 下有多个真实可编译的示例插件，覆盖工具注册、通道、记忆读写、LLM 调用、生命周期等常见形态
+- [能力边界：哪些 API 外部插件能用](https://sdk.hologramagent.jianfgit.xyz/guide/capability-boundary.md): HologramAgent 有两类插件：
+- [第一个 Lua 插件](https://sdk.hologramagent.jianfgit.xyz/guide/first-lua-plugin.md): Lua 插件适合轻量、快速原型：不需要 Go 编译环境，改完重启内核即可生效
+- [第一个 Go 插件](https://sdk.hologramagent.jianfgit.xyz/guide/first-plugin.md): 以下是一个能直接跑起来的最小插件：注册一个工具、声明一项配置、处理停止与卸载
+- [环境与工具链](https://sdk.hologramagent.jianfgit.xyz/guide/getting-started.md): hmapdev 是 SDK 仓提供的统一插件开发工具链，Go 与 Lua 两种插件都用它，
+- [多平台构建](https://sdk.hologramagent.jianfgit.xyz/guide/multi-platform.md): hmapdev build 默认 bundle 模式，一次产出含三个平台的单个 
+- [打包与发布](https://sdk.hologramagent.jianfgit.xyz/guide/packaging.md): hmapdev build 一次完成编译与打包，产出 
+- [工具并发声明：`ParallelSafe` / `Serial`](https://sdk.hologramagent.jianfgit.xyz/guide/parallel-tool-declaration.md): > 对应 sdk
+- [场景记忆（Scene Memory）](https://sdk.hologramagent.jianfgit.xyz/guide/scene-memory.md): > 场景式记忆是内核 v1
+- [受限 SDK 与安全](https://sdk.hologramagent.jianfgit.xyz/guide/security.md): 外部插件与内置插件的区别不只是「能不能调某个函数」，还包含一层安全边界：
+- [流式多 `tool_call`：适配器必须透传 `index`](https://sdk.hologramagent.jianfgit.xyz/guide/stream-tool-call-index.md): > 面向在 Lua 里写适配器（transform_stream_chunk）的插件作者
+- [版本与兼容](https://sdk.hologramagent.jianfgit.xyz/versions.md): SDK 版本跟随内核的中版本，patch 位恒为 

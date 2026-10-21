@@ -14,6 +14,7 @@
 | [`Get`](#settingsapiget) | Get reads the plugin's own config value (config_<name> table). |
 | [`GetCore`](#settingsapigetcore) | GetCore reads the core config table. |
 | [`GetPlugin`](#settingsapigetplugin) | GetPlugin reads another plugin's config table. |
+| [`GetSecret`](#settingsapigetsecret) | GetSecret reads a value written by SetSecret (transparently decrypted). |
 | [`List`](#settingsapilist) | List returns all keys matching the given prefix. |
 | [`ListCore`](#settingsapilistcore) | ListCore lists core config keys matching the prefix. |
 | [`ListPlugin`](#settingsapilistplugin) | ListPlugin lists another plugin's config keys matching the prefix. |
@@ -22,6 +23,7 @@
 | [`Set`](#settingsapiset) | Set writes a config value to the plugin's own config table. |
 | [`SetCore`](#settingsapisetcore) | SetCore writes to the core config table. |
 | [`SetPlugin`](#settingsapisetplugin) | SetPlugin writes to another plugin's config table. |
+| [`SetSecret`](#settingsapisetsecret) | SetSecret writes a value that is ALWAYS encrypted at rest, regardless of |
 
 ### `SettingsAPI.DataDir`
 
@@ -33,7 +35,7 @@ DataDir returns the plugin-specific data directory (guaranteed to exist):
 <daemon data>/plugin_data/<plugin_name>. Plugins should persist any
 runtime files (generated images, caches, downloads) here.
 
-<small>`settings.go:25`</small>
+<small>`settings.go:40`</small>
 
 ### `SettingsAPI.Defs`
 
@@ -43,7 +45,7 @@ Defs(prefix string) []*ConfigDef
 
 Defs returns config definitions matching the prefix.
 
-<small>`settings.go:40`</small>
+<small>`settings.go:55`</small>
 
 ### `SettingsAPI.Dump`
 
@@ -53,7 +55,7 @@ Dump() map[string]interface{}
 
 Dump returns all config values.
 
-<small>`settings.go:43`</small>
+<small>`settings.go:58`</small>
 
 ### `SettingsAPI.Get`
 
@@ -73,7 +75,7 @@ GetCore(key string) (interface{}, error)
 
 GetCore reads the core config table.
 
-<small>`settings.go:14`</small>
+<small>`settings.go:29`</small>
 
 ### `SettingsAPI.GetPlugin`
 
@@ -83,7 +85,17 @@ GetPlugin(plugin, key string) (interface{}, error)
 
 GetPlugin reads another plugin's config table.
 
-<small>`settings.go:28`</small>
+<small>`settings.go:43`</small>
+
+### `SettingsAPI.GetSecret`
+
+```go
+GetSecret(key string) (string, error)
+```
+
+GetSecret reads a value written by SetSecret (transparently decrypted).
+
+<small>`settings.go:23`</small>
 
 ### `SettingsAPI.List`
 
@@ -93,7 +105,7 @@ List(prefix string) ([]string, error)
 
 List returns all keys matching the given prefix.
 
-<small>`settings.go:11`</small>
+<small>`settings.go:26`</small>
 
 ### `SettingsAPI.ListCore`
 
@@ -103,7 +115,7 @@ ListCore(prefix string) ([]string, error)
 
 ListCore lists core config keys matching the prefix.
 
-<small>`settings.go:20`</small>
+<small>`settings.go:35`</small>
 
 ### `SettingsAPI.ListPlugin`
 
@@ -113,7 +125,7 @@ ListPlugin(plugin, prefix string) ([]string, error)
 
 ListPlugin lists another plugin's config keys matching the prefix.
 
-<small>`settings.go:34`</small>
+<small>`settings.go:49`</small>
 
 ### `SettingsAPI.Plugins`
 
@@ -123,7 +135,7 @@ Plugins() []string
 
 Plugins returns a list of all plugin config namespaces.
 
-<small>`settings.go:46`</small>
+<small>`settings.go:61`</small>
 
 ### `SettingsAPI.RegisterDef`
 
@@ -133,7 +145,7 @@ RegisterDef(def ConfigDef)
 
 RegisterDef registers a config definition for UI display.
 
-<small>`settings.go:37`</small>
+<small>`settings.go:52`</small>
 
 ### `SettingsAPI.Set`
 
@@ -153,7 +165,7 @@ SetCore(key string, value interface{}) error
 
 SetCore writes to the core config table.
 
-<small>`settings.go:17`</small>
+<small>`settings.go:32`</small>
 
 ### `SettingsAPI.SetPlugin`
 
@@ -163,7 +175,26 @@ SetPlugin(plugin, key string, value interface{}) error
 
 SetPlugin writes to another plugin's config table.
 
-<small>`settings.go:31`</small>
+<small>`settings.go:46`</small>
+
+### `SettingsAPI.SetSecret`
+
+```go
+SetSecret(key string, value interface{}) error
+```
+
+SetSecret writes a value that is ALWAYS encrypted at rest, regardless of
+the key name. Use it when the key name is neutral (e.g. "blob", "conn")
+and so cannot be detected as sensitive automatically.
+
+Returns an error (not a silent plaintext write) when no master key is
+installed — a plugin that believes it stored a secret must not end up
+with plaintext on disk.
+
+The companion read is GetSecret. ConfigDef.Secret/Type=="password" and
+sensitive key names are encrypted automatically and do NOT need this.
+
+<small>`settings.go:20`</small>
 
 ### `ConfigDef`
 
@@ -173,7 +204,7 @@ type ConfigDef struct { Key string `json:"key"` Default interface{} `json:"defau
 
 ConfigDef describes a configuration field for the WebUI.
 
-<small>`settings.go:50`</small>
+<small>`settings.go:65`</small>
 
 ### `PluginSDK.Settings`
 
@@ -193,5 +224,5 @@ sett 在 New 时一次性写入且无 setter，故不需要加锁。
 | [`ai_image`](../examples/index.md#ai_image) | `example/ai_image/plugin.go:114` | `s.Settings().RegisterDef(sdk.ConfigDef{` |
 | [`bili`](../examples/index.md#bili) | `example/bili/plugin.go:67` | `s.Settings().RegisterDef(sdk.ConfigDef{` |
 
-<small>`plugin.go:505`</small>
+<small>`plugin.go:584`</small>
 

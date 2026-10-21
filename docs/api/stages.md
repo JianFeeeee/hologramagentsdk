@@ -10,7 +10,7 @@
 func (c *StageContext) IsResponded() bool
 ```
 
-<small>`plugin.go:213`</small>
+<small>`plugin.go:243`</small>
 
 ### `StageContext.Lock`
 
@@ -25,9 +25,9 @@ func (c *StageContext) Lock()
 | [`a2a`](../examples/index.md#a2a) | `example/a2a/plugin.go:158` | `p.sessMu.Lock()` |
 | [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:128` | `p.srvMu.Lock()` |
 | [`bili`](../examples/index.md#bili) | `example/bili/plugin.go:37` | `p.runMu.Lock()` |
-| [`browser`](../examples/index.md#browser) | `example/browser/plugin.go:427` | `p.mu.Lock()` |
+| [`browser`](../examples/index.md#browser) | `example/browser/plugin.go:450` | `p.mu.Lock()` |
 
-<small>`plugin.go:211`</small>
+<small>`plugin.go:241`</small>
 
 ### `StageContext.RLock`
 
@@ -40,11 +40,11 @@ func (c *StageContext) RLock()
 | 插件 | 位置 | 代码 |
 |---|---|---|
 | [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:267` | `p.mu.RLock()` |
-| [`calendar`](../examples/index.md#calendar) | `example/calendar/plugin.go:649` | `p.mu.RLock()` |
+| [`calendar`](../examples/index.md#calendar) | `example/calendar/plugin.go:650` | `p.mu.RLock()` |
 | [`memo`](../examples/index.md#memo) | `example/memo/plugin.go:224` | `p.mu.RLock()` |
-| [`qq`](../examples/index.md#qq) | `example/qq/plugin.go:1152` | `ctx.RLock()` |
+| [`qq`](../examples/index.md#qq) | `example/qq/status.go:569` | `ctx.RLock()` |
 
-<small>`plugin.go:209`</small>
+<small>`plugin.go:239`</small>
 
 ### `StageContext.RUnlock`
 
@@ -57,11 +57,11 @@ func (c *StageContext) RUnlock()
 | 插件 | 位置 | 代码 |
 |---|---|---|
 | [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:273` | `p.mu.RUnlock()` |
-| [`calendar`](../examples/index.md#calendar) | `example/calendar/plugin.go:650` | `defer p.mu.RUnlock()` |
+| [`calendar`](../examples/index.md#calendar) | `example/calendar/plugin.go:651` | `defer p.mu.RUnlock()` |
 | [`memo`](../examples/index.md#memo) | `example/memo/plugin.go:229` | `p.mu.RUnlock()` |
-| [`qq`](../examples/index.md#qq) | `example/qq/plugin.go:1155` | `ctx.RUnlock()` |
+| [`qq`](../examples/index.md#qq) | `example/qq/status.go:570` | `defer ctx.RUnlock()` |
 
-<small>`plugin.go:210`</small>
+<small>`plugin.go:240`</small>
 
 ### `PluginSDK.RegisterStage`
 
@@ -78,12 +78,12 @@ RegisterStage registers a handler for a pipeline stage.
 
 | 插件 | 位置 | 代码 |
 |---|---|---|
+| [`cmd`](../examples/index.md#cmd) | `example/cmd/plugin.go:221` | `s.RegisterStage(sdk.StageBeforeToolcall, func(ctx *sdk.StageContext) error {` |
 | [`memo`](../examples/index.md#memo) | `example/memo/plugin.go:152` | `s.RegisterStage(sdk.StagePreAction, p.stagePreAction)` |
-| [`qq`](../examples/index.md#qq) | `example/qq/plugin.go:719` | `s.RegisterStage(sdk.StageOnInput, p.onInputAuthContext, sdk.StageScopeGlobal)` |
+| [`qq`](../examples/index.md#qq) | `example/qq/plugin.go:940` | `s.RegisterStage(sdk.StageOnInput, p.onInputAuthContext, sdk.StageScopeGlobal)` |
 | [`sanitizer`](../examples/index.md#sanitizer) | `example/sanitizer/plugin.go:52` | `s.RegisterStage(sdk.StageOnInput, func(ctx *sdk.StageContext) error {` |
-| [`weather`](../examples/index.md#weather) | `example/weather/plugin.go:94` | `s.RegisterStage(sdk.StageAfterToolcall, func(ctx *sdk.StageContext) error {` |
 
-<small>`plugin.go:571`</small>
+<small>`plugin.go:660`</small>
 
 ### `Stage`
 
@@ -103,7 +103,7 @@ type StageContext struct { mu sync.RWMutex RawMessage string UserID string Group
 
 StageContext provides context for stage handlers.
 
-<small>`plugin.go:189`</small>
+<small>`plugin.go:219`</small>
 
 ### `StageHandler`
 
@@ -123,7 +123,7 @@ type StageRegistrar func(stage Stage, handler StageHandler)
 
 StageRegistrar registers a stage handler.
 
-<small>`plugin.go:407`</small>
+<small>`plugin.go:483`</small>
 
 ### `StageScope`
 
@@ -133,7 +133,7 @@ type StageScope int
 
 StageScope controls which events a stage handler receives.
 
-<small>`plugin.go:393`</small>
+<small>`plugin.go:469`</small>
 
 ### `StageContext.Unlock`
 
@@ -148,7 +148,7 @@ func (c *StageContext) Unlock()
 | [`a2a`](../examples/index.md#a2a) | `example/a2a/plugin.go:164` | `p.sessMu.Unlock()` |
 | [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:129` | `defer p.srvMu.Unlock()` |
 | [`bili`](../examples/index.md#bili) | `example/bili/plugin.go:40` | `p.runMu.Unlock()` |
-| [`browser`](../examples/index.md#browser) | `example/browser/plugin.go:432` | `p.mu.Unlock()` |
+| [`browser`](../examples/index.md#browser) | `example/browser/plugin.go:455` | `p.mu.Unlock()` |
 
-<small>`plugin.go:212`</small>
+<small>`plugin.go:242`</small>
 

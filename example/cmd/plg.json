@@ -4,7 +4,7 @@
   "name_en": "cmd",
   "version": "1.0.0",
   "description": "沙箱内执行",
-  "author": "HomeAgent",
+  "author": "HologramAgent",
   "entry": "plugin.so",
   "tags": [
     "cmd"

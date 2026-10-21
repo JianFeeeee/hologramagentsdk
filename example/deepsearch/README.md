@@ -1,4 +1,4 @@
-# 联网检索插件（HomeAgent）
+# 联网检索插件（HologramAgent）
 
 给 agent 补上**真正的信息检索**能力：检索交给本地 SearXNG（多引擎聚合、结构化 JSON），
 并补上「读完前 K 篇再回答」的深检索。
@@ -51,7 +51,7 @@ agent 原本只有 `browser_*` 那套浏览器工具，联网检索实际只有 
 
 1. **`search.formats` 必须含 `json`**，否则 `/search?format=json` 返回 **403**（看起来像网络问题，其实是配置）。
 2. 该镜像默认 `GRANIAN_PORT=8080`，而 granian 的 `GRANIAN_*` **优先级高于 settings.yml**：
-   .60 上 8080 被 homeagent 占用 → 不改 `SEARXNG_PORT` 就是无休止的 `Address already in use` 崩溃循环。
+   .60 上 8080 被 hologramagent 占用 → 不改 `SEARXNG_PORT` 就是无休止的 `Address already in use` 崩溃循环。
 
 实测可用的引擎（2026-09-12）：`duckduckgo`、`brave`、`google cse`；`quark` 时好时坏；
 `baidu`/`google` 经代理出口触发 CAPTCHA，`sogou` 崩溃，`wikidata` 报 HTTP error（已关）。

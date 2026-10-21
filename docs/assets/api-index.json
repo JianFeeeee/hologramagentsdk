@@ -8,7 +8,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 410
+    "l": 486
   },
   {
     "n": "Add",
@@ -47,7 +47,7 @@
     "p": "misc",
     "b": false,
     "f": "plugin.go",
-    "l": 966
+    "l": 1098
   },
   {
     "n": "AutoRestart",
@@ -58,13 +58,46 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 895,
+    "l": 1027,
     "g": [
       "自动重启",
       "崩溃自愈",
       "故障恢复",
       "查询是否自动重启"
     ]
+  },
+  {
+    "n": "AutoStartOnDemand",
+    "s": "const AutoStartOnDemand",
+    "d": "AutoStartOnDemand 表示启用但不自启：待 agent 显式拉起。",
+    "k": "const",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "autostart.go",
+    "l": 68
+  },
+  {
+    "n": "AutoStartOnKernel",
+    "s": "const AutoStartOnKernel",
+    "d": "AutoStartOnKernel 表示伴随内核启动（缺少该字段时的默认形态）。",
+    "k": "const",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "autostart.go",
+    "l": 64
+  },
+  {
+    "n": "Available",
+    "s": "Available() bool",
+    "d": "Available 报告变量库是否可用（内核未启用安全模块时为 false）。",
+    "k": "method",
+    "r": "SecretsAPI",
+    "p": "misc",
+    "b": false,
+    "f": "secrets.go",
+    "l": 100
   },
   {
     "n": "CapAudio",
@@ -75,7 +108,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 430,
+    "l": 506,
     "g": [
       "音频能力"
     ]
@@ -89,7 +122,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 428,
+    "l": 504,
     "g": [
       "文件能力"
     ]
@@ -103,7 +136,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 429,
+    "l": 505,
     "g": [
       "图片能力"
     ]
@@ -117,7 +150,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 431,
+    "l": 507,
     "g": [
       "结构化能力"
     ]
@@ -131,7 +164,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 427,
+    "l": 503,
     "g": [
       "文本能力"
     ]
@@ -145,7 +178,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 178,
+    "l": 208,
     "g": [
       "通道",
       "频道",
@@ -176,7 +209,7 @@
     "p": "settings",
     "b": false,
     "f": "settings.go",
-    "l": 50,
+    "l": 65,
     "g": [
       "配置项定义"
     ]
@@ -190,7 +223,7 @@
     "p": "tools",
     "b": false,
     "f": "plugin.go",
-    "l": 954,
+    "l": 1086,
     "g": [
       "多模态内容块",
       "图片块",
@@ -252,10 +285,21 @@
     "p": "settings",
     "b": false,
     "f": "settings.go",
-    "l": 25,
+    "l": 40,
     "g": [
       "数据目录"
     ]
+  },
+  {
+    "n": "Decrypt",
+    "s": "Decrypt(stored string) ([]byte, error)",
+    "d": "Decrypt 解密由 Encrypt 产生的串。",
+    "k": "method",
+    "r": "SecretsAPI",
+    "p": "misc",
+    "b": false,
+    "f": "secrets.go",
+    "l": 94
   },
   {
     "n": "Defs",
@@ -266,10 +310,21 @@
     "p": "settings",
     "b": false,
     "f": "settings.go",
-    "l": 40,
+    "l": 55,
     "g": [
       "配置定义列表"
     ]
+  },
+  {
+    "n": "Dir",
+    "s": "Dir() string",
+    "d": "Dir 返回包内资源的根目录（只读）。",
+    "k": "method",
+    "r": "RawFilesAPI",
+    "p": "misc",
+    "b": false,
+    "f": "rawfiles.go",
+    "l": 49
   },
   {
     "n": "Doc",
@@ -295,7 +350,7 @@
     "p": "memory",
     "b": false,
     "f": "plugin.go",
-    "l": 522,
+    "l": 601,
     "g": [
       "记忆",
       "内存",
@@ -322,7 +377,7 @@
     "p": "settings",
     "b": false,
     "f": "settings.go",
-    "l": 43,
+    "l": 58,
     "g": [
       "导出配置"
     ]
@@ -337,6 +392,17 @@
     "b": false,
     "f": "proxy.go",
     "l": 169
+  },
+  {
+    "n": "Encrypt",
+    "s": "Encrypt(plain []byte) (string, error)",
+    "d": "Encrypt 加密一段字节用于插件自己落盘（密钥由内核管理）。",
+    "k": "method",
+    "r": "SecretsAPI",
+    "p": "misc",
+    "b": false,
+    "f": "secrets.go",
+    "l": 91
   },
   {
     "n": "Entity",
@@ -362,7 +428,7 @@
     "p": "misc",
     "b": false,
     "f": "plugin.go",
-    "l": 264
+    "l": 294
   },
   {
     "n": "Event",
@@ -373,7 +439,7 @@
     "p": "events",
     "b": false,
     "f": "plugin.go",
-    "l": 364,
+    "l": 413,
     "g": [
       "事件",
       "订阅"
@@ -388,7 +454,7 @@
     "p": "constants",
     "b": false,
     "f": "plugin.go",
-    "l": 351,
+    "l": 400,
     "g": [
       "事件",
       "订阅"
@@ -403,7 +469,7 @@
     "p": "constants",
     "b": false,
     "f": "plugin.go",
-    "l": 350,
+    "l": 399,
     "g": [
       "事件",
       "订阅"
@@ -418,7 +484,7 @@
     "p": "constants",
     "b": false,
     "f": "plugin.go",
-    "l": 360,
+    "l": 409,
     "g": [
       "事件",
       "订阅"
@@ -433,7 +499,7 @@
     "p": "events",
     "b": false,
     "f": "plugin.go",
-    "l": 372,
+    "l": 421,
     "g": [
       "事件",
       "订阅"
@@ -448,7 +514,7 @@
     "p": "constants",
     "b": false,
     "f": "plugin.go",
-    "l": 349,
+    "l": 398,
     "g": [
       "事件",
       "订阅"
@@ -463,7 +529,7 @@
     "p": "constants",
     "b": false,
     "f": "plugin.go",
-    "l": 353,
+    "l": 402,
     "g": [
       "事件",
       "订阅"
@@ -478,7 +544,7 @@
     "p": "constants",
     "b": false,
     "f": "plugin.go",
-    "l": 359,
+    "l": 408,
     "g": [
       "事件",
       "订阅"
@@ -493,7 +559,7 @@
     "p": "constants",
     "b": false,
     "f": "plugin.go",
-    "l": 354,
+    "l": 403,
     "g": [
       "事件",
       "订阅",
@@ -521,7 +587,7 @@
     "p": "constants",
     "b": false,
     "f": "plugin.go",
-    "l": 355,
+    "l": 404,
     "g": [
       "事件",
       "订阅"
@@ -536,7 +602,7 @@
     "p": "constants",
     "b": false,
     "f": "plugin.go",
-    "l": 352,
+    "l": 401,
     "g": [
       "事件",
       "订阅",
@@ -552,7 +618,7 @@
     "p": "events",
     "b": false,
     "f": "plugin.go",
-    "l": 346,
+    "l": 395,
     "g": [
       "事件",
       "订阅"
@@ -567,13 +633,219 @@
     "p": "events",
     "b": true,
     "f": "plugin.go",
-    "l": 550,
+    "l": 639,
     "g": [
       "事件",
       "订阅",
       "事件订阅",
       "监听事件"
     ]
+  },
+  {
+    "n": "Exists",
+    "s": "Exists(rel string) bool",
+    "d": "Exists 报告某个资源是否存在。",
+    "k": "method",
+    "r": "RawFilesAPI",
+    "p": "misc",
+    "b": false,
+    "f": "rawfiles.go",
+    "l": 43
+  },
+  {
+    "n": "FacilityAgent",
+    "s": "const FacilityAgent",
+    "d": "FacilityAgent 是主 Agent 就绪（**最晚**的一个，通常在插件加载前）。",
+    "k": "const",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "facilities.go",
+    "l": 63
+  },
+  {
+    "n": "FacilityConfig",
+    "s": "const FacilityConfig",
+    "d": "FacilityConfig 是配置快照（cfg）就绪。",
+    "k": "const",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "facilities.go",
+    "l": 37
+  },
+  {
+    "n": "FacilityDocStore",
+    "s": "const FacilityDocStore",
+    "d": "FacilityDocStore 是文档记忆就绪。",
+    "k": "const",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "facilities.go",
+    "l": 53,
+    "g": [
+      "文档"
+    ]
+  },
+  {
+    "n": "FacilityKernelIO",
+    "s": "const FacilityKernelIO",
+    "d": "FacilityKernelIO 是 IOManager + EventBus 就绪。",
+    "k": "const",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "facilities.go",
+    "l": 39
+  },
+  {
+    "n": "FacilityKnowledge",
+    "s": "const FacilityKnowledge",
+    "d": "FacilityKnowledge 是知识库就绪。",
+    "k": "const",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "facilities.go",
+    "l": 55,
+    "g": [
+      "知识库",
+      "知识"
+    ]
+  },
+  {
+    "n": "FacilityLLM",
+    "s": "const FacilityLLM",
+    "d": "FacilityLLM 是多源 Provider 管理就绪。",
+    "k": "const",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "facilities.go",
+    "l": 51
+  },
+  {
+    "n": "FacilityLua",
+    "s": "const FacilityLua",
+    "d": "FacilityLua 是 Lua 协议适配 VM 就绪。",
+    "k": "const",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "facilities.go",
+    "l": 43
+  },
+  {
+    "n": "FacilityMemory",
+    "s": "const FacilityMemory",
+    "d": "FacilityMemory 是图记忆（含索引/社交图/蒸馏）就绪。",
+    "k": "const",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "facilities.go",
+    "l": 41,
+    "g": [
+      "记忆",
+      "内存"
+    ]
+  },
+  {
+    "n": "FacilityMultimodal",
+    "s": "const FacilityMultimodal",
+    "d": "FacilityMultimodal 是多模态向量空间就绪。",
+    "k": "const",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "facilities.go",
+    "l": 57
+  },
+  {
+    "n": "FacilityONNX",
+    "s": "const FacilityONNX",
+    "d": "FacilityONNX 是依存句法分析器就绪。",
+    "k": "const",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "facilities.go",
+    "l": 59
+  },
+  {
+    "n": "FacilityStageHost",
+    "s": "const FacilityStageHost",
+    "d": "FacilityStageHost 是阶段管道 + 插件注册表就绪。",
+    "k": "const",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "facilities.go",
+    "l": 61,
+    "g": [
+      "阶段",
+      "钩子"
+    ]
+  },
+  {
+    "n": "FacilitySupervisor",
+    "s": "const FacilitySupervisor",
+    "d": "FacilitySupervisor 是代理生命周期守护就绪。",
+    "k": "const",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "facilities.go",
+    "l": 45
+  },
+  {
+    "n": "FacilityTextMemory",
+    "s": "const FacilityTextMemory",
+    "d": "FacilityTextMemory 是文本记忆就绪。",
+    "k": "const",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "facilities.go",
+    "l": 49,
+    "g": [
+      "记忆",
+      "内存"
+    ]
+  },
+  {
+    "n": "FacilityTracker",
+    "s": "const FacilityTracker",
+    "d": "FacilityTracker 是变更追踪（overlayfs）就绪。",
+    "k": "const",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "facilities.go",
+    "l": 47
+  },
+  {
+    "n": "Fill",
+    "s": "Fill(text string) (out string, replaced int, aliases []string)",
+    "d": "Fill 把一段文本里的 @{别名} 换成明文。",
+    "k": "method",
+    "r": "SecretsAPI",
+    "p": "misc",
+    "b": false,
+    "f": "secrets.go",
+    "l": 87
+  },
+  {
+    "n": "Forget",
+    "s": "Forget(alias string) error",
+    "d": "Forget 按别名删除一个变量。",
+    "k": "method",
+    "r": "SecretsAPI",
+    "p": "misc",
+    "b": false,
+    "f": "secrets.go",
+    "l": 69
   },
   {
     "n": "Get",
@@ -598,7 +870,7 @@
     "p": "settings",
     "b": false,
     "f": "settings.go",
-    "l": 14,
+    "l": 29,
     "g": [
       "读核心配置"
     ]
@@ -640,7 +912,7 @@
     "p": "settings",
     "b": false,
     "f": "settings.go",
-    "l": 28,
+    "l": 43,
     "g": [
       "读插件配置"
     ]
@@ -658,6 +930,17 @@
     "g": [
       "查关系"
     ]
+  },
+  {
+    "n": "GetSecret",
+    "s": "GetSecret(key string) (string, error)",
+    "d": "GetSecret reads a value written by SetSecret (transparently decrypted).",
+    "k": "method",
+    "r": "SettingsAPI",
+    "p": "settings",
+    "b": false,
+    "f": "settings.go",
+    "l": 23
   },
   {
     "n": "GetTrait",
@@ -693,26 +976,7 @@
     "p": "misc",
     "b": false,
     "f": "plugin.go",
-    "l": 961
-  },
-  {
-    "n": "InjectInputMedia",
-    "s": "InjectInputMedia(source, channel, text string, blocks []ContentBlock)",
-    "d": "",
-    "k": "method",
-    "r": "IOInjector",
-    "p": "channels",
-    "b": false,
-    "f": "plugin.go",
-    "l": 329,
-    "g": [
-      "注入输入",
-      "投喂输入",
-      "模拟用户输入",
-      "媒体",
-      "图片",
-      "音频"
-    ]
+    "l": 1093
   },
   {
     "n": "InjectInputMedia",
@@ -723,7 +987,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 805,
+    "l": 937,
     "g": [
       "注入输入",
       "投喂输入",
@@ -734,15 +998,15 @@
     ]
   },
   {
-    "n": "InjectInputMediaOpts",
-    "s": "InjectInputMediaOpts(source, channel, text string, blocks []ContentBlock, opts InjectOptions)",
+    "n": "InjectInputMedia",
+    "s": "InjectInputMedia(source, channel, text string, blocks []ContentBlock)",
     "d": "",
     "k": "method",
     "r": "IOInjector",
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 340,
+    "l": 378,
     "g": [
       "注入输入",
       "投喂输入",
@@ -761,7 +1025,26 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 844,
+    "l": 976,
+    "g": [
+      "注入输入",
+      "投喂输入",
+      "模拟用户输入",
+      "媒体",
+      "图片",
+      "音频"
+    ]
+  },
+  {
+    "n": "InjectInputMediaOpts",
+    "s": "InjectInputMediaOpts(source, channel, text string, blocks []ContentBlock, opts InjectOptions)",
+    "d": "",
+    "k": "method",
+    "r": "IOInjector",
+    "p": "channels",
+    "b": false,
+    "f": "plugin.go",
+    "l": 389,
     "g": [
       "注入输入",
       "投喂输入",
@@ -780,7 +1063,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 330,
+    "l": 379,
     "g": [
       "注入输入",
       "投喂输入",
@@ -799,7 +1082,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 811,
+    "l": 943,
     "g": [
       "注入输入",
       "投喂输入",
@@ -818,7 +1101,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 341,
+    "l": 390,
     "g": [
       "注入输入",
       "投喂输入",
@@ -837,7 +1120,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 851,
+    "l": 983,
     "g": [
       "注入输入",
       "投喂输入",
@@ -849,14 +1132,14 @@
   },
   {
     "n": "InjectInputSync",
-    "s": "InjectInputSync(source, channel, text string) string",
-    "d": "InjectInputSync 注入输入事件并同步等待 agent 回复，返回回复文本（无回复时返回空串）。",
+    "s": "func (s *PluginSDK) InjectInputSync(source, channel, text string) string",
+    "d": "InjectInputSync injects a text message and synchronously waits for the agent reply,",
     "k": "method",
-    "r": "IOInjector",
+    "r": "PluginSDK",
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 325,
+    "l": 928,
     "g": [
       "注入输入",
       "投喂输入",
@@ -865,30 +1148,14 @@
   },
   {
     "n": "InjectInputSync",
-    "s": "func (s *PluginSDK) InjectInputSync(source, channel, text string) string",
-    "d": "InjectInputSync injects a text message and synchronously waits for the agent reply,",
+    "s": "InjectInputSync(source, channel, text string) string",
+    "d": "InjectInputSync 注入输入事件并同步等待 agent 回复，返回回复文本（无回复时返回空串）。",
     "k": "method",
-    "r": "PluginSDK",
+    "r": "IOInjector",
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 796,
-    "g": [
-      "注入输入",
-      "投喂输入",
-      "模拟用户输入"
-    ]
-  },
-  {
-    "n": "InjectInputSyncOpts",
-    "s": "func (s *PluginSDK) InjectInputSyncOpts(source, channel, text string, opts InjectOptions) string",
-    "d": "InjectInputSyncOpts 注入输入并同步等待回复，同时在这次注入上声明记忆/裁剪行为。",
-    "k": "method",
-    "r": "PluginSDK",
-    "p": "channels",
-    "b": false,
-    "f": "plugin.go",
-    "l": 835,
+    "l": 374,
     "g": [
       "注入输入",
       "投喂输入",
@@ -904,7 +1171,23 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 339,
+    "l": 388,
+    "g": [
+      "注入输入",
+      "投喂输入",
+      "模拟用户输入"
+    ]
+  },
+  {
+    "n": "InjectInputSyncOpts",
+    "s": "func (s *PluginSDK) InjectInputSyncOpts(source, channel, text string, opts InjectOptions) string",
+    "d": "InjectInputSyncOpts 注入输入并同步等待回复，同时在这次注入上声明记忆/裁剪行为。",
+    "k": "method",
+    "r": "PluginSDK",
+    "p": "channels",
+    "b": false,
+    "f": "plugin.go",
+    "l": 967,
     "g": [
       "注入输入",
       "投喂输入",
@@ -920,7 +1203,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 331,
+    "l": 380,
     "g": [
       "中断注入",
       "插话",
@@ -940,27 +1223,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 868,
-    "g": [
-      "中断注入",
-      "插话",
-      "打断",
-      "抢占",
-      "媒体",
-      "图片",
-      "音频"
-    ]
-  },
-  {
-    "n": "InjectInterruptMediaOpts",
-    "s": "InjectInterruptMediaOpts(source, channel, text string, blocks []ContentBlock, opts InjectOptions)",
-    "d": "",
-    "k": "method",
-    "r": "IOInjector",
-    "p": "channels",
-    "b": false,
-    "f": "plugin.go",
-    "l": 342,
+    "l": 1000,
     "g": [
       "中断注入",
       "插话",
@@ -980,7 +1243,27 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 860,
+    "l": 992,
+    "g": [
+      "中断注入",
+      "插话",
+      "打断",
+      "抢占",
+      "媒体",
+      "图片",
+      "音频"
+    ]
+  },
+  {
+    "n": "InjectInterruptMediaOpts",
+    "s": "InjectInterruptMediaOpts(source, channel, text string, blocks []ContentBlock, opts InjectOptions)",
+    "d": "",
+    "k": "method",
+    "r": "IOInjector",
+    "p": "channels",
+    "b": false,
+    "f": "plugin.go",
+    "l": 391,
     "g": [
       "中断注入",
       "插话",
@@ -993,14 +1276,14 @@
   },
   {
     "n": "InjectInterruptText",
-    "s": "InjectInterruptText(source, channel, text string)",
-    "d": "",
+    "s": "func (s *PluginSDK) InjectInterruptText(source, channel, text string)",
+    "d": "InjectInterruptText injects a text interrupt that can preempt current LLM processing.",
     "k": "method",
-    "r": "IOInjector",
+    "r": "PluginSDK",
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 320,
+    "l": 909,
     "g": [
       "中断注入",
       "插话",
@@ -1010,14 +1293,14 @@
   },
   {
     "n": "InjectInterruptText",
-    "s": "func (s *PluginSDK) InjectInterruptText(source, channel, text string)",
-    "d": "InjectInterruptText injects a text interrupt that can preempt current LLM processing.",
+    "s": "InjectInterruptText(source, channel, text string)",
+    "d": "",
     "k": "method",
-    "r": "PluginSDK",
+    "r": "IOInjector",
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 777,
+    "l": 369,
     "g": [
       "中断注入",
       "插话",
@@ -1034,7 +1317,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 338,
+    "l": 387,
     "g": [
       "中断注入",
       "插话",
@@ -1051,7 +1334,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 828,
+    "l": 960,
     "g": [
       "中断注入",
       "插话",
@@ -1084,7 +1367,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 783,
+    "l": 915,
     "g": [
       "注入文本",
       "注入消息",
@@ -1101,31 +1384,12 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 321,
+    "l": 370,
     "g": [
       "注入文本",
       "注入消息",
       "投喂输入",
       "灌入内容"
-    ]
-  },
-  {
-    "n": "InjectTextNoMemory",
-    "s": "InjectTextNoMemory(source, channel, text string)",
-    "d": "",
-    "k": "method",
-    "r": "IOInjector",
-    "p": "channels",
-    "b": false,
-    "f": "plugin.go",
-    "l": 322,
-    "g": [
-      "注入文本",
-      "注入消息",
-      "投喂输入",
-      "灌入内容",
-      "记忆",
-      "内存"
     ]
   },
   {
@@ -1137,7 +1401,26 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 789,
+    "l": 921,
+    "g": [
+      "注入文本",
+      "注入消息",
+      "投喂输入",
+      "灌入内容",
+      "记忆",
+      "内存"
+    ]
+  },
+  {
+    "n": "InjectTextNoMemory",
+    "s": "InjectTextNoMemory(source, channel, text string)",
+    "d": "",
+    "k": "method",
+    "r": "IOInjector",
+    "p": "channels",
+    "b": false,
+    "f": "plugin.go",
+    "l": 371,
     "g": [
       "注入文本",
       "注入消息",
@@ -1156,7 +1439,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 337,
+    "l": 386,
     "g": [
       "注入文本",
       "注入消息",
@@ -1173,7 +1456,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 818,
+    "l": 950,
     "g": [
       "注入文本",
       "注入消息",
@@ -1190,7 +1473,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 413,
+    "l": 489,
     "g": [
       "通道",
       "频道"
@@ -1245,16 +1528,27 @@
   {
     "n": "IsPluginDisabled",
     "s": "IsPluginDisabled(name string) bool",
-    "d": "IsPluginDisabled 查询插件是否被禁用。",
+    "d": "IsPluginDisabled 查询插件是否被**持久**禁用。",
     "k": "method",
     "r": "PluginMgrAPI",
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 389,
+    "l": 438,
     "g": [
       "查插件是否被禁用"
     ]
+  },
+  {
+    "n": "IsPluginRuntimeStopped",
+    "s": "IsPluginRuntimeStopped(name string) bool",
+    "d": "IsPluginRuntimeStopped 查询插件是否处于运行态关闭。",
+    "k": "method",
+    "r": "PluginMgrAPI",
+    "p": "lifecycle",
+    "b": false,
+    "f": "plugin.go",
+    "l": 465
   },
   {
     "n": "IsResponded",
@@ -1265,22 +1559,29 @@
     "p": "stages",
     "b": false,
     "f": "plugin.go",
-    "l": 213
+    "l": 243
   },
   {
-    "n": "Knowledge",
-    "s": "func (s *PluginSDK) Knowledge() KnowledgeAPI",
-    "d": "Knowledge returns the knowledge store API (may be nil if not available).",
+    "n": "KernelControl",
+    "s": "func (s *PluginSDK) KernelControl() KernelControlAPI",
+    "d": "KernelControl returns the kernel control API (restart / shutdown).",
     "k": "method",
     "r": "PluginSDK",
-    "p": "memory",
+    "p": "misc",
     "b": false,
     "f": "plugin.go",
-    "l": 529,
-    "g": [
-      "知识库",
-      "知识"
-    ]
+    "l": 889
+  },
+  {
+    "n": "KernelControlAPI",
+    "s": "type KernelControlAPI interface",
+    "d": "KernelControlAPI：插件请求**内核本身**重启或关机。",
+    "k": "interface",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "",
+    "l": 0
   },
   {
     "n": "Knowledge",
@@ -1298,6 +1599,21 @@
     ]
   },
   {
+    "n": "Knowledge",
+    "s": "func (s *PluginSDK) Knowledge() KnowledgeAPI",
+    "d": "Knowledge returns the knowledge store API (may be nil if not available).",
+    "k": "method",
+    "r": "PluginSDK",
+    "p": "memory",
+    "b": false,
+    "f": "plugin.go",
+    "l": 608,
+    "g": [
+      "知识库",
+      "知识"
+    ]
+  },
+  {
     "n": "KnowledgeAPI",
     "s": "type KnowledgeAPI interface",
     "d": "KnowledgeAPI provides access to the knowledge store.",
@@ -1309,6 +1625,17 @@
     "l": 0
   },
   {
+    "n": "KnownFacilities",
+    "s": "func KnownFacilities() []string",
+    "d": "KnownFacilities 返回本 SDK 已知的全部设施名（供工具链校验插件声明）。",
+    "k": "func",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "facilities.go",
+    "l": 70
+  },
+  {
     "n": "LLM",
     "s": "func (s *PluginSDK) LLM() LLMAPI",
     "d": "LLM returns the LLM provider API (may be nil if not available).",
@@ -1317,7 +1644,7 @@
     "p": "llm",
     "b": false,
     "f": "plugin.go",
-    "l": 536
+    "l": 615
   },
   {
     "n": "LLMAPI",
@@ -1329,20 +1656,6 @@
     "b": false,
     "f": "",
     "l": 0
-  },
-  {
-    "n": "List",
-    "s": "List(prefix string) ([]string, error)",
-    "d": "List returns all keys matching the given prefix.",
-    "k": "method",
-    "r": "SettingsAPI",
-    "p": "settings",
-    "b": false,
-    "f": "settings.go",
-    "l": 11,
-    "g": [
-      "列出"
-    ]
   },
   {
     "n": "List",
@@ -1359,6 +1672,48 @@
     ]
   },
   {
+    "n": "List",
+    "s": "List(prefix string) ([]string, error)",
+    "d": "List returns all keys matching the given prefix.",
+    "k": "method",
+    "r": "SettingsAPI",
+    "p": "settings",
+    "b": false,
+    "f": "settings.go",
+    "l": 26,
+    "g": [
+      "列出"
+    ]
+  },
+  {
+    "n": "List",
+    "s": "List(rel string) ([]string, error)",
+    "d": "List 列出某个目录下的条目（相对 rawfile/ 根；\"\" 表示根）。",
+    "k": "method",
+    "r": "RawFilesAPI",
+    "p": "misc",
+    "b": false,
+    "f": "rawfiles.go",
+    "l": 40,
+    "g": [
+      "列出"
+    ]
+  },
+  {
+    "n": "List",
+    "s": "List() []SecretInfo",
+    "d": "List 列出变量库的元信息（别名/来源/备注/命中次数）—— **不含明文**。",
+    "k": "method",
+    "r": "SecretsAPI",
+    "p": "misc",
+    "b": false,
+    "f": "secrets.go",
+    "l": 63,
+    "g": [
+      "列出"
+    ]
+  },
+  {
     "n": "ListCore",
     "s": "ListCore(prefix string) ([]string, error)",
     "d": "ListCore lists core config keys matching the prefix.",
@@ -1367,7 +1722,7 @@
     "p": "settings",
     "b": false,
     "f": "settings.go",
-    "l": 20,
+    "l": 35,
     "g": [
       "列出核心配置"
     ]
@@ -1381,7 +1736,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 387,
+    "l": 436,
     "g": [
       "已加载插件列表"
     ]
@@ -1409,7 +1764,7 @@
     "p": "settings",
     "b": false,
     "f": "settings.go",
-    "l": 34,
+    "l": 49,
     "g": [
       "列出插件配置"
     ]
@@ -1437,7 +1792,7 @@
     "p": "stages",
     "b": false,
     "f": "plugin.go",
-    "l": 211
+    "l": 241
   },
   {
     "n": "MediaAttachment",
@@ -1465,7 +1820,7 @@
     "p": "misc",
     "b": false,
     "f": "plugin.go",
-    "l": 220
+    "l": 250
   },
   {
     "n": "Memory",
@@ -1476,7 +1831,7 @@
     "p": "memory",
     "b": false,
     "f": "plugin.go",
-    "l": 508,
+    "l": 587,
     "g": [
       "记忆",
       "内存"
@@ -1533,6 +1888,17 @@
     "l": 202
   },
   {
+    "n": "OnDemandNeedsSkill",
+    "s": "const OnDemandNeedsSkill",
+    "d": "OnDemandNeedsSkill 说明 auto_start=false 的插件为什么必须有 skill。",
+    "k": "const",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "autostart.go",
+    "l": 82
+  },
+  {
     "n": "OutputChannelRegistrar",
     "s": "type OutputChannelRegistrar func(name string, caps int, desc string, def ChannelDef, handler ToolHandler) error",
     "d": "OutputChannelRegistrar registers an output channel that the output_send tool can use.",
@@ -1541,7 +1907,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 416,
+    "l": 492,
     "g": [
       "通道",
       "频道"
@@ -1556,7 +1922,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 423,
+    "l": 499,
     "g": [
       "通道",
       "频道"
@@ -1596,7 +1962,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 757,
+    "l": 870,
     "g": [
       "插件管理",
       "重载插件",
@@ -1624,7 +1990,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 501,
+    "l": 580,
     "g": [
       "插件名"
     ]
@@ -1638,7 +2004,7 @@
     "p": "misc",
     "b": false,
     "f": "plugin.go",
-    "l": 436
+    "l": 512
   },
   {
     "n": "Plugins",
@@ -1649,7 +2015,7 @@
     "p": "settings",
     "b": false,
     "f": "settings.go",
-    "l": 46,
+    "l": 61,
     "g": [
       "插件配置"
     ]
@@ -1663,7 +2029,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 161,
+    "l": 191,
     "g": [
       "优先级",
       "中断级别"
@@ -1678,7 +2044,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 162,
+    "l": 192,
     "g": [
       "优先级",
       "中断级别"
@@ -1693,7 +2059,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 163,
+    "l": 193,
     "g": [
       "优先级",
       "中断级别"
@@ -1708,7 +2074,7 @@
     "p": "channels",
     "b": true,
     "f": "plugin.go",
-    "l": 165,
+    "l": 195,
     "g": [
       "优先级",
       "中断级别"
@@ -1717,7 +2083,7 @@
   {
     "n": "ProxyAuthHomeAgent",
     "s": "const ProxyAuthHomeAgent",
-    "d": "ProxyAuthHomeAgent 表示由 HomeAgent 统一保护：浏览器走门户会话",
+    "d": "ProxyAuthHomeAgent 表示由 HologramAgent 统一保护：浏览器走门户会话",
     "k": "const",
     "r": "",
     "p": "misc",
@@ -1728,7 +2094,7 @@
   {
     "n": "ProxyAuthNone",
     "s": "const ProxyAuthNone",
-    "d": "ProxyAuthNone 表示不经 HomeAgent 鉴权，直接把请求转发给上游。",
+    "d": "ProxyAuthNone 表示不经 HologramAgent 鉴权，直接把请求转发给上游。",
     "k": "const",
     "r": "",
     "p": "misc",
@@ -1739,7 +2105,7 @@
   {
     "n": "ProxyDef",
     "s": "type ProxyDef struct { // Name 是同一插件内多条声明的唯一标识（如 \"ui\"、\"api\"）。 // 运行期由 RegisterProxy 的第一个参数填入；声明式由 …",
-    "d": "反向代理声明：插件告诉 HomeAgent「我起了个 HTTP 服务，请把它反代出去」。",
+    "d": "反向代理声明：插件告诉 HologramAgent「我起了个 HTTP 服务，请把它反代出去」。",
     "k": "type",
     "r": "",
     "p": "misc",
@@ -1797,7 +2163,7 @@
     "p": "stages",
     "b": false,
     "f": "plugin.go",
-    "l": 209
+    "l": 239
   },
   {
     "n": "RUnlock",
@@ -1808,7 +2174,40 @@
     "p": "stages",
     "b": false,
     "f": "plugin.go",
-    "l": 210
+    "l": 240
+  },
+  {
+    "n": "RawFiles",
+    "s": "func (s *PluginSDK) RawFiles() RawFilesAPI",
+    "d": "SetMemoryAPI sets the memory API (called by the core at startup).",
+    "k": "method",
+    "r": "PluginSDK",
+    "p": "misc",
+    "b": false,
+    "f": "plugin.go",
+    "l": 799
+  },
+  {
+    "n": "RawFilesAPI",
+    "s": "type RawFilesAPI interface",
+    "d": "RawFilesAPI 让插件读写**随包分发的资源**（rawfile）。",
+    "k": "interface",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "",
+    "l": 0
+  },
+  {
+    "n": "Read",
+    "s": "Read(rel string) ([]byte, error)",
+    "d": "Read 读一个包内资源（路径相对 rawfile/ 根）。",
+    "k": "method",
+    "r": "RawFilesAPI",
+    "p": "misc",
+    "b": false,
+    "f": "rawfiles.go",
+    "l": 35
   },
   {
     "n": "Recall",
@@ -1872,7 +2271,7 @@
     "p": "settings",
     "b": false,
     "f": "settings.go",
-    "l": 37,
+    "l": 52,
     "g": [
       "注册配置项",
       "声明配置",
@@ -1888,7 +2287,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 665,
+    "l": 754,
     "g": [
       "注册输入通道",
       "收消息",
@@ -1907,7 +2306,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 930,
+    "l": 1062,
     "g": [
       "卸载回调",
       "删除清理",
@@ -1924,7 +2323,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 632,
+    "l": 721,
     "g": [
       "注册输出通道",
       "发消息",
@@ -1943,7 +2342,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 606,
+    "l": 695,
     "g": [
       "注册插件接口",
       "暴露接口"
@@ -1952,7 +2351,7 @@
   {
     "n": "RegisterProxy",
     "s": "func (s *PluginSDK) RegisterProxy(name string, def ProxyDef)",
-    "d": "RegisterProxy 声明一个需要 HomeAgent 反代出去的服务。",
+    "d": "RegisterProxy 声明一个需要 HologramAgent 反代出去的服务。",
     "k": "method",
     "r": "PluginSDK",
     "p": "misc",
@@ -1969,7 +2368,7 @@
     "p": "stages",
     "b": false,
     "f": "plugin.go",
-    "l": 571,
+    "l": 660,
     "g": [
       "注册阶段",
       "阶段钩子",
@@ -1989,7 +2388,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 905,
+    "l": 1037,
     "g": [
       "停止回调",
       "关闭清理",
@@ -2005,7 +2404,7 @@
     "p": "tools",
     "b": false,
     "f": "plugin.go",
-    "l": 557,
+    "l": 646,
     "g": [
       "注册工具",
       "添加工具",
@@ -2042,7 +2441,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 385,
+    "l": 434,
     "g": [
       "重载单个插件"
     ]
@@ -2062,6 +2461,28 @@
     ]
   },
   {
+    "n": "RequestKernelRestart",
+    "s": "RequestKernelRestart(reason string) error",
+    "d": "RequestKernelRestart 请求重启内核（热重启，guard 重拉）。",
+    "k": "method",
+    "r": "KernelControlAPI",
+    "p": "misc",
+    "b": false,
+    "f": "kernel.go",
+    "l": 33
+  },
+  {
+    "n": "RequestKernelShutdown",
+    "s": "RequestKernelShutdown(reason string) error",
+    "d": "RequestKernelShutdown 请求关闭内核（systemd 不再拉起）。",
+    "k": "method",
+    "r": "KernelControlAPI",
+    "p": "misc",
+    "b": false,
+    "f": "kernel.go",
+    "l": 35
+  },
+  {
     "n": "RunOnRemoveHandlers",
     "s": "func (s *PluginSDK) RunOnRemoveHandlers()",
     "d": "RunOnRemoveHandlers 执行全部已注册的 onRemove handler（后注册先执行，执行后清空，幂等）。",
@@ -2070,7 +2491,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 941
+    "l": 1073
   },
   {
     "n": "RunStopHandlers",
@@ -2081,7 +2502,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 916
+    "l": 1048
   },
   {
     "n": "SDKVersion",
@@ -2140,6 +2561,39 @@
     ]
   },
   {
+    "n": "SecretInfo",
+    "s": "type SecretInfo struct { Alias string `json:\"alias\"` Source string `json:\"source\"` // intercepted | submitted Note string `json:\"note,omitempty\"` …",
+    "d": "SecretInfo 是一条变量的元信息（**不含明文**）。",
+    "k": "type",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "secrets.go",
+    "l": 104
+  },
+  {
+    "n": "Secrets",
+    "s": "func (s *PluginSDK) Secrets() SecretsAPI",
+    "d": "Social returns the social graph API (may be nil if not available).",
+    "k": "method",
+    "r": "PluginSDK",
+    "p": "misc",
+    "b": false,
+    "f": "plugin.go",
+    "l": 626
+  },
+  {
+    "n": "SecretsAPI",
+    "s": "type SecretsAPI interface",
+    "d": "SecretsAPI 是插件访问**内核变量库**的接口。",
+    "k": "interface",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "",
+    "l": 0
+  },
+  {
     "n": "Set",
     "s": "Set(key string, value interface{}) error",
     "d": "Set writes a config value to the plugin's own config table.",
@@ -2164,7 +2618,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 888,
+    "l": 1020,
     "g": [
       "设置",
       "装配",
@@ -2184,7 +2638,7 @@
     "p": "settings",
     "b": false,
     "f": "settings.go",
-    "l": 17,
+    "l": 32,
     "g": [
       "设置",
       "装配",
@@ -2200,7 +2654,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 718,
+    "l": 831,
     "g": [
       "设置",
       "装配",
@@ -2218,7 +2672,7 @@
     "p": "bridge",
     "b": true,
     "f": "plugin.go",
-    "l": 742,
+    "l": 855,
     "g": [
       "设置",
       "装配",
@@ -2235,7 +2689,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 699,
+    "l": 788,
     "g": [
       "设置",
       "装配"
@@ -2250,12 +2704,27 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 692,
+    "l": 781,
     "g": [
       "设置",
       "装配",
       "通道",
       "频道"
+    ]
+  },
+  {
+    "n": "SetKernelControlAPI",
+    "s": "func (s *PluginSDK) SetKernelControlAPI(k KernelControlAPI)",
+    "d": "SetKernelControlAPI sets the kernel control API (restart/shutdown).",
+    "k": "method",
+    "r": "PluginSDK",
+    "p": "bridge",
+    "b": false,
+    "f": "plugin.go",
+    "l": 878,
+    "g": [
+      "设置",
+      "装配"
     ]
   },
   {
@@ -2267,7 +2736,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 724,
+    "l": 837,
     "g": [
       "设置",
       "装配",
@@ -2284,7 +2753,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 730,
+    "l": 843,
     "g": [
       "设置",
       "装配"
@@ -2293,13 +2762,13 @@
   {
     "n": "SetMemoryAPI",
     "s": "func (s *PluginSDK) SetMemoryAPI(mem MemoryAPI)",
-    "d": "SetMemoryAPI sets the memory API (called by the core at startup).",
+    "d": "",
     "k": "method",
     "r": "PluginSDK",
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 706,
+    "l": 819,
     "g": [
       "设置",
       "装配",
@@ -2316,7 +2785,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 678,
+    "l": 767,
     "g": [
       "设置",
       "装配",
@@ -2333,7 +2802,7 @@
     "p": "bridge",
     "b": true,
     "f": "plugin.go",
-    "l": 685,
+    "l": 774,
     "g": [
       "设置",
       "装配",
@@ -2350,7 +2819,7 @@
     "p": "settings",
     "b": false,
     "f": "settings.go",
-    "l": 31,
+    "l": 46,
     "g": [
       "设置",
       "装配",
@@ -2366,7 +2835,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 749,
+    "l": 862,
     "g": [
       "设置",
       "装配",
@@ -2391,6 +2860,51 @@
     ]
   },
   {
+    "n": "SetRawFilesAPI",
+    "s": "func (s *PluginSDK) SetRawFilesAPI(v RawFilesAPI)",
+    "d": "SetRawFilesAPI 由内核装配时注入（插件不调用它）。",
+    "k": "method",
+    "r": "PluginSDK",
+    "p": "bridge",
+    "b": false,
+    "f": "plugin.go",
+    "l": 806,
+    "g": [
+      "设置",
+      "装配"
+    ]
+  },
+  {
+    "n": "SetSecret",
+    "s": "SetSecret(key string, value interface{}) error",
+    "d": "SetSecret writes a value that is ALWAYS encrypted at rest, regardless of",
+    "k": "method",
+    "r": "SettingsAPI",
+    "p": "settings",
+    "b": false,
+    "f": "settings.go",
+    "l": 20,
+    "g": [
+      "设置",
+      "装配"
+    ]
+  },
+  {
+    "n": "SetSecretsAPI",
+    "s": "func (s *PluginSDK) SetSecretsAPI(v SecretsAPI)",
+    "d": "SetSecretsAPI 由内核装配时注入（插件不调用它）。",
+    "k": "method",
+    "r": "PluginSDK",
+    "p": "bridge",
+    "b": false,
+    "f": "plugin.go",
+    "l": 813,
+    "g": [
+      "设置",
+      "装配"
+    ]
+  },
+  {
     "n": "SetSocialAPI",
     "s": "func (s *PluginSDK) SetSocialAPI(social SocialAPI)",
     "d": "",
@@ -2399,7 +2913,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 736,
+    "l": 849,
     "g": [
       "设置",
       "装配",
@@ -2433,31 +2947,12 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 712,
+    "l": 825,
     "g": [
       "设置",
       "装配",
       "记忆",
       "内存"
-    ]
-  },
-  {
-    "n": "SetToolBlocks",
-    "s": "func (s *PluginSDK) SetToolBlocks(blocks []ContentBlock)",
-    "d": "SetToolBlocks 在工具处理函数内注入多模态内容块，内核在下一条 tool message",
-    "k": "method",
-    "r": "PluginSDK",
-    "p": "channels",
-    "b": false,
-    "f": "plugin.go",
-    "l": 876,
-    "g": [
-      "设置",
-      "装配",
-      "工具",
-      "工具返回图片",
-      "多模态返回",
-      "让模型看图"
     ]
   },
   {
@@ -2469,7 +2964,26 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 328,
+    "l": 377,
+    "g": [
+      "设置",
+      "装配",
+      "工具",
+      "工具返回图片",
+      "多模态返回",
+      "让模型看图"
+    ]
+  },
+  {
+    "n": "SetToolBlocks",
+    "s": "func (s *PluginSDK) SetToolBlocks(blocks []ContentBlock)",
+    "d": "SetToolBlocks 在工具处理函数内注入多模态内容块，内核在下一条 tool message",
+    "k": "method",
+    "r": "PluginSDK",
+    "p": "channels",
+    "b": false,
+    "f": "plugin.go",
+    "l": 1008,
     "g": [
       "设置",
       "装配",
@@ -2488,7 +3002,7 @@
     "p": "settings",
     "b": false,
     "f": "plugin.go",
-    "l": 505,
+    "l": 584,
     "g": [
       "设置",
       "装配"
@@ -2508,13 +3022,13 @@
   {
     "n": "Social",
     "s": "func (s *PluginSDK) Social() SocialAPI",
-    "d": "Social returns the social graph API (may be nil if not available).",
+    "d": "",
     "k": "method",
     "r": "PluginSDK",
     "p": "memory",
     "b": false,
     "f": "plugin.go",
-    "l": 543,
+    "l": 632,
     "g": [
       "社交",
       "关系",
@@ -2637,7 +3151,7 @@
     "p": "stages",
     "b": false,
     "f": "plugin.go",
-    "l": 189,
+    "l": 219,
     "g": [
       "阶段",
       "钩子",
@@ -2715,7 +3229,7 @@
     "p": "stages",
     "b": false,
     "f": "plugin.go",
-    "l": 407,
+    "l": 483,
     "g": [
       "阶段",
       "钩子"
@@ -2730,7 +3244,7 @@
     "p": "stages",
     "b": false,
     "f": "plugin.go",
-    "l": 393,
+    "l": 469,
     "g": [
       "阶段",
       "钩子",
@@ -2747,7 +3261,7 @@
     "p": "constants",
     "b": false,
     "f": "plugin.go",
-    "l": 397,
+    "l": 473,
     "g": [
       "阶段",
       "钩子"
@@ -2762,7 +3276,7 @@
     "p": "constants",
     "b": false,
     "f": "plugin.go",
-    "l": 400,
+    "l": 476,
     "g": [
       "阶段",
       "钩子",
@@ -2782,6 +3296,17 @@
     "g": [
       "启动"
     ]
+  },
+  {
+    "n": "StartPlugin",
+    "s": "StartPlugin(name string) error",
+    "d": "StartPlugin 运行态启动：现在拉起，**不解除持久禁用**。",
+    "k": "method",
+    "r": "PluginMgrAPI",
+    "p": "lifecycle",
+    "b": false,
+    "f": "plugin.go",
+    "l": 463
   },
   {
     "n": "Stats",
@@ -2813,6 +3338,28 @@
     ]
   },
   {
+    "n": "StopPlugin",
+    "s": "StopPlugin(name string) error",
+    "d": "StopPlugin 运行态关闭：现在停掉，**不改持久状态**。重启后按",
+    "k": "method",
+    "r": "PluginMgrAPI",
+    "p": "lifecycle",
+    "b": false,
+    "f": "plugin.go",
+    "l": 458
+  },
+  {
+    "n": "Store",
+    "s": "Store(value, note string) (alias string, err error)",
+    "d": "Store 把一个凭据登记进内核变量库，返回其**别名**。",
+    "k": "method",
+    "r": "SecretsAPI",
+    "p": "misc",
+    "b": false,
+    "f": "secrets.go",
+    "l": 58
+  },
+  {
     "n": "Subscribe",
     "s": "Subscribe(eventType EventType, handler EventHandler) func()",
     "d": "",
@@ -2821,7 +3368,7 @@
     "p": "events",
     "b": true,
     "f": "plugin.go",
-    "l": 378
+    "l": 427
   },
   {
     "n": "TextEvent",
@@ -2847,7 +3394,7 @@
     "p": "memory",
     "b": false,
     "f": "plugin.go",
-    "l": 515,
+    "l": 594,
     "g": [
       "记忆",
       "内存"
@@ -2873,7 +3420,7 @@
     "p": "tools",
     "b": false,
     "f": "plugin.go",
-    "l": 227,
+    "l": 257,
     "g": [
       "工具",
       "工具调用"
@@ -2888,7 +3435,7 @@
     "p": "tools",
     "b": false,
     "f": "plugin.go",
-    "l": 279,
+    "l": 309,
     "g": [
       "工具",
       "工具定义",
@@ -2905,7 +3452,7 @@
     "p": "misc",
     "b": false,
     "f": "plugin.go",
-    "l": 252,
+    "l": 282,
     "g": [
       "工具"
     ]
@@ -2935,7 +3482,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 404,
+    "l": 480,
     "g": [
       "工具"
     ]
@@ -2949,7 +3496,7 @@
     "p": "tools",
     "b": false,
     "f": "plugin.go",
-    "l": 235,
+    "l": 265,
     "g": [
       "工具",
       "工具结果",
@@ -2979,7 +3526,7 @@
     "p": "stages",
     "b": false,
     "f": "plugin.go",
-    "l": 212
+    "l": 242
   },
   {
     "n": "UnregisterOutputChannel",
@@ -2990,7 +3537,7 @@
     "p": "misc",
     "b": true,
     "f": "plugin.go",
-    "l": 643,
+    "l": 732,
     "g": [
       "通道",
       "频道",
@@ -3076,5 +3623,16 @@
     "b": false,
     "f": "proxy.go",
     "l": 229
+  },
+  {
+    "n": "WorkDir",
+    "s": "WorkDir() string",
+    "d": "WorkDir 返回一个**可写**目录，供插件放运行期生成的文件。",
+    "k": "method",
+    "r": "RawFilesAPI",
+    "p": "misc",
+    "b": false,
+    "f": "rawfiles.go",
+    "l": 55
   }
 ]

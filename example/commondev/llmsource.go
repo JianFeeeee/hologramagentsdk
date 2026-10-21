@@ -1,6 +1,6 @@
 package main
 
-// LLM 源导入：把 HomeAgent 内核已配的 LLM 源写进内置 pi 的配置文件。
+// LLM 源导入：把 HologramAgent 内核已配的 LLM 源写进内置 pi 的配置文件。
 //
 // 用户要求（2026-10-14）：
 //

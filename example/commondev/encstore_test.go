@@ -15,7 +15,7 @@ import (
 	"strings"
 	"testing"
 
-	sdk "github.com/JianFeeeee/homeagentsdk/sdk"
+	sdk "github.com/JianFeeeee/hologramagentsdk/sdk"
 )
 
 // fakeVault 是内核变量库的测试替身。

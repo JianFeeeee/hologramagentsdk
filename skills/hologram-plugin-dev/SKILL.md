@@ -1,11 +1,11 @@
 ---
-name: homeagent-plugin-dev
-description: 开发、安装、调试 HomeAgent 插件。涉及 hmapdev 工具链、SDK 版本、plugin.bin 部署、插件注册排查时使用。触发词：HomeAgent 插件、hmapdev、plugin.bin、写插件、装插件、插件不生效、SDK 版本、RegisterTool、plugin_spawn。
+name: hologram-plugin-dev
+description: 开发、安装、调试 HologramAgent 插件。涉及 hmapdev 工具链、SDK 版本、plugin.bin 部署、插件注册排查时使用。触发词：HologramAgent 插件、hmapdev、plugin.bin、写插件、装插件、插件不生效、SDK 版本、RegisterTool、plugin_spawn。
 ---
 
-# HomeAgent 插件开发与安装
+# HologramAgent 插件开发与安装
 
-> 本机（192.168.2.60）HomeAgent 的插件工具链手册。**所有命令都实测过**，
+> 本机（192.168.2.60）HologramAgent 的插件工具链手册。**所有命令都实测过**，
 > 不是从文档抄的。改了本机环境后请回来更正。
 
 ## ★ 协议通道纪律：插件**绝不能**往 stdout 打印（高频踩坑）
@@ -47,7 +47,7 @@ hmapdev sdk current    # 当前活跃 SDK 版本
 hmapdev sdk list       # 本机已装的所有 SDK 版本
 ```
 
-**核心仓在** `/home/program/TrueAgent`（Go module `gitcode.com/JianFeeeee/HomeAgent`）。
+**核心仓在** `/home/program/TrueAgent`（Go module `github.com/JianFeeeee/HologramAgent`）。
 **SDK 仓在** `third_party/homeagent-sdk`（独立 git 仓，独立版本号）。
 
 ## 1. 工具链：hmapdev
@@ -150,7 +150,7 @@ s.RegisterTool(tp+"mytool", sdk.ToolDef{
   "name_zh": "QQ消息",       // 展示名
   "version": "1.4.1",
   "description": "……",
-  "author": "HomeAgent",
+  "author": "HologramAgent",
   "entry": "plugin.so",      // 入口（build 会替换为实际产物）
   "tags": ["qq", "messaging"],
   "targets": "linux/amd64",  // 目标平台
@@ -224,7 +224,7 @@ curl -s -H "X-API-Key: $K" http://127.0.0.1:8080/api/v1/status | grep -oE '"comm
 | --- | --- |
 | SDK 源码 | `third_party/homeagent-sdk/sdk/` |
 | **可运行的示例插件** | `third_party/homeagent-sdk/example/`（a2a / acp / qq / bili …） |
-| 文档站 | `https://sdk.homeagent.jianfgit.xyz`（本地源 `docs/`，构建 `tools/apidoc/build.sh`） |
+| 文档站 | `https://sdk.hologramagent.jianfgit.xyz`（本地源 `docs/`，构建 `tools/apidoc/build.sh`） |
 | 能力边界（哪些 API 外部可用） | `docs/guide/capability-boundary.md` |
 | 并发声明 | `docs/guide/parallel-tool-declaration.md` |
 | Lua 适配器写法 | `docs/guide/first-lua-plugin.md` |
