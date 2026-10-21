@@ -95,6 +95,16 @@ func collectSkillFiles(root string) ([]rawEntry, error) {
 			out = append(out, rawEntry{
 				src: p,
 				zip: filepath.ToSlash(filepath.Join(SkillZipPrefix, rel)),
+				// origin 这里是**防御性填写**，不是必要连带：
+				//
+				// skill 条目不经过 collectRawFiles 的撞名循环 —— collectSkillFiles
+				// 的返回值是在 cmd_build 里 `append(raws, skills...)` 直接拼进包
+				// 的，所以 conflictError 目前不会看到 originSkill。
+				//
+				// 填它的理由是推断而非事实：让所有构造点都显式声明来源，避免将来
+				// 有代码把 skill 条目喂进撞名检查时，留着空 origin 被 isLocal()
+				// 当成"本地声明"而报出错误的提示。
+				origin: originSkill,
 			})
 			return nil
 		})
