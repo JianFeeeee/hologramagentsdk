@@ -2,7 +2,7 @@
   "name": "commondev",
   "name_zh": "多仓库开发主管",
   "name_en": "CommonDev",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "主管式多仓库开发流水线：登记项目、开工程对话、为每条线拉起内置 pi 并注册一对通道，投递任务给 pi 并在同一会话内续投。",
   "author": "HomeAgent",
   "entry": "plugin.so",

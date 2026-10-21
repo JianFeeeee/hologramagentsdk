@@ -1,6 +1,6 @@
 ---
 name: commondev-discipline
-description: commondev 主管式多仓库开发流水线的使用与开发纪律。当你要为某个工程开一条分支、把工程派给一个下属 agent、或拉起执行后端 agent 干活时必读。核心动作：为每个工程对话新建驻留式子 agent 并把该工程的一对通道划给它（否则所有工程都挤在根 agent 上）。**git 托管平台的操作（Gitea/GitHub/GitLab）不在插件里，而在本文** —— 用 enc_shell + 保存的凭据调 curl/CLI 完成。也含 hmap 插件开发与部署纪律。
+description: commondev 主管式多仓库开发流水线的使用与开发纪律。当你要为某个工程开一条分支、把工程派给一个下属 agent、或拉起执行后端 agent（后端由 agent_cli 决定，可选 pi / zcode 等）干活时必读。核心动作：为每个工程对话新建驻留式子 agent 并把该工程的一对通道划给它（否则所有工程都挤在根 agent 上）。**git 托管平台的操作（Gitea/GitHub/GitLab）不在插件里，而在本文** —— 用 enc_shell + 保存的凭据调 curl/CLI 完成。也含 hmap 插件开发与部署纪律。
 version: 2.0.0
 author: HomeAgent
 ---
@@ -151,7 +151,7 @@ enc_shell(command="cd <repo> && git -c http.extraheader=\"Authorization: token @
 
 ### 15. Gitea 分支保护：让「必须复审」成为**机制**而非礼貌
 
-**光有流程约定不算机制** —— 执行后端 agent 可以直接推主干。必须让**平台**拦。
+**光有流程约定不算机制** —— 执行后端 agent 可以直接推主干（`git push` 到 `main` 本身不经过任何评审）。必须让**平台**拦。
 
 ```bash
 curl -s -X POST -H "Authorization: token @{t}" -H 'Content-Type: application/json'   -d '{"enable_push":false,"required_approvals":1,"block_admin_merge_override":true,"dismiss_stale_approvals":true}'   "http://host/api/v1/repos/jianf/MyProj/branch_protections?name=main"
@@ -161,7 +161,7 @@ curl -s -X POST -H "Authorization: token @{t}" -H 'Content-Type: application/jso
 
 | 开关 | 作用 | 缺了会怎样 |
 |---|---|---|
-| `enable_push: false` | 禁止直接推送 | 执行后端 agent 直推主干，绕过评审 |
+| `enable_push: false` | 禁止直接推送 | 执行后端 agent 可直接推主干（`git push main` 不看 PR 状态），绕过评审 |
 | `required_approvals: ≥1` | 至少一个审批 | 自己就能合 |
 | `block_admin_merge_override: true` | admin 也不能绕过 | 用 admin token 的人绕过一切 |
 | `dismiss_stale_approvals: true` | 新提交作废旧审批 | 先批准再改代码，批准白拿 |
@@ -270,10 +270,10 @@ enc_shell(command="curl -s -X POST -H \"Authorization: token @{t}\" -H 'Content-
 
 ### 23. ★ 必做：为每个工程对话新建驻留子，并把通道划给它
 
-**★ 顺序很关键**：通道是**拉起执行后端 agent 拿到 session 之后**才注册的，所以你的动作是：
+**★ 顺序很关键**：通道是**拉起执行后端 agent 并拿到 session 之后**才注册的，所以你的动作是：
 
 ```
-建工程 ──► commondev_agent_up（拉起执行后端 agent，拿到 session_id）
+建工程 ──► commondev_agent_up（拉起执行后端 agent 并拿到 session_id）
             └─► 插件**此刻才**注册通道 inputch commondev/<id> + outputch commondev_<id>
                   └─► ★ 你建驻留子并把这对通道划给它
 ```
@@ -488,7 +488,7 @@ commondev_pi_mcp_add/remove/list
 
 ```
 ssh 不通          → 报错（配置问题，不是缺环境）
-无 pi / 无 node   → ★ 注入 L3「远端 <host> 未装 X，是否安装？」→ **你（agent）去问用户**
+无执行后端 / 无 node → ★ 注入 L3「远端 <host> 未装 X，是否安装？」→ **你（agent）去问用户**
 目录不可写        → 报错（权限问题，需人处理）
 ```
 
@@ -501,7 +501,7 @@ ssh 不通          → 报错（配置问题，不是缺环境）
 
 ### 28. 投递纪律（**这是最容易犯的错**）
 
-**每个工程的投递必须落到同一个 `session_id`。** 实测反例（别重犯）：
+**每个工程的投递必须落到同一个 `session_id`。**（与后端是 pi 还是 zcode 无关，规则一样） 实测反例（别重犯）：
 
 | 错法 | 后果 |
 |---|---|
