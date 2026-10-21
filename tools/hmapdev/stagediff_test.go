@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	sdk "github.com/JianFeeeee/homeagentsdk/sdk"
+	sdk "github.com/JianFeeeee/hologramagentsdk/sdk"
 )
 
 // 本测试验证 tmplLinuxBridge 中 snapshotWritable + changedFieldsOnly 的语义。

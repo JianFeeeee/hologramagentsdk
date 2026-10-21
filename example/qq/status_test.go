@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/JianFeeeee/homeagentsdk/sdk"
+	"github.com/JianFeeeee/hologramagentsdk/sdk"
 )
 
 // ★★★ 判据：NapCat 不可达时，三个 stage 钩子**仍返回 nil**（不阻塞）。

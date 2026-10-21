@@ -28,7 +28,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/JianFeeeee/homeagentsdk/sdk"
+	"github.com/JianFeeeee/hologramagentsdk/sdk"
 )
 
 // coreSettings 是只答 GetCore 的最小替身 —— 内核配置面在这一层被使用。

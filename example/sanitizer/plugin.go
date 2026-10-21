@@ -13,8 +13,8 @@
 //
 //	go build -buildmode=plugin -o sanitizer.so .
 //
-// 安装到 HomeAgent 插件目录（如 plugins/sanitizer/plugin.so），
-// HomeAgent 自动通过 tryLoadSO 加载。
+// 安装到 HologramAgent 插件目录（如 plugins/sanitizer/plugin.so），
+// HologramAgent 自动通过 tryLoadSO 加载。
 package main
 
 import (
@@ -23,7 +23,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/JianFeeeee/homeagentsdk/sdk"
+	"github.com/JianFeeeee/hologramagentsdk/sdk"
 )
 
 var (

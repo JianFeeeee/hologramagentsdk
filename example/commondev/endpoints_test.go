@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	sdk "github.com/JianFeeeee/homeagentsdk/sdk"
+	sdk "github.com/JianFeeeee/hologramagentsdk/sdk"
 )
 
 // newEndpointPlugin 造一个带端点表的插件（数据目录在临时目录）。

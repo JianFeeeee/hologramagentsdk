@@ -21,8 +21,23 @@ const sdkDirName = "hmapdev/sdk"
 // （表现为「没有活动版本」）。新目录不存在而旧目录存在时沿用旧目录。
 const legacySDKDirName = "plugindev/sdk"
 
+// storeDirName 是 SDK store 的根目录名（~/.hologram）。
+// legacyStoreDirName 是产品改名前的根目录名（~/.homeagent）。
+//
+// 用户机器上可能两种情况都有：新版装到新根目录，而**改名之前**装的 SDK 还在
+// 旧根目录里。所以新目录不存在、旧目录存在时沿用旧的——否则用户升级工具链后
+// 会看到「没有活动版本」，而磁盘上那份 SDK 明明还在。
+const (
+	storeDirName       = ".hologram"
+	legacyStoreDirName = ".homeagent"
+)
+
 // sdkStore returns the root directory for stored SDK versions.
 func sdkStore() string {
+	// 环境变量优先。新名为主，旧名继续认（存量脚本/文档还在用旧名）。
+	if v := os.Getenv("HOLOGRAM_SDK_DIR"); v != "" {
+		return v
+	}
 	if v := os.Getenv("HOMEAGENT_SDK_DIR"); v != "" {
 		return v
 	}
@@ -31,9 +46,15 @@ func sdkStore() string {
 		fmt.Printf("error: cannot determine home directory: %v\n", err)
 		os.Exit(1)
 	}
-	dir := filepath.Join(home, ".homeagent", sdkDirName)
+	dir := filepath.Join(home, storeDirName, sdkDirName)
 	if _, err := os.Stat(dir); err != nil {
-		if legacy := filepath.Join(home, ".homeagent", legacySDKDirName); legacy != "" {
+		// 1) 同一根目录下更早的工具链时代目录（plugindev/sdk）
+		for _, legacy := range []string{
+			filepath.Join(home, storeDirName, legacySDKDirName),
+			// 2) 产品改名前的整根目录（~/.homeagent/...）
+			filepath.Join(home, legacyStoreDirName, sdkDirName),
+			filepath.Join(home, legacyStoreDirName, legacySDKDirName),
+		} {
 			if _, err := os.Stat(legacy); err == nil {
 				return legacy
 			}
@@ -50,8 +71,11 @@ func sdkVersionDir(version string) string {
 	return filepath.Join(sdkStore(), version)
 }
 
-const sdkRepoURL = "https://github.com/JianFeeeee/homeagentsdk.git"
-const sdkDownloadURL = "https://github.com/JianFeeeee/homeagentsdk/-/archive/%s/homeagent-sdk-%s.tar.gz"
+const sdkRepoURL = "https://github.com/JianFeeeee/hologramagentsdk.git"
+
+// sdkDownloadURL 是发布归档地址（%s = tag）。
+// 归档里的顶层目录名带仓库名，必须跟着仓库改名一起改，否则解出来的目录名对不上。
+const sdkDownloadURL = "https://github.com/JianFeeeee/hologramagentsdk/-/archive/%s/hologramagent-sdk-%s.tar.gz"
 
 func cmdSDK(args []string) {
 	if len(args) < 1 {
@@ -108,7 +132,7 @@ func cmdSDK(args []string) {
 func sdkHelp() {
 	fmt.Print(`Usage: hmapdev sdk <command>
 
-Manage installed HomeAgent SDK versions.
+Manage installed HologramAgent SDK versions.
 
 Commands:
   list                  List installed SDK versions
@@ -122,7 +146,8 @@ Examples:
   hmapdev sdk install v0.7.1
   hmapdev sdk install latest
   hmapdev sdk install v0.7.1
-  hmapdev sdk install --from /path/to/homeagent-sdk   # 用本地源码（SDK 开发时用）sdk use v0.7.1
+  hmapdev sdk use v0.7.1
+  hmapdev sdk install --from /path/to/hologramagent-sdk   # 用本地源码（SDK 开发时用）
 `)
 }
 
@@ -238,7 +263,7 @@ func cmdSDKInstall(version string) {
 	url := fmt.Sprintf(sdkDownloadURL, version, version)
 	fmt.Printf("Downloading SDK %s from Release archive...\n", version)
 
-	tmpDir, err := os.MkdirTemp("", "homeagent-sdk-extract-*")
+	tmpDir, err := os.MkdirTemp("", "hologramagent-sdk-extract-*")
 	if err != nil {
 		fmt.Printf("error: create temp dir: %v\n", err)
 		os.Exit(1)
@@ -280,7 +305,7 @@ func openFile(path string) (*os.File, error) {
 
 // installFromArchive downloads the SDK release archive and extracts it to tmpDir.
 func installFromArchive(url, tmpDir string) error {
-	tmpFile, err := os.CreateTemp("", "homeagent-sdk-*.tar.gz")
+	tmpFile, err := os.CreateTemp("", "hologramagent-sdk-*.tar.gz")
 	if err != nil {
 		return err
 	}

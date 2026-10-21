@@ -22,7 +22,7 @@ import (
 	"time"
 	"unicode"
 
-	sdk "github.com/JianFeeeee/homeagentsdk/sdk"
+	sdk "github.com/JianFeeeee/hologramagentsdk/sdk"
 
 	"github.com/chromedp/chromedp"
 )
@@ -1475,7 +1475,7 @@ func (p *Plugin) handleBrowserInstall(args map[string]interface{}) (interface{},
 	}
 
 	unit := fmt.Sprintf(`[Unit]
-Description=HomeAgent Shared Browser Backend (headless chromium, CDP :9222)
+Description=HologramAgent Shared Browser Backend (headless chromium, CDP :9222)
 After=network.target
 
 [Service]
@@ -1515,9 +1515,9 @@ WantedBy=multi-user.target
 		time.Sleep(500 * time.Millisecond)
 		if cdpReachable(cdpEndpoint) {
 			guide := "共享浏览器后端已就绪（CDP " + cdpEndpoint + "）。\n" +
-				"全机共享说明：本机所有 agent（HomeAgent、pi、opencode、deepseekharness 等）都可连接此实例：" +
+				"全机共享说明：本机所有 agent（HologramAgent、pi、opencode、deepseekharness 等）都可连接此实例：" +
 				"登录一次全机可用；各 agent 各自占用独立标签页互不干扰；\n" +
-				"- HomeAgent 内部：browser_start 即自动连接本后端\n" +
+				"- HologramAgent 内部：browser_start 即自动连接本后端\n" +
 				"- 其他 agent：让其浏览器工具/MCP 连接 CDP 端点 " + cdpEndpoint + "（如 playwright connectOverCDP / puppeteer connect）\n" +
 				"- 服务由 systemd 托管：崩溃自动重启，登录态持久保存在 " + profileDir
 			log.Printf("[%s] browser backend installed and running (chrome=%s profile=%s)", p.name, chromePath, profileDir)

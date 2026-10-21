@@ -11,9 +11,9 @@ func TestIsSDKModuleAcceptsBothNames(t *testing.T) {
 		s    string
 		want bool
 	}{
-		{"replace github.com/JianFeeeee/homeagentsdk => ../sdk", true},
+		{"replace github.com/JianFeeeee/hologramagentsdk => ../sdk", true},
 		{"replace gitcode.com/JianFeeeee/homeagent-sdk => /tmp/sdk-clone", true},
-		{"github.com/JianFeeeee/homeagentsdk/sdk", true},
+		{"github.com/JianFeeeee/hologramagentsdk/sdk", true},
 		{"gitcode.com/JianFeeeee/homeagent-sdk/sdk", true},
 		{"replace github.com/other/thing => ../x", false},
 		{"", false},

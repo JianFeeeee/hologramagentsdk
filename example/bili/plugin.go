@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/JianFeeeee/homeagentsdk/sdk"
+	"github.com/JianFeeeee/hologramagentsdk/sdk"
 )
 
 type Plugin struct {

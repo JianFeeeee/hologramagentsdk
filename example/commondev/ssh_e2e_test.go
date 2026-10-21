@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/JianFeeeee/homeagentsdk/sdk"
+	"github.com/JianFeeeee/hologramagentsdk/sdk"
 )
 
 // mapSettings 是能**真正存取值**的 settings 替身。

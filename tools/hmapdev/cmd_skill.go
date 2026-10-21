@@ -12,7 +12,7 @@ import (
 //
 // ## 为什么需要这个命令
 //
-// HomeAgent 插件开发的知识（hmapdev 工具链、SDK 版本坑、plg.json、
+// HologramAgent 插件开发的知识（hmapdev 工具链、SDK 版本坑、plg.json、
 // plugin.bin 部署、内置 vs 独立二进制）此前只存在于**某个 agent 的对话历史**里。
 // 本机四个 agent 都不会开发插件，因为它们没有任何渠道拿到这些知识。
 //
@@ -45,7 +45,7 @@ var knownSkillTargets = []skillTarget{
 func skillHelp() {
 	fmt.Println(`hmapdev skill <command>
 
-Distribute HomeAgent plugin-development knowledge to agent skill directories.
+Distribute HologramAgent plugin-development knowledge to agent skill directories.
 
 Commands:
   list                 List skills shipped with the active SDK
@@ -96,7 +96,7 @@ func skillsSourceDir(sdkRoot string) string {
 //
 // ★ 为什么需要这个回退顺序
 //
-// store（~/.homeagent/hmapdev/sdk/<v>/）是 `hmapdev sdk install` 复制的**副本**。
+// store（~/.hologram/hmapdev/sdk/<v>/）是 `hmapdev sdk install` 复制的**副本**。
 // 而 skill 是纯文档、加它不需要动 SDK 的编译产物 —— 于是「改了 skill 却要
 // 重装 SDK 才能生效」，对日常维护很不合理。
 //

@@ -27,7 +27,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/JianFeeeee/homeagentsdk/sdk"
+	"github.com/JianFeeeee/hologramagentsdk/sdk"
 )
 
 func mkOutputCall(name, meta string) *sdk.StageContext {

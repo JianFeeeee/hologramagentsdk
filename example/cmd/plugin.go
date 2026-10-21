@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	sdk "github.com/JianFeeeee/homeagentsdk/sdk"
+	sdk "github.com/JianFeeeee/hologramagentsdk/sdk"
 )
 
 // isWindows 缓存运行时检测结果

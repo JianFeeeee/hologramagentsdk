@@ -12,7 +12,7 @@ func withSDKStore(t *testing.T, versions ...string) {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	store := filepath.Join(home, ".homeagent", sdkDirName)
+	store := filepath.Join(home, storeDirName, sdkDirName)
 	if err := os.MkdirAll(store, 0755); err != nil {
 		t.Fatal(err)
 	}

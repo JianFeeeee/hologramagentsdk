@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-func TestProxyAuthDefaultsToHomeAgent(t *testing.T) {
-	// 空串必须归一化为「HomeAgent 统一保护」——这是安全默认。
+func TestProxyAuthDefaultsToHologramAgent(t *testing.T) {
+	// 空串必须归一化为「HologramAgent 统一保护」——这是安全默认。
 	// 若哪天有人把默认改成 none，这条会立刻红。
 	if got := EffectiveProxyAuth(""); got != ProxyAuthHomeAgent {
 		t.Fatalf("空 auth 应归一化为 %q，实际 %q", ProxyAuthHomeAgent, got)

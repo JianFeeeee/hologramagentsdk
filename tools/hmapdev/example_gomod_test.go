@@ -7,8 +7,8 @@ package main
 // 我在一个提交里用 `git add -A` 把本机 `go build` **自动改写**过的
 // go.mod 一并提交了：
 //
-//	require github.com/JianFeeeee/homeagentsdk v1.4.0
-//	replace github.com/JianFeeeee/homeagentsdk => /root/.homeagent/hmapdev/sdk/v1.4.0
+//	require github.com/JianFeeeee/hologramagentsdk v1.4.0
+//	replace github.com/JianFeeeee/hologramagentsdk => /root/.hologram/hmapdev/sdk/v1.4.0
 //	                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 本机绝对路径
 //
 // 后果：CI（干净环境）上 commondev / editdoc 构建**必然失败**

@@ -11,7 +11,7 @@ import (
 	"runtime"
 	"sort"
 
-	pubsdk "github.com/JianFeeeee/homeagentsdk/sdk"
+	pubsdk "github.com/JianFeeeee/hologramagentsdk/sdk"
 	"strings"
 )
 
@@ -118,7 +118,7 @@ func cmdBuild(args []string) {
 		fmt.Printf("  子进程模式（proc 桥）的模板需要它来透传注入优先级 L1-L4。\n")
 		fmt.Printf("  解决办法（二选一）：\n")
 		fmt.Printf("    1) 升级 SDK：hmapdev sdk install <含该能力的版本> && hmapdev sdk use <版本>\n")
-		fmt.Printf("    2) 用本地 SDK 源码：hmapdev sdk install --from /path/to/homeagent-sdk\n")
+		fmt.Printf("    2) 用本地 SDK 源码：hmapdev sdk install --from /path/to/hologramagent-sdk\n")
 		os.Exit(1)
 	}
 
@@ -590,7 +590,7 @@ func ensureSDKResolvable(plg *PlgConfig, sdkModule, sdkPath string) {
 			fmt.Printf("  %s\n", strings.TrimSpace(string(out)))
 		}
 		fmt.Printf("  提示：%s 不在公共 proxy 上。用以下任一方式指向本机 SDK：\n", sdkModule)
-		fmt.Printf("    hmapdev sdk install latest      # 装一份到 ~/.homeagent/hmapdev/sdk\n")
+		fmt.Printf("    hmapdev sdk install latest      # 装一份到 ~/.hologram/hmapdev/sdk\n")
 		fmt.Printf("    hmapdev build --sdk-path <路径>  # 或直接指定源码目录\n")
 	}
 }

@@ -44,7 +44,7 @@ import (
 	"sort"
 	"strings"
 
-	sdk "github.com/JianFeeeee/homeagentsdk/sdk"
+	sdk "github.com/JianFeeeee/hologramagentsdk/sdk"
 )
 
 // secretRef 是「可读名 → 内核别名」的一条映射。

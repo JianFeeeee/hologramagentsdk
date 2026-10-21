@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/JianFeeeee/homeagentsdk/sdk"
+	"github.com/JianFeeeee/hologramagentsdk/sdk"
 )
 
 // fakeSettings 是 SettingsAPI 的最小实现，只为把 resolveScript 的 DataDir 分支跑通。
