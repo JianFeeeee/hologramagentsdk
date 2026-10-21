@@ -151,6 +151,29 @@ func cmdBuild(args []string) {
 		targets = nil // bundle 模式：目标集固定为 allBundleTargets（见 effectiveTargets）
 	}
 
+	// ★ rawfile 外部依赖的前置处理（下载/校验/展开）必须在**编译之前**。
+	//
+	// 两个理由：
+	//   ① 配置错（缺 sha256、sha 写错、平台写错）是最常见的一类，应该在
+	//      白等一次 122MB 下载或一次交叉编译之前就报出来；
+	//   ② collectRawFiles 的契约是纯本地遍历（见 rawfiles_fetch.go 文件头），
+	//      它不联网。全部 I/O 集中在这里做一次，打包循环里只读账。
+	//
+	// 目标集用**真正要产出的平台**（不是宿主）：交叉编译 linux/amd64 时，
+	// 一台 darwin 机器不该决定打进哪个 node。
+	if err := validateRawFileDecls(plg.RawFiles); err != nil {
+		fmt.Printf("  error: rawfiles: %v\n", err)
+		buildFailed = true
+		exitIfBuildFailed()
+		return
+	}
+	if err := ensureRawFileDownloads(plg.RawFiles, effectiveTargets(plg, bundle, targets)); err != nil {
+		fmt.Printf("  error: rawfiles: %v\n", err)
+		buildFailed = true
+		exitIfBuildFailed()
+		return
+	}
+
 	if bundle || len(targets) == 0 {
 		buildBundle(plg, outDir, sdkPath)
 	} else {
