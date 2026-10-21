@@ -49,3 +49,11 @@ docs/llms-full.txt
 # ★ rawfile/ 的内容是随包资源（可能内嵌 node/pi 等上百兆二进制），
 # 由构建方自行准备，不进版本库。忽略规则放在 rawfile/.gitignore 内
 # （自包含，避免依赖上层规则的作用域与否定式语义）。
+
+# ★ commondev 的 zcode sidecar 会往**工程线工作目录**（一个 git 仓库）里写两样东西：
+#     .zcode/config.json        会话库指向（storage.sessionDbPath）
+#     .zcode-sessions/          会话 sqlite 库
+# 不忽略的话，插件的「工作树干净」检查会因为这些未跟踪文件误报，
+# 而它们本质是 agent 的运行时产物（同 .pi-sessions/），不是工程内容。
+.zcode/
+.zcode-sessions/
