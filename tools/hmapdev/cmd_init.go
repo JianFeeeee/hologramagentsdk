@@ -118,7 +118,24 @@ type PlgConfig struct {
 	// RawFiles 声明要一并打包的**非代码资源**（见 rawfiles.go）。
 	//
 	// 工程根的 `rawfile/` 目录**默认全收**，不需要在这里声明；
-	// 本数组用于**额外**的外部路径。解包后统一落在 <插件目录>/rawfile/ 下。
+	// 本数组用于**额外**的来源。解包后统一落在 <插件目录>/rawfile/ 下。
+	//
+	// 两种来源（字段细节见 rawfiles.go 的 RawFileDecl）：
+	//
+	//	"assets/theme.css"                          工程内的本地路径（旧写法）
+	//	{ "from": "assets", "exclude": ["assets/tmp"] }
+	//	{ "name": "node/bin/node",                   包内路径（相对 rawfile/）
+	//	  "url": "https://host/node-linux-x64",      外部下载（与 from 互斥）
+	//	  "sha256": "…64 hex…",                      ★ 必填，不符即构建失败
+	//	  "os": "linux", "arch": "amd64" }           可选：按构建目标过滤
+	//	{ "name": "runtime", "url": "https://host/rt.tgz", "sha256": "…",
+	//	  "format": "tar.gz", "strip_prefix": "package/" }  归档在**构建期**展开
+	//
+	// 为什么需要 url 来源：`rawfile/` 里的东西不进版本库（上百兆二进制进 git
+	// 会拖慢克隆且每次升级产生巨型 diff），于是干净克隆打出的包缺 sidecar/
+	// 缺内嵌 node。声明式外部依赖让「克隆就能构建」与「不把二进制塞进 git」
+	// 同时成立。下载产物按 sha256 缓存在
+	// ${HOMEAGENT_RAWFILE_CACHE} 或 ~/.homeagent/hmapdev/cache/rawfiles/。
 	RawFiles []RawFileDecl `json:"rawfiles,omitempty"`
 
 	// ResolvedSDK 是本次构建实际选中的 SDK 版本（build 按 SDK 声明解析后回填），
