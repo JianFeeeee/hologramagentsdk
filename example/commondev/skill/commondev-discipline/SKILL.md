@@ -34,7 +34,7 @@ plugin_stop  name=commondev
 3. 确认都不在跑，再 `plugin_stop`
 
 ★ **不要在有 sidecar 在跑时直接 disable** —— 进程会变成孤儿。
-插件 `Stop()` 里有幂等全清（sidecar / pi 进程一个不留），但那是兜底，
+插件 `Stop()` 里有幂等全清（sidecar / 执行后端进程一个不留），但那是兜底，
 不是正常路径。
 
 ### 关闭不影响已做的活
@@ -225,6 +225,11 @@ enc_shell(command="curl -s -X POST -H \"Authorization: token @{t}\" -H 'Content-
 > **⚠ 别把 `agentcli` 当成执行后端**：`agentcli` 插件管的是**交互式终端会话**
 > （创建 / 读 / 写终端），跟执行后端 agent **没有任何关系** —— 它既不拉起执行后端，
 > 也不参与工程投递。名字像而已，别混为一谈。
+>
+> **⚠ 执行层 ≠ pi**：后端由每条线自己的 `agent_cli` 决定（默认 pi，也可选 zcode / dsh 等），
+> **多条工程线可能各用不同后端**。凡指「执行层」一律写 **执行后端 agent** /
+> **执行后端会话**；只有 pi 专有的技术标识（`pi.prompt`、`PI_CODING_AGENT_DIR`、
+> sidecar 契约里的 pi、配置键名、`commondev_pi_*` 工具名）才保留 pi 的字面。
 
 **为何能用内核机制**（而不是自己造）：
 
@@ -302,8 +307,8 @@ resident_agents create
                        下任务给执行后端用 output_send__commondev_<br-id>(payload=…)，
                        执行后端的输出会回投到你的 commondev/<br-id>。
                        向上级（父 agent）汇报：有结论/卡住/需要决策时用 notify_parent；
-                       不越级：结论先报父 agent，不越过父 agent 直接给执行层下结论、
-                       也不自行拍板下级线的成败。"
+                       不越级：结论只报父 agent，不直接对人拍板、
+                       也不让执行后端越过你联系上级；执行后端的产出一律由你收口。"
 ```
 
 **★ 汇报方向是单向的**：驻留子 → 父 agent（`notify_parent`）→ 人。驻留子**不**向执行后端
@@ -342,7 +347,8 @@ resident_agents create
 
 ### 24. 形态选择、自包含运行时与远端环境
 
-**默认本地内嵌**（进程内 pi 实例）；通过配置 `runtime=ssh` 切到**远程**，
+**默认本地内嵌**（`agent_cli=pi` 时是**进程内 pi 实例**，换后端则为该后端的 sidecar）；
+通过配置 `runtime=ssh` 切到**远程**，
 远端**同样创建目录并在该目录拉起执行后端 agent**（默认 pi）。
 
 **★ 自包含运行时**：插件**自带独立的 node 与独立的 pi**，都装在**插件工作目录**，
@@ -505,12 +511,12 @@ ssh 不通          → 报错（配置问题，不是缺环境）
 
 | 错法 | 后果 |
 |---|---|
-| 漏传 `--session-id` | `pi` **静默开新会话** —— 你以为在催上一次，其实是把活派给了陌生人 |
+| 漏传 `--session-id` | 后端 CLI（默认 `pi`）**静默开新会话** —— 你以为在催上一次，其实是把活派给了陌生人 |
 | 两个进程**并发**同 `--session-id` | 会话文件被写坏：`user A`/`user B` 相邻，`assistant B` 在前、`assistant A` 落在最后 ⇒ B 那轮的模型上下文里**根本没有 A 的用户消息**，树链交错 |
 
 ⇒ 投递前先拿台账里的 `session_id`，投完**断言它没变**；一个 session **绝不并发投递**。
 这两条插件侧已做成结构性保证（单一投递队列 + 断言），你做主管时**不要绕过插件**直接
-去敲 `pi -p`。
+去敲后端 CLI（默认就是 `pi -p`）。
 
 **★ 另外两条实测硬经验（别再踩）：**
 
@@ -874,7 +880,7 @@ commondev_review_result()          ← 取结论
 3. **token 不进 remote URL**：拼接仅用于**单次命令**（`pushURLWithToken`），
    clone 出来的 remote 不带凭据 —— 否则删掉临时目录也删不掉凭据。
 4. **不要硬编码 token**：走 `Settings()` 或宿主注入。
-5. **拉起 pi 时隔离端口**：内层 pi 会尝试监听 A2A/ACP 端口并打 `EADDRINUSE`，
+5. **拉起执行后端（默认 pi）时隔离端口**：内层 pi 会尝试监听 A2A/ACP 端口并打 `EADDRINUSE`，
    显式设 `PI_CODING_AGENT_SESSION_DIR` / `PI_A2A_PORT` / `PI_ACP_PORT`。
 
 ### 40. ★ 孤儿清理（插件有自己的硬约束）
@@ -883,7 +889,7 @@ commondev_review_result()          ← 取结论
 （`resident-subagent-design.md` §10，写成判据）。
 
 **插件对自己拉起的进程必须同样硬**：`Stop()` 必须是**幂等的全清** ——
-pi 进程、sidecar、ssh 会话、workdir（含凭据残留检查）一个不留。
+执行后端进程（默认 pi）、sidecar、ssh 会话、workdir（含凭据残留检查）一个不留。
 写成判据：`TestStopKillsAllRuntimes`（变异：删掉某个清理 → 必须报红）。
 
 ### 41. 参考资料（**别凭记忆写 API**）
@@ -906,7 +912,7 @@ pi 进程、sidecar、ssh 会话、workdir（含凭据残留检查）一个不�
 ## Notes: 红牌（做了就是错）
 
 1. **不划通道就当派了活** —— 登记 ≠ 划入；不划则所有输入涌向根 agent。
-2. **绕过插件直接敲 `pi -p`** —— 漏 `--session-id` 会静默开新会话。
+2. **绕过插件直接敲后端 CLI（默认 `pi -p`）** —— 漏 `--session-id` 会静默开新会话。
 3. **并发投同一个 session** —— 会写坏会话（实测）。
 4. **没有变异阶段的复核** —— 等于给假绿充值。
 5. **凭据写进 `config.db` 或 remote URL**。
