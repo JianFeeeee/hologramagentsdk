@@ -1,7 +1,7 @@
 ---
 name: commondev-discipline
 description: commondev 主管式多仓库开发流水线的使用与开发纪律。当你要为某个工程开一条分支、把工程派给一个下属 agent、或拉起执行后端 agent（后端由 agent_cli 决定，可选 pi / zcode 等）干活时必读。核心动作：为每个工程对话新建驻留式子 agent 并把该工程的一对通道划给它（否则所有工程都挤在根 agent 上）。**git 托管平台的操作（Gitea/GitHub/GitLab）不在插件里，而在本文** —— 用 enc_shell + 保存的凭据调 curl/CLI 完成。也含 hmap 插件开发与部署纪律。
-version: 2.0.0
+version: 2.2.0
 author: HomeAgent
 ---
 
