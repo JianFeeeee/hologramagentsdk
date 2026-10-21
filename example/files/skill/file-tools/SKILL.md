@@ -1,22 +1,30 @@
 ---
 name: file-tools
-description: 沙箱内文件读写（read/write/edit/ls）。按需工具：先 plugin_start files，用完可 plugin_stop。
+description: 文件读写（read/write/edit/edit_line/ls）。文件操作一律走本插件，不要用 shell 的 cat/echo/sed 代替。按需工具：先 plugin_start files。
 ---
 
 # 文件操作
 
 ## 什么时候用
 
-需要在**插件配置的工作目录**内读写文件时。
+**所有文件读写都走本插件**（`files_read` / `files_write` / `files_edit` /
+`files_edit_line` / `files_ls`）。
 
-★ 如果你已经有 run_shell / bash 之类的能力，优先用那个 —— 它更直接。
-本插件适合**没有 shell 权限**或需要走沙箱路径限制的场景。
+不要用 `cmd_run` 或终端里的 `cat` / `echo` / `sed` / `tee` 代替文件操作：
+- shell 拼长文本会被引号与转义吃掉，写坏文件后很难发现；
+- 本插件是**原子写 + 写前留档**，shell 重定向会直接截断原文件。
+
+唯一例外：文件本来就是某条命令的**副产物**（如 `go build -o x`、
+`git clone`、重定向日志），那属于命令执行，用 cmd/终端没问题；
+但只要目标是「把已知内容写进文件」或「读出文件内容」，就用 files_*。
 
 ## 先拉起插件
 
 ```
 plugin_start  name=files
 ```
+
+文件操作前若 `files_*` 不在工具清单里，先执行上面这条。
 
 | 工具 | 用途 |
 |---|---|
@@ -25,12 +33,6 @@ plugin_start  name=files
 | `files_edit` | 局部替换编辑（old 文本须全文件唯一） |
 | `files_edit_line` | **按行号**精确替换/插入/删除（目标文本不唯一时用它，如改第 N 个 `}`） |
 | `files_ls` | 列目录 |
-
-## 用完可释放
-
-```
-plugin_stop  name=files
-```
 
 ## 注意
 
@@ -51,5 +53,5 @@ plugin_stop  name=files
 **释放上下文用 `plugin_stop`。** 用 `plugin_disable` 会顺手把"开机自启"
 永久关掉 —— 用户下次开机发现插件没了，得再手动开回来。
 
-（本插件声明 `auto_start: false`，所以它本来就不自启；但 `plugin_disable`
+（本插件声明 `auto_start: false`，本来就不自启；但 `plugin_disable`
 仍会写进持久禁用清单，让 `plugin_start` 拒绝拉起，只能再用 `plugin_enable` 解。）

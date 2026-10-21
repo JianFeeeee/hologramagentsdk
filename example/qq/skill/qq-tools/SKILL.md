@@ -1,6 +1,6 @@
 ---
 name: qq-tools
-description: QQ 消息收发（NapCat 协议桥接）。本插件**常驻自启**：它在监听外部消息，不能按需加载。
+description: QQ 消息收发（NapCat 协议桥接）+ 发收藏表情包。本插件**常驻自启**：它在监听外部消息，不能按需加载。
 ---
 
 # QQ 消息
@@ -27,6 +27,11 @@ QQ 插件在 **HTTP 端口上监听 NapCat 推送**。用户发来的 QQ 消息*
 | `qq_list_chats` | 会话列表，按最新消息排序，带未读数与摘要 |
 | `qq_mark_read` | 清零某会话未读数 |
 | `output_send__qq` | 主动发消息（群/私聊由 meta 决定） |
+| `qq_list_stickers` | 列出收藏表情包（index + url + 已缓存的 desc/mood） |
+| `qq_send_sticker` | 发表情：传 `index`（来自 list_stickers）或直接传 `url` |
+| `qq_describe_sticker` | 给表情记录内容/情绪描述（先用 see_image 看，再记） |
+| `qq_add_sticker` | 把别人发的表情收藏到自己账号（message_id / url / file） |
+| `qq_remove_sticker` | 从收藏里删表情（index / url），清理误收 |
 
 ## ★★ 拉私聊历史：只传 user_id，**不要**传 group_id
 
@@ -65,6 +70,87 @@ qq_get_history(group_id=0, user_id=2198972886) ❌ 报「消息undefined不存�
 - 依赖 **NapCat** 服务在运行且已登录。
 - 消息可能过期（NapCat 侧有时效），发送失败时会明确报错。
 - **不要在群里 @全体成员**、不要连续刷屏。
+
+## 表情包
+
+### 该主动发，不要等用户要
+
+表情是**情绪的表达方式**，不是"用户点名才发的附件"。在 QQ 聊天里遇到这些场合，
+**主动**挑一张合适的发过去（发完可以再补一句文字，或只发表情）：
+
+- 用户吐槽、抱怨、被气到 → 发一张「无语 / 翻白眼 / 扶额 / 摊手」类的
+- 用户自嘲、搞砸了、认错 → 发一张「心虚 / 委屈 / 求放过」类的
+- 用户分享好消息、得意 → 发一张「比心 / 开心 / 鼓掌」类的
+- 你在卖萌、撒娇、被夸 → 发一张「害羞 / 得意」类的
+- 对话冷场/收尾，可以用表情代替一句干巴巴的「好的」
+
+**分寸**（避免刷屏）：
+
+- 一轮对话最多 1～2 张，别每句都贴。
+- 表情要和当下情绪**真的对得上**；没有匹配的就只说话，别硬发。
+- 别在同一轮里连发表情；连续对话里也别一直用同一张。
+- 群里发要更克制：只在明确对某人说话、或气氛合适时发。
+
+挑选方式：先 `qq_list_stickers` 看 `mood`/`desc`，选最贴的一张 `index`；
+列表里没有匹配的（或都没有描述）就先按下面的流程补描述，别乱发一张。
+
+NapCat 的表情接口是 `fetch_custom_face`（收藏表情，返回的是**图片 URL**，
+不是 mface 的 emoji_id/key —— 后者只有收到别人发表情时才带）。所以发收藏表情
+走 image 段：QQ 会渲染成表情图。
+
+```
+qq_list_stickers count=20
+  → [{index:1, url:"https://p.qpic.cn/...", desc:"猫翻白眼", mood:"无语"}, ...]
+qq_send_sticker user_id=2198972886 index=1
+```
+
+也可以 `output_send__qq` 用 `type=sticker` + 表情 URL 直接发。
+
+### 别人发的表情，可以收进自己收藏
+
+用户（或群里）发来表情时，如果想留着以后自己用：
+
+```
+qq_add_sticker message_id=12345     # 那条消息里的表情全部收藏
+qq_add_sticker url="https://..."    # 单张
+qq_add_sticker file="/path/a.gif"   # 本机图片
+```
+
+收藏后 `qq_list_stickers` 就能看到；新收藏的还没有描述，第一次发之前先 `see_image`
+看一眼再用 `qq_describe_sticker` 记下来（否则列表里只有 URL，挑不准）。
+
+收错了用 `qq_remove_sticker index=N` 删掉（内部走 NapCat delete_custom_face）。
+
+★ 如果用户说「你没有添加表情的接口」：先确认它是不是在**群/非 owner 私聊**里提的——
+`qq_add_sticker` 默认不在给外部用户的工具白名单里，会被权限门挡下。那种情况要
+如实说「需要管理员开放权限」，不要说工具不存在。
+
+### 第一次用某张表情：先看再记，之后按情绪挑
+
+NapCat 只给图片 URL，没有名称/情绪。所以列表里 `desc`/`mood` **是模型自己
+看过后缓存的**（存在插件配置 `sticker_descs`，重启不丢）：
+
+1. `qq_list_stickers` 看到某张没有 desc ⇒ `see_image(url)` 亲自看；
+2. `qq_describe_sticker(url="…", desc="画面内容", mood="无语/开心/嘲讽…")` 记下来；
+3. 之后每次 list 都自带描述，直接按 mood 挑 `index` 发送即可。
+
+描述要写**能帮你在别的场合挑图**的信息：画的是什么、什么梗、什么情绪下合适。
+
+## 权限门（可配置，不是写死的）
+
+非所有者（群里的人、非 owner 好友）能用的工具由插件配置决定，三个开关：
+
+| 配置项 | 默认 | 说明 |
+|---|---|---|
+| `private_tool_allowlist` | 公共工具 + 当前会话 QQ 工具 | 非 owner 私聊白名单（精确名 / 尾部 `*`） |
+| `group_tool_allowlists` | 同上（`*` 为默认群） | 群聊白名单，可按群号单独配 |
+| `hard_private_tools` | 日历/邮件/记忆/知识库/终端/文件/配置等 | **硬性**拦（白名单也放不开）；清空 `[]` = 不硬拦，全交给白名单 |
+| `group_require_at` | `true` | 群里是否必须 @ 才响应；`false` = 群里所有消息都回 |
+| `session_scope_enforce` | `true` | 非 owner 是否只能读本会话；`false` = 可按 ID 读别的会话 |
+
+★ 如果用户抱怨"机器人没权限/不能看图/不能下载"，先查这几项，而不是让它道歉：
+它自己的工具清单里就有 `plugin_*` 之外的管理工具不一定开着 —— 权限是部署者配置，
+可以在 WebUI 插件设置里改。owner 不受这些限制。
 
 ## ★ 用 plugin_stop / plugin_start，不要用 plugin_disable / plugin_enable
 
