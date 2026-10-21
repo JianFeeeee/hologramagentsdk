@@ -134,6 +134,45 @@ type rawEntry struct {
 	// 而随包资源里最典型的是 node 可执行文件 —— 权限丢了就是"包里有文件
 	// 但运行期起不来"。归档来源不需要它（展开时已按归档内 mode 落盘）。
 	mode os.FileMode
+
+	// origin 记录这条条目的**来源类别**，只用于撞名时报对文案。
+	//
+	// 为什么需要它：撞名（两条声明落到同一包内路径）有三种组合，而
+	// "下一步怎么做"对三种组合并不相同：
+	//
+	//	url  + url      → 没有本地目录可删，该说"改名/删一条/分平台构建"
+	//	local + url     → 删本地目录、或从 plg.json 去掉那条 url
+	//	local + local   → 删其中一份声明
+	//
+	// 不给来源标识就只能用一勺烩文案，那必然对其中一种场景是错的 ——
+	// 实测 url/url 撞名时报的是"要保留打开后的本地目录请去除 url 声明"，
+	// 而该场景下根本没有本地目录，照做等于原地打转。
+	//
+	// 取值见 origin* 常量；空值视为 originLocal（兼容旧构造点）。
+	origin rawOrigin
+}
+
+// rawOrigin 是 rawEntry 的来源类别。
+type rawOrigin string
+
+const (
+	// originLocal：工程内本地路径（rawfile/ 默认目录、from 声明）。
+	originLocal rawOrigin = "local"
+	// originURL：url 来源（下载到缓存、可展开归档）。
+	originURL rawOrigin = "url"
+	// originSkill：skill/ 目录（与 rawfile 平级，不参与 rawfile 撞名）。
+	originSkill rawOrigin = "skill"
+)
+
+// label 返回给人看的来源名（用于报错文案）。
+func (o rawOrigin) label() string {
+	if o == originURL {
+		return "url 声明"
+	}
+	if o == originSkill {
+		return "skill 目录"
+	}
+	return "本地声明"
 }
 
 // collectRawFiles 收集要打包的资源。
@@ -192,8 +231,9 @@ func collectRawFiles(root string, decls []RawFileDecl) ([]rawEntry, error) {
 				return nil
 			}
 			out = append(out, rawEntry{
-				src: p,
-				zip: filepath.ToSlash(filepath.Join(RawFilesPrefix, rel)),
+				src:    p,
+				zip:    filepath.ToSlash(filepath.Join(RawFilesPrefix, rel)),
+				origin: originLocal,
 			})
 			return nil
 		})
@@ -268,8 +308,9 @@ func collectRawFiles(root string, decls []RawFileDecl) ([]rawEntry, error) {
 				continue
 			}
 			out = append(out, rawEntry{
-				src: abs,
-				zip: filepath.ToSlash(filepath.Join(RawFilesPrefix, base)),
+				src:    abs,
+				zip:    filepath.ToSlash(filepath.Join(RawFilesPrefix, base)),
+				origin: originLocal,
 			})
 			continue
 		}
@@ -295,8 +336,9 @@ func collectRawFiles(root string, decls []RawFileDecl) ([]rawEntry, error) {
 				}
 			}
 			out = append(out, rawEntry{
-				src: p,
-				zip: filepath.ToSlash(filepath.Join(RawFilesPrefix, base, rel)),
+				src:    p,
+				zip:    filepath.ToSlash(filepath.Join(RawFilesPrefix, base, rel)),
+				origin: originLocal,
 			})
 			return nil
 		})
@@ -312,29 +354,56 @@ func collectRawFiles(root string, decls []RawFileDecl) ([]rawEntry, error) {
 	// 里删掉一项；而"内容相同则去重"需要真的删（否则包里会出现两条同名条目，
 	// 内核解包后哪个在上面取决于顺序）。
 	kept := make([]rawEntry, 0, len(out))
-	seen := map[string]string{}
-	for _, e := range out {
+	seen := map[string]*rawEntry{}
+	for i := range out {
+		e := &out[i]
 		prev, dup := seen[e.zip]
 		if !dup {
-			seen[e.zip] = e.src
-			kept = append(kept, e)
+			seen[e.zip] = e
+			kept = append(kept, *e)
 			continue
 		}
 		// 内容**完全相同**时去重：典型场景是"工作区里还留着展开好的本地
 		// rawfile/node/，同时 plg.json 又声明了 url 来源"。此时两份字节一致，
 		// 报错只会逼人删目录（而那目录可能是本机跑 e2e 需要的）。
 		// 内容不同则必须报错：静默取一边会让"我改的没生效"不可查。
-		same, cmpErr := sameFileContent(prev, e.src)
+		same, cmpErr := sameFileContent(prev.src, e.src)
 		if cmpErr == nil && same {
-			fmt.Printf("  rawfile 去重 %s（本地与 url 来源内容一致，取其一）\n", e.zip)
+			// ★ 日志也要分清来源：url+url 时不能说"本地与 url"。
+			// 一句话说错来源，读者就会去不存在的地方找东西。
+			fmt.Printf("  rawfile 去重 %s（%s 与 %s 内容一致，取其一）\n",
+				e.zip, prev.origin.label(), e.origin.label())
 			continue
 		}
-		return nil, fmt.Errorf(
-			"rawfile 目标冲突: %q 同时来自 %s 与 %s 且内容不同 —— "+
-				"删掉其中一份（要保留打开后的本地目录请从 plg.json 去掉对应 url 声明）",
-			e.zip, prev, e.src)
+		// ★ 撞名冲突：文案必须对**当前来源组合**成立。
+		// 这条是纪律，不是措辞偏好：url+url 场景下没有本地目录可删，
+		// 沿用 local+url 那句"去掉本地目录"会把人引向不存在的对象。
+		return nil, conflictError(e.zip, prev, e)
 	}
 	return kept, nil
+}
+
+// conflictError 为撞名冲突生成**对当前来源组合成立**的报错。
+//
+// 三种组合的"下一步"确实不同，所以不能共用一句：
+//
+//	url  + url（sha 不同）→ url/url 专用：改名/删一条/按平台分构建
+//	local + url           → 现有语义（删本地目录或去掉那条 url 声明）
+//	local + local         → 删其中一份声明
+func conflictError(zipName string, a, b *rawEntry) error {
+	sameOriginURL := a.origin == originURL && b.origin == originURL
+	if sameOriginURL {
+		return fmt.Errorf(
+			"rawfile 目标冲突: 两条 url 声明指向同一个包内名 %q（sha256 不同，来自 %s 与 %s）。"+
+				"请**改名**（让两条声明的 name 不同）或**删掉其中一条**；"+
+				"若确实要按平台分发不同内容，请用 os/arch 区分声明并用 --target 分平台构建"+
+				"（bundle 包要求所有目标平台共用同一组条目，装不下两份同名不同内容的资源）",
+			zipName, a.origin.label(), b.origin.label())
+	}
+	return fmt.Errorf(
+		"rawfile 目标冲突: %q 同时来自 %s 与 %s 且内容不同 —— "+
+			"删掉其中一份（要保留打开后的本地目录请从 plg.json 去掉对应 url 声明）",
+		zipName, a.src, b.src)
 }
 
 // sameFileContent 比较两个文件内容是否逐字节相同（长度不同直接返回 false）。

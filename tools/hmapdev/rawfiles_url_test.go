@@ -827,6 +827,9 @@ func TestURLRawFileCollidesWithLocalEntry(t *testing.T) {
 	}
 	// 变异点：去掉 sameFileContent 的去重分支（一律报错）→ (b) 红；
 	//         去掉冲突报错（一律后者覆盖）→ (a) 红。
+	//
+	// ★ 本条只覆盖 **local+url** 这一种组合的机制判定；专门文案见
+	// TestURLURLConflictErrorIsActionable（它同时反验 local+url 没被改坏）。
 }
 
 // ---------------------------------------------------------------------------
@@ -1260,4 +1263,163 @@ func TestCLILocalAndURLNameCollision(t *testing.T) {
 	//         把冲突报错改成静默覆盖 → (a) 红。
 	//         把 cmdBuild 里的 ensureRawFileDownloads 删掉 → (a)(b) 都红
 	//         （collectRawFiles 会报"url 来源尚未预取"）。
+}
+
+// ---------------------------------------------------------------------------
+// 判据 18：url+url 撞名的报错文案必须对当前来源组合成立
+// ---------------------------------------------------------------------------
+
+// TestURLURLConflictErrorIsActionable 守的是**文案指向**，不是机制判定。
+//
+// ## 缺陷背景（实测）
+//
+// 撞名冲突原先只有一句文案，url+url 和 local+url 共用：
+//
+//	rawfile 目标冲突: "rawfile/node/bin/node" 同时来自 /cache/264f21e0… 与 /cache/6eeb8c2e…
+//	且内容不同 —— 删掉其中一份（要保留打开后的本地目录请从 plg.json 去掉对应 url 声明）
+//
+// 而在 url+url 场景下**根本没有本地目录**：两个来源都是缓存里的 sha 文件。
+// 照它做等于原地打转。sha 相同时的去重日志说「本地与 url 来源内容一致」，
+// 同样把两个 url 源说成了一个本地源。
+//
+// ## 为什么这不只是措辞问题
+//
+// 错误信息是用户排查的**唯一入口**。指向错误的对象（"本地目录"）会让人
+// 去翻一个不存在的东西，而真正的解（改名 / 删一条 / 分平台构建）根本没被
+// 提到。这与本线一直在防的"静默失败"是同一族：都不让人到达正确结论。
+//
+// ## 断言设计
+//
+// 除了"必须含正确关键词"，还断言**不得出现**「本地目录」—— 后者才是这条
+// 判据的主力：变异（把 url/url 分支改回共用文案）会立刻踩中它。
+func TestURLURLConflictErrorIsActionable(t *testing.T) {
+	lin := []byte("LINUX-NODE-BYTES")
+	mac := []byte("DARWIN-NODE-BYTES")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/lin" {
+			w.Write(lin)
+			return
+		}
+		w.Write(mac)
+	}))
+	defer srv.Close()
+
+	// (a) url + url，sha 不同 → 必须说"改名/删一条/分平台构建"，绝不能提"本地目录"
+	t.Run("sha 不同", func(t *testing.T) {
+		newTestCache(t)
+		decls := []RawFileDecl{
+			{Name: "node/bin/node", URL: srv.URL + "/lin", SHA256: shaOf(lin), OS: "linux", Arch: "amd64"},
+			{Name: "node/bin/node", URL: srv.URL + "/mac", SHA256: shaOf(mac), OS: "darwin", Arch: "amd64"},
+		}
+		if err := validateRawFileDecls(decls); err != nil {
+			t.Fatal(err)
+		}
+		// bundle 目标集：两平台都匹配 ⇒ 两条都下载 ⇒ 落到同一个 rawfile/<name>
+		if err := ensureRawFileDownloads(decls, []string{"linux/amd64", "darwin/amd64"}); err != nil {
+			t.Fatal(err)
+		}
+		_, err := collectRawFiles(t.TempDir(), decls)
+		if err == nil {
+			t.Fatal("★ 两条 url 声明落到同一包内名且 sha 不同，未被拒绝")
+		}
+		msg := err.Error()
+
+		// 必须给出的三条出路
+		for _, want := range []string{"改名", "删掉其中一条", "--target"} {
+			if !strings.Contains(msg, want) {
+				t.Errorf("url/url 冲突的文案应给出 %q 这条出路，实际: %s", want, msg)
+			}
+		}
+		// ★ 主力断言：不得指向不存在的"本地目录"
+		for _, forbidden := range []string{"本地目录", "本地与 url"} {
+			if strings.Contains(msg, forbidden) {
+				t.Errorf("★ url/url 冲突的文案出现了 %q —— 该场景没有本地来源，照做是原地打转。实际: %s",
+					forbidden, msg)
+			}
+		}
+		// 必须点名冲突的包内名，否则用户不知道改哪条
+		if !strings.Contains(msg, "rawfile/node/bin/node") {
+			t.Errorf("文案应点名冲突的包内名，实际: %s", msg)
+		}
+	})
+
+	// (b) url + url，sha 相同 → 去重日志不得说"本地与 url"
+	t.Run("sha 相同", func(t *testing.T) {
+		newTestCache(t)
+		decls := []RawFileDecl{
+			{Name: "node/bin/node", URL: srv.URL + "/lin", SHA256: shaOf(lin), OS: "linux", Arch: "amd64"},
+			{Name: "node/bin/node", URL: srv.URL + "/lin", SHA256: shaOf(lin), OS: "darwin", Arch: "amd64"},
+		}
+		if err := validateRawFileDecls(decls); err != nil {
+			t.Fatal(err)
+		}
+		if err := ensureRawFileDownloads(decls, []string{"linux/amd64", "darwin/amd64"}); err != nil {
+			t.Fatal(err)
+		}
+		// 捕获 stdout：去重提示是一行日志，不是 error。
+		orig := os.Stdout
+		r, w, err := os.Pipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		os.Stdout = w
+		ents, collectErr := collectRawFiles(t.TempDir(), decls)
+		w.Close()
+		os.Stdout = orig
+		var buf bytes.Buffer
+		buf.ReadFrom(r)
+		logged := buf.String()
+
+		if collectErr != nil {
+			t.Fatalf("同 sha 应去重成功: %v", collectErr)
+		}
+		n := 0
+		for _, e := range ents {
+			if e.zip == "rawfile/node/bin/node" {
+				n++
+			}
+		}
+		if n != 1 {
+			t.Errorf("去重后应只有 1 条，实际 %d", n)
+		}
+		if !strings.Contains(logged, "去重") {
+			t.Errorf("应打出\"去重\"日志，实际输出: %q", logged)
+		}
+		if strings.Contains(logged, "本地与 url") {
+			t.Errorf("★ url/url 去重日志说了\"本地与 url\" —— 两个来源都是 url。实际: %q", logged)
+		}
+		if !strings.Contains(logged, "url 声明") {
+			t.Errorf("去重日志应点明来源是 url 声明，实际: %q", logged)
+		}
+	})
+
+	// (c) local + url 撞名：现有语义不能改坏（回归保护）
+	t.Run("local 与 url", func(t *testing.T) {
+		newTestCache(t)
+		root := mkProject(t)
+		if err := os.WriteFile(filepath.Join(root, "rawfile", "dup.txt"), []byte("LOCAL"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		decls := []RawFileDecl{{Name: "dup.txt", URL: srv.URL + "/lin", SHA256: shaOf(lin)}}
+		if err := ensureRawFileDownloads(decls, []string{"linux/amd64"}); err != nil {
+			t.Fatal(err)
+		}
+		_, err := collectRawFiles(root, decls)
+		if err == nil {
+			t.Fatal("★ local 与 url 同名且内容不同，未被拒绝")
+		}
+		msg := err.Error()
+		// 这一路本来就该说"去掉 url 声明 / 删本地目录"，不能被新分支改坏
+		if !strings.Contains(msg, "url 声明") {
+			t.Errorf("local/url 冲突文案应提到 url 声明，实际: %s", msg)
+		}
+		// 也不该误用 url/url 专用文案
+		if strings.Contains(msg, "两条 url 声明") {
+			t.Errorf("★ local/url 冲突误用了 url/url 专用文案: %s", msg)
+		}
+	})
+
+	// 变异点：把 conflictError 里的 sameOriginURL 分支删掉（全部走共用文案）
+	//         → (a) 红（"本地目录" 出现 + 缺 "改名"/"--target"）；
+	//         把去重日志改回硬编码"本地与 url" → (b) 红。
 }

@@ -505,9 +505,10 @@ func ensureRawFileDownloads(decls []RawFileDecl, targets []string) error {
 			// 会让包里出现一个"存在但不可执行"的 node，症状是 agent_up 报
 			// “找不到 node”而文件明明就在那里。
 			d.materialized = []rawEntry{{
-				src:  archivePath,
-				zip:  filepath.ToSlash(path.Join(RawFilesPrefix, d.Name)),
-				mode: 0o755,
+				src:    archivePath,
+				zip:    filepath.ToSlash(path.Join(RawFilesPrefix, d.Name)),
+				mode:   0o755,
+				origin: originURL,
 			}}
 			continue
 		}
@@ -580,8 +581,9 @@ func archiveEntries(dir, name string) ([]rawEntry, error) {
 			return nil
 		}
 		out = append(out, rawEntry{
-			src: p,
-			zip: filepath.ToSlash(path.Join(RawFilesPrefix, name, relSlash)),
+			src:    p,
+			zip:    filepath.ToSlash(path.Join(RawFilesPrefix, name, relSlash)),
+			origin: originURL,
 		})
 		return nil
 	})

@@ -93,8 +93,9 @@ func collectSkillFiles(root string) ([]rawEntry, error) {
 				return nil
 			}
 			out = append(out, rawEntry{
-				src: p,
-				zip: filepath.ToSlash(filepath.Join(SkillZipPrefix, rel)),
+				src:    p,
+				zip:    filepath.ToSlash(filepath.Join(SkillZipPrefix, rel)),
+				origin: originSkill,
 			})
 			return nil
 		})
