@@ -49,3 +49,9 @@ docs/llms-full.txt
 # ★ rawfile/ 的内容是随包资源（可能内嵌 node/pi 等上百兆二进制），
 # 由构建方自行准备，不进版本库。忽略规则放在 rawfile/.gitignore 内
 # （自包含，避免依赖上层规则的作用域与否定式语义）。
+
+# agent 会话记录（.pi-sessions/ 是运行时产物，由 coding agent 自己写）。
+# 不忽略的话每次 git status 都带出一条未跟踪目录，而一旦有人用
+# `git add -A` 提交，几百 KB 的会话流水就永久进了历史 —— 它既不是源码
+# 也不是可复现的产物，且含对话原文。
+.pi-sessions/
