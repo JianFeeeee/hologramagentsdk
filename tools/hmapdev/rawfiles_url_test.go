@@ -1419,6 +1419,60 @@ func TestURLURLConflictErrorIsActionable(t *testing.T) {
 		}
 	})
 
+	// (d) ★ local + local 撞名：不得给出做不到的"去掉 url 声明"
+	//
+	// 这是**最常见的配置错误**（工程内两条声明撞了），而它早于本分支就拿到
+	// 了一条物理上做不到的指引。与 url/url 那支同一族：都把人指向不存在的对象。
+	//
+	// 主力断言是 **不得含「url」** —— 变异（删掉 local/local 那支、回落到通用
+	// 文案）会立刻踩中它。
+	t.Run("local 与 local", func(t *testing.T) {
+		root := mkProject(t)
+		// 默认目录里已有一个 dup.txt（mkProject 制造了 rawfile/main/...，这里自己建根级同名）
+		if err := os.WriteFile(filepath.Join(root, "rawfile", "dup.txt"), []byte("FROM-DEFAULT-DIR"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		// 另一份同名文件，用 from 声明落到同一个包内名 rawfile/dup.txt
+		if err := os.MkdirAll(filepath.Join(root, "other"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "other", "dup.txt"), []byte("FROM-OTHER"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err := collectRawFiles(root, []RawFileDecl{{From: "other/dup.txt"}})
+		if err == nil {
+			t.Fatal("★ 工程内两条声明落到同一包内名且内容不同，未被拒绝（会静默取一边）")
+		}
+		msg := err.Error()
+
+		// 必须点名冲突名 + 给出一条真能做到的出路
+		if !strings.Contains(msg, "rawfile/dup.txt") {
+			t.Errorf("文案应点名冲突的包内名，实际: %s", msg)
+		}
+		if !strings.Contains(msg, "删掉其中一份") && !strings.Contains(msg, "改名") {
+			t.Errorf("文案应给出\"删掉其中一份\"或\"改名\"这条出路，实际: %s", msg)
+		}
+		// ★ 主力断言：该场景没有 url 声明，也不能指向"本地目录"（两个都是本地源，
+		// "去掉本地目录"同样是在让人去删一个删不掉的东西）
+		for _, forbidden := range []string{"url", "本地目录"} {
+			if strings.Contains(msg, forbidden) {
+				t.Errorf("★ local/local 冲突的文案出现了 %q —— 该场景没有 url 声明可去，"+
+					"照做是原地打转。实际: %s", forbidden, msg)
+			}
+		}
+	})
+
+	// 变异点（每条都需先确认 go build 退出码 0，再看红在哪句断言）：
+	//   A. conflictError 里删掉 url/url 那支（sameOriginURL 恒 false）
+	//      → 子用例 "sha 不同" 红（缺改名/删掉其中一条/--target + 出现"本地目录"）
+	//   B. 去重日志改回硬编码"本地与 url"
+	//      → 子用例 "sha 相同" 红
+	//   C. conflictError 里删掉 local/local 那支（回落到通用文案）
+	//      → 子用例 "local 与 local" 红在"不得含 url"断言上
+	//   D. local/local 那支文案里塞回"url 声明"字样
+	//      → 同一断言红
+
 	// 变异点：把 conflictError 里的 sameOriginURL 分支删掉（全部走共用文案）
 	//         → (a) 红（"本地目录" 出现 + 缺 "改名"/"--target"）；
 	//         把去重日志改回硬编码"本地与 url" → (b) 红。

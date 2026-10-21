@@ -175,6 +175,14 @@ func (o rawOrigin) label() string {
 	return "本地声明"
 }
 
+// isLocal 报告某个来源是否算"本地"（含空值）。
+//
+// 空 origin = 本地：origin 是后加的字段，任何没填它的构造点都是旧式的
+// 本地条目。用 `== originLocal` 会因空值不相等而误落进"含 url"的通用支。
+func (o rawOrigin) isLocal() bool {
+	return o == "" || o == originLocal
+}
+
 // collectRawFiles 收集要打包的资源。
 //
 // 两部分合起来：
@@ -354,6 +362,13 @@ func collectRawFiles(root string, decls []RawFileDecl) ([]rawEntry, error) {
 	// 里删掉一项；而"内容相同则去重"需要真的删（否则包里会出现两条同名条目，
 	// 内核解包后哪个在上面取决于顺序）。
 	kept := make([]rawEntry, 0, len(out))
+	// ★ seen 存的是指向 out 元素的**指针**，kept 存的是**副本** —— 两者此后
+	// 不再同步。这是刻意取舍：seen 只用于"后面还有没有同名条目"与读
+	// prev.src / prev.origin，kept 只用于交出最终列表；为了这个目的去让
+	// 两者共享存储（或都存指针再二次展平）只会把代码弄复杂。
+	//
+	// ⚠️ 隐含前提：**不要写 `kept[i].xxx = …` 然后回头从 seen 读同一项**，
+	// 那样拿到的是 out 里的旧值。要改就改成统一只维护一份。
 	seen := map[string]*rawEntry{}
 	for i := range out {
 		e := &out[i]
@@ -387,19 +402,37 @@ func collectRawFiles(root string, decls []RawFileDecl) ([]rawEntry, error) {
 //
 // 三种组合的"下一步"确实不同，所以不能共用一句：
 //
-//	url  + url（sha 不同）→ url/url 专用：改名/删一条/按平台分构建
-//	local + url           → 现有语义（删本地目录或去掉那条 url 声明）
-//	local + local         → 删其中一份声明
+//	url  + url   → 改名/删一条/按平台分构建（没有本地目录可删）
+//	local + local → 删一份声明或改名（**没有 url 声明可去**）
+//	local + url   → 删本地目录 或 去掉那条 url 声明（两条出路都成立）
+//
+// ★ 为什么不给 local/local 用 local/url 那句：`rawfile 目标冲突` 是用户排错
+// 的**唯一入口**，而 local/local（工程内两条声明撞了）是最常见的配置错误。
+// 给它一句"请从 plg.json 去掉对应 url 声明"是**物理上做不到**的指引
+// —— 该场景下根本没有 url 声明。这与静默失败同族：都不让人到达正确结论。
+// （这处旧缺陷早于本分支引入，但它与本分支在改的是同一段代码，留着就是盖章。）
 func conflictError(zipName string, a, b *rawEntry) error {
-	sameOriginURL := a.origin == originURL && b.origin == originURL
-	if sameOriginURL {
+	// ★ 来源判定统一走 isLocal()：空 origin 视为 local。
+	// 为什么不能直接写 `a.origin == originLocal`：origin 是后来新增的字段，
+	// 任何没显式填它的构造点（旧代码、将来的新增点）都是空值 ——
+	// 那就是本地条目，但 `== originLocal` 会因不相等而掉进通用支，
+	// 于是又拿到带"url 声明"的那句。
+	switch {
+	case a.origin == originURL && b.origin == originURL:
 		return fmt.Errorf(
 			"rawfile 目标冲突: 两条 url 声明指向同一个包内名 %q（sha256 不同，来自 %s 与 %s）。"+
 				"请**改名**（让两条声明的 name 不同）或**删掉其中一条**；"+
 				"若确实要按平台分发不同内容，请用 os/arch 区分声明并用 --target 分平台构建"+
 				"（bundle 包要求所有目标平台共用同一组条目，装不下两份同名不同内容的资源）",
 			zipName, a.origin.label(), b.origin.label())
+	case a.origin.isLocal() && b.origin.isLocal():
+		return fmt.Errorf(
+			"rawfile 目标冲突: 工程内两条声明落到同一个包内名 %q（内容不同，来自 %s 与 %s）。"+
+				"请**删掉其中一份声明**，或**改名让两者不撞**"+
+				"（例如默认目录 %s/ 里的同名文件与一条 from 声明指向了同一个包内路径）",
+			zipName, a.src, b.src, RawFilesDir)
 	}
+	// local + url（以及任何含 url 的未穷尽组合）：两条出路在该场景下都成立。
 	return fmt.Errorf(
 		"rawfile 目标冲突: %q 同时来自 %s 与 %s 且内容不同 —— "+
 			"删掉其中一份（要保留打开后的本地目录请从 plg.json 去掉对应 url 声明）",
