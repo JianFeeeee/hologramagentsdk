@@ -91,6 +91,11 @@ func cmdBuild(args []string) {
 			os.Exit(1)
 		}
 		buildTarget(plg, "lua", outDir, "")
+		// ★ 必须走 exitIfBuildFailed：Lua 分支在这里 return，不经过 cmdBuild
+		// 末尾的收尾统计。初版就漏了这一步 —— Lua 插件打包失败时退出码为 0，
+		// 而 build-examples.sh 靠退出码 + 产物存在两条一起判，于是产物缺失
+		// 也会被报成成功（见 package/build-examples.sh 里那两条判据的注释）。
+		exitIfBuildFailed()
 		return
 	}
 
@@ -143,6 +148,10 @@ func cmdBuild(args []string) {
 	defer gmRestore()
 
 	if bundle || len(targets) == 0 {
+		targets = nil // bundle 模式：目标集固定为 allBundleTargets（见 effectiveTargets）
+	}
+
+	if bundle || len(targets) == 0 {
 		buildBundle(plg, outDir, sdkPath)
 	} else {
 		for _, t := range targets {
@@ -153,6 +162,16 @@ func cmdBuild(args []string) {
 	// 以非零码退出：调用方（批量重编、CI、发版脚本）靠退出码判成败。
 	// 以前这里直接 return，失败也退 0，于是「构建失败」只能靠人翻日志发现——
 	// 实测中就因此把一次部分失败当成了全绿。
+	exitIfBuildFailed()
+}
+
+// exitIfBuildFailed 是本文件里**唯一**的失败退出点。
+//
+// 抽成函数而不是内联，是因为 Lua 分支在 cmdBuild 中途 return（不经过
+// 末尾的收尾统计）—— 那里以前直接 return，于是「Lua 插件编译失败」
+// 表现为退出码 0。凡是新增的失败路径（如 rawfile 下载/校验失败）都必须
+// 走这里，否则口径「sha256 不符必须报错退出」在 shell 层就不成立。
+func exitIfBuildFailed() {
 	if buildFailed {
 		fmt.Println("error: 至少一个目标构建失败（详见上面日志）")
 		os.Exit(1)
@@ -264,7 +283,12 @@ func buildBundle(plg *PlgConfig, outDir string, sdkPath string) {
 	// 收集失败即**整包失败**（少资源就是个坏包，却仍会产出 .hmap 让人以为成功）。
 	raws, rerr := collectRawFiles(".", plg.RawFiles)
 	if rerr != nil {
+		// ★ 必须置 buildFailed。初版是 Printf + return，而 cmdBuild 的退出码
+		// 只由 buildFailed 决定 ⇒ 收集失败时**退出码 0 且没有产物**，
+		// 调用方（build-examples.sh / CI / 发版脚本）会把它当成成功。
+		// 实测就是这个洞让"rawfile 缺资源"一直没被发现。
 		fmt.Printf("  error: rawfiles: %v\n", rerr)
+		buildFailed = true
 		return
 	}
 	// 随包 skill（skill/ 目录，与 rawfile/ 平行；见 skills.go）
@@ -727,6 +751,7 @@ func buildTarget(plg *PlgConfig, target, outDir, sdkPath string) {
 		raws, rerr := collectRawFiles(".", plg.RawFiles)
 		if rerr != nil {
 			fmt.Printf("  error: rawfiles: %v\n", rerr)
+			buildFailed = true // 同上：否则 Lua 分支的失败会以退出码 0 结束
 			return
 		}
 		skills, serr := collectSkillFiles(".")
@@ -803,6 +828,7 @@ func buildTarget(plg *PlgConfig, target, outDir, sdkPath string) {
 	raws, rerr := collectRawFiles(".", plg.RawFiles)
 	if rerr != nil {
 		fmt.Printf("  error: rawfiles: %v\n", rerr)
+		buildFailed = true // 同上：否则失败仍以退出码 0 结束
 		return
 	}
 	skills, serr := collectSkillFiles(".")
