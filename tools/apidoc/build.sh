@@ -18,7 +18,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-TMP_API="${TMPDIR:-/tmp}/homeagent-sdk-api.json"
+TMP_API="${TMPDIR:-/tmp}/hologramagent-sdk-api.json"
 SITE=site_build
 
 # copy_agent_files 把 docs/ 下的 Markdown 原样复制进站点产物。
