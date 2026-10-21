@@ -45,9 +45,12 @@ PluginMgrAPI 提供插件管理能力（外部插件可调用）。
 
 | 方法 | 说明 |
 |---|---|
-| [`IsPluginDisabled`](#pluginmgrapiisplugindisabled) | IsPluginDisabled 查询插件是否被禁用。 |
+| [`IsPluginDisabled`](#pluginmgrapiisplugindisabled) | IsPluginDisabled 查询插件是否被**持久**禁用。 |
+| [`IsPluginRuntimeStopped`](#pluginmgrapiispluginruntimestopped) | IsPluginRuntimeStopped 查询插件是否处于运行态关闭。 |
 | [`ListLoadedPlugins`](#pluginmgrapilistloadedplugins) | ListLoadedPlugins 列出已加载插件。 |
 | [`ReloadOne`](#pluginmgrapireloadone) | ReloadOne 重载单个插件（停止后重新加载）。 |
+| [`StartPlugin`](#pluginmgrapistartplugin) | StartPlugin 运行态启动：现在拉起，**不解除持久禁用**。 |
+| [`StopPlugin`](#pluginmgrapistopplugin) | StopPlugin 运行态关闭：现在停掉，**不改持久状态**。重启后按 |
 
 ### `PluginMgrAPI.IsPluginDisabled`
 
@@ -55,9 +58,19 @@ PluginMgrAPI 提供插件管理能力（外部插件可调用）。
 IsPluginDisabled(name string) bool
 ```
 
-IsPluginDisabled 查询插件是否被禁用。
+IsPluginDisabled 查询插件是否被**持久**禁用。
 
-<small>`plugin.go:389`</small>
+<small>`plugin.go:438`</small>
+
+### `PluginMgrAPI.IsPluginRuntimeStopped`
+
+```go
+IsPluginRuntimeStopped(name string) bool
+```
+
+IsPluginRuntimeStopped 查询插件是否处于运行态关闭。
+
+<small>`plugin.go:465`</small>
 
 ### `PluginMgrAPI.ListLoadedPlugins`
 
@@ -67,7 +80,7 @@ ListLoadedPlugins() []string
 
 ListLoadedPlugins 列出已加载插件。
 
-<small>`plugin.go:387`</small>
+<small>`plugin.go:436`</small>
 
 ### `PluginMgrAPI.ReloadOne`
 
@@ -77,7 +90,33 @@ ReloadOne(name string) error
 
 ReloadOne 重载单个插件（停止后重新加载）。
 
-<small>`plugin.go:385`</small>
+<small>`plugin.go:434`</small>
+
+### `PluginMgrAPI.StartPlugin`
+
+```go
+StartPlugin(name string) error
+```
+
+StartPlugin 运行态启动：现在拉起，**不解除持久禁用**。
+
+被持久禁用的插件会被拒绝（提示先用 EnablePlugin）——
+持久禁用是用户的明确决定，运行态操作不该绕过它。
+
+<small>`plugin.go:463`</small>
+
+### `PluginMgrAPI.StopPlugin`
+
+```go
+StopPlugin(name string) error
+```
+
+StopPlugin 运行态关闭：现在停掉，**不改持久状态**。重启后按
+auto_start + disabled_plugins 正常决定。
+
+拒绝作用于 pluginmgr 自身与 webui（自锁/失联，内核层面拦死）。
+
+<small>`plugin.go:458`</small>
 
 ### `PluginSDK.AutoRestart`
 
@@ -87,7 +126,7 @@ func (s *PluginSDK) AutoRestart() bool
 
 AutoRestart 返回插件是否允许自动重启。
 
-<small>`plugin.go:895`</small>
+<small>`plugin.go:1027`</small>
 
 ### `PluginSDK.PluginMgr`
 
@@ -98,7 +137,7 @@ func (s *PluginSDK) PluginMgr() PluginMgrAPI
 PluginMgr returns the plugin manager API (ReloadOne / ReloadPlugins / list).
 May be nil if the host did not wire it.
 
-<small>`plugin.go:757`</small>
+<small>`plugin.go:870`</small>
 
 ### `PluginSDK.PluginName`
 
@@ -108,7 +147,7 @@ func (s *PluginSDK) PluginName() string
 
 PluginName returns the name of the plugin.
 
-<small>`plugin.go:501`</small>
+<small>`plugin.go:580`</small>
 
 ### `PluginSDK.RegisterOnRemoveHandler`
 
@@ -125,11 +164,11 @@ RegisterOnRemoveHandler 注册插件被删除（卸载）时的清理回调。
 
 | 插件 | 位置 | 代码 |
 |---|---|---|
-| [`calendar`](../examples/index.md#calendar) | `example/calendar/plugin.go:296` | `s.RegisterOnRemoveHandler(p.cleanupData)` |
+| [`calendar`](../examples/index.md#calendar) | `example/calendar/plugin.go:297` | `s.RegisterOnRemoveHandler(p.cleanupData)` |
 | [`memo`](../examples/index.md#memo) | `example/memo/plugin.go:69` | `s.RegisterOnRemoveHandler(p.cleanupData)` |
-| [`rss`](../examples/index.md#rss) | `example/rss/plugin.go:127` | `s.RegisterOnRemoveHandler(p.cleanupData)` |
+| [`rss`](../examples/index.md#rss) | `example/rss/plugin.go:128` | `s.RegisterOnRemoveHandler(p.cleanupData)` |
 
-<small>`plugin.go:930`</small>
+<small>`plugin.go:1062`</small>
 
 ### `PluginSDK.RegisterPluginAPI`
 
@@ -139,7 +178,7 @@ func (s *PluginSDK) RegisterPluginAPI(name string) error
 
 RegisterPluginAPI registers this plugin's API for access by other plugins.
 
-<small>`plugin.go:606`</small>
+<small>`plugin.go:695`</small>
 
 ### `PluginSDK.RegisterStopHandler`
 
@@ -156,10 +195,10 @@ RegisterStopHandler 注册插件停止阶段的清理回调。
 
 | 插件 | 位置 | 代码 |
 |---|---|---|
-| [`calendar`](../examples/index.md#calendar) | `example/calendar/plugin.go:294` | `s.RegisterStopHandler(p.saveEvents)` |
+| [`calendar`](../examples/index.md#calendar) | `example/calendar/plugin.go:295` | `s.RegisterStopHandler(p.saveEvents)` |
 | [`deepsearch`](../examples/index.md#deepsearch) | `example/deepsearch/plugin.go:695` | `s.RegisterStopHandler(func() { p.shutdownSearxng() })` |
 
-<small>`plugin.go:905`</small>
+<small>`plugin.go:1037`</small>
 
 ### `PluginSDK.RunOnRemoveHandlers`
 
@@ -170,7 +209,7 @@ func (s *PluginSDK) RunOnRemoveHandlers()
 RunOnRemoveHandlers 执行全部已注册的 onRemove handler（后注册先执行，执行后清空，幂等）。
 由内核在卸载插件（registry.RemovePlugin）时、插件 Stop() 之后执行。
 
-<small>`plugin.go:941`</small>
+<small>`plugin.go:1073`</small>
 
 ### `PluginSDK.RunStopHandlers`
 
@@ -181,7 +220,7 @@ func (s *PluginSDK) RunStopHandlers()
 RunStopHandlers 执行全部已注册的 stop handler（后注册先执行，执行后清空，幂等）。
 由内核（内置插件）或插件桥接层（外部插件 z_bridge 的 StopPlugin）在调用插件 Stop() 前执行。
 
-<small>`plugin.go:916`</small>
+<small>`plugin.go:1048`</small>
 
 ### `PluginSDK.SetAutoRestart`
 
@@ -205,5 +244,5 @@ SetAutoRestart 设置插件崩溃后内核是否自动重启它。
 | [`ai_image`](../examples/index.md#ai_image) | `example/ai_image/plugin.go:110` | `s.SetAutoRestart(true)` |
 | [`bili`](../examples/index.md#bili) | `example/bili/plugin.go:63` | `s.SetAutoRestart(true)` |
 
-<small>`plugin.go:888`</small>
+<small>`plugin.go:1020`</small>
 

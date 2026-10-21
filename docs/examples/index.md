@@ -30,6 +30,14 @@ SDK 仓 `example/` 下有多个**真实可编译**的示例插件，覆盖工具
 
 用到的 API：`InjectInterruptTextOpts` · `RLock` · `RUnlock` · `RegisterInputChannel` · `RegisterOnRemoveHandler` · `RegisterStopHandler`
 
+## `cmd`
+
+用到的 API：`RegisterStage`
+
+## `commondev`
+
+用到的 API：`InjectText` · `RawFiles` · `RegisterOutputChannel` · `Secrets` · `SetRawFilesAPI`
+
 ## `deepsearch`
 
 用到的 API：`RegisterStopHandler`
@@ -53,8 +61,4 @@ SDK 仓 `example/` 下有多个**真实可编译**的示例插件，覆盖工具
 ## `sanitizer`
 
 用到的 API：`RegisterStage`
-
-## `weather`
-
-用到的 API：`RegisterOutputChannel` · `RegisterStage`
 

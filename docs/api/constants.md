@@ -4,6 +4,25 @@
 
 SDK 里的取值枚举。其中带「仅内置」标注的取值在内核侧会被夹到较低级别。
 
+## FacilityConfig 等
+
+| 名称 | 说明 |
+|---|---|
+| `FacilityConfig` | FacilityConfig 是配置快照（cfg）就绪。 |
+| `FacilityKernelIO` | FacilityKernelIO 是 IOManager + EventBus 就绪。 |
+| `FacilityMemory` | FacilityMemory 是图记忆（含索引/社交图/蒸馏）就绪。 |
+| `FacilityLua` | FacilityLua 是 Lua 协议适配 VM 就绪。 |
+| `FacilitySupervisor` | FacilitySupervisor 是代理生命周期守护就绪。 |
+| `FacilityTracker` | FacilityTracker 是变更追踪（overlayfs）就绪。 |
+| `FacilityTextMemory` | FacilityTextMemory 是文本记忆就绪。 |
+| `FacilityLLM` | FacilityLLM 是多源 Provider 管理就绪。 |
+| `FacilityDocStore` | FacilityDocStore 是文档记忆就绪。 |
+| `FacilityKnowledge` | FacilityKnowledge 是知识库就绪。 |
+| `FacilityMultimodal` | FacilityMultimodal 是多模态向量空间就绪。 |
+| `FacilityONNX` | FacilityONNX 是依存句法分析器就绪。 |
+| `FacilityStageHost` | FacilityStageHost 是阶段管道 + 插件注册表就绪。 |
+| `FacilityAgent` | FacilityAgent 是主 Agent 就绪（**最晚**的一个，通常在插件加载前）。 |
+
 ## StageOnInput 等
 
 | 名称 | 说明 |
@@ -81,6 +100,19 @@ SDK 里的取值枚举。其中带「仅内置」标注的取值在内核侧会�
 
 | 名称 | 说明 |
 |---|---|
-| `ProxyAuthHomeAgent` | ProxyAuthHomeAgent 表示由 HomeAgent 统一保护：浏览器走门户会话 |
-| `ProxyAuthNone` | ProxyAuthNone 表示不经 HomeAgent 鉴权，直接把请求转发给上游。 |
+| `ProxyAuthHomeAgent` | ProxyAuthHomeAgent 表示由 HologramAgent 统一保护：浏览器走门户会话 |
+| `ProxyAuthNone` | ProxyAuthNone 表示不经 HologramAgent 鉴权，直接把请求转发给上游。 |
+
+## AutoStartOnKernel 等
+
+| 名称 | 说明 |
+|---|---|
+| `AutoStartOnKernel` | AutoStartOnKernel 表示伴随内核启动（缺少该字段时的默认形态）。 |
+| `AutoStartOnDemand` | AutoStartOnDemand 表示启用但不自启：待 agent 显式拉起。 |
+
+## OnDemandNeedsSkill
+
+| 名称 | 说明 |
+|---|---|
+| `OnDemandNeedsSkill` |  |
 

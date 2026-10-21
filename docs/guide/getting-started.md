@@ -5,7 +5,7 @@
 
 !!! note "改名说明"
     1.2.0 起工具链由 `plugindev` 更名为 `hmapdev`；SDK 存储目录同时由
-    `~/.homeagent/plugindev/sdk` 迁到 `~/.homeagent/hmapdev/sdk`
+    `~/.hologram/plugindev/sdk` 迁到 `~/.hologram/hmapdev/sdk`
     （旧目录会自动继续沿用）。
 
 ## 安装
@@ -13,8 +13,8 @@
 从源码构建：
 
 ```bash
-git clone https://github.com/JianFeeeee/homeagentsdk
-cd homeagentsdk/tools/hmapdev
+git clone https://github.com/JianFeeeee/hologramagentsdk
+cd hologramagentsdk/tools/hmapdev
 go build -o hmapdev
 # 把 hmapdev 放进 PATH，或直接用 ./hmapdev
 ```
@@ -23,9 +23,10 @@ go build -o hmapdev
 共 5 个平台：linux/darwin/windows × amd64/arm64）。
 
 > 仓已迁到 GitHub；gitcode 仅作国内镜像（源码同步，**release 附件暂时仍在那里**）：
-> `https://github.com/JianFeeeee/homeagentsdk/releases`。
-> Go 模块路径仍是 `github.com/JianFeeeee/homeagentsdk` —— 这是有意保留的，
-> 改模块路径会让现有插件的 `go.mod` 全面失效。
+> `https://github.com/JianFeeeee/hologramagentsdk/releases`。
+> Go 模块路径已随产品改名变成 `github.com/JianFeeeee/hologramagentsdk`；
+> **旧名仍被工具链识别**（存量的 `go.mod` 里写旧名不会失效，见 `hmapdev` 的
+> `sdkModuleNames`：三代名字都认）。新建工程直接用新名即可。
 
 ## SDK 版本管理
 
@@ -41,7 +42,7 @@ hmapdev sdk use v1.2.0      # 切换版本
 hmapdev sdk path            # 当前 SDK 路径
 ```
 
-存储在 `~/.homeagent/hmapdev/sdk/<version>/`。
+存储在 `~/.hologram/hmapdev/sdk/<version>/`。
 
 !!! warning "版本未命中会**明确报错**"
     `plg.json` 声明的 `sdk` 版本若不在本地存储里，`hmapdev` 不会退回某个默认版本，

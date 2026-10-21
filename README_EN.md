@@ -1,16 +1,16 @@
-# HomeAgent SDK
+# HologramAgent SDK
 
-Plugin development SDK for building intelligent plugins that interact with the HomeAgent platform.
+Plugin development SDK for building intelligent plugins that interact with the HologramAgent platform.
 
-> 📖 **Full documentation**: <https://sdk.homeagent.jianfgit.xyz/>
+> 📖 **Full documentation**: <https://sdk.hologramagent.jianfgit.xyz/>
 >
 > Quick start / API reference / guides / example plugins all live there. **This README is a
 > summary only** — the docs site is authoritative for interface details.
-> Jump to: [Getting started](https://sdk.homeagent.jianfgit.xyz/guide/getting-started/)
-> · [API reference](https://sdk.homeagent.jianfgit.xyz/api/) · [Capability boundary](https://sdk.homeagent.jianfgit.xyz/guide/capability-boundary/)
+> Jump to: [Getting started](https://sdk.hologramagent.jianfgit.xyz/guide/getting-started/)
+> · [API reference](https://sdk.hologramagent.jianfgit.xyz/api/) · [Capability boundary](https://sdk.hologramagent.jianfgit.xyz/guide/capability-boundary/)
 >
-> Agent-friendly plain-text entry points: [`llms.txt`](https://sdk.homeagent.jianfgit.xyz/llms.txt)
-> and [`llms-full.txt`](https://sdk.homeagent.jianfgit.xyz/llms-full.txt) (the whole docs in one file).
+> Agent-friendly plain-text entry points: [`llms.txt`](https://sdk.hologramagent.jianfgit.xyz/llms.txt)
+> and [`llms-full.txt`](https://sdk.hologramagent.jianfgit.xyz/llms-full.txt) (the whole docs in one file).
 
 ## Version and Compatibility
 
@@ -338,15 +338,15 @@ Plugin developers only need to implement the `Plugin` interface and export a `Ne
 `hmapdev` provides full development workflow support and produces `.hmap` plugin bundles (the tool is
 named after that package format). Prebuilt binaries ship as **release assets**
 (linux/darwin/windows × amd64/arm64); download from
-[Releases](https://github.com/JianFeeeee/homeagentsdk/releases) and put it on your PATH:
+[Releases](https://github.com/JianFeeeee/hologramagentsdk/releases) and put it on your PATH:
 
 > Rename note: the toolchain was called `plugindev` and is `hmapdev` since 1.2.0.
-> The SDK store moved from `~/.homeagent/plugindev/sdk` to `~/.homeagent/hmapdev/sdk`
+> The SDK store moved from `~/.hologram/plugindev/sdk` to `~/.hologram/hmapdev/sdk`
 > (the old directory is still honored, so installed versions are not lost).
 
 ```bash
 # From release assets (latest SDK release / linux amd64 shown)
-curl -Lo hmapdev https://github.com/JianFeeeee/homeagentsdk/releases/download/<version>/hmapdev_linux_amd64
+curl -Lo hmapdev https://github.com/JianFeeeee/hologramagentsdk/releases/download/<version>/hmapdev_linux_amd64
 chmod +x hmapdev
 
 # Or build from source
@@ -376,7 +376,7 @@ Supports both **Go** and **Lua** plugin languages.
   "name_en": "Weather",
   "version": "1.0.0",
   "description": "Weather plugin",
-  "author": "HomeAgent",
+  "author": "HologramAgent",
   "entry": "plugin.bin",
   "tags": ["weather", "forecast"],
   "targets": "linux/amd64,windows/amd64",
@@ -631,15 +631,15 @@ target_include_directories(my_app PRIVATE ${HA_REMOTEDEVICE_INCLUDE_DIR})
 
 ### Quick Start Guide
 
-A complete step-by-step guide from zero to a device successfully connected to HomeAgent.
+A complete step-by-step guide from zero to a device successfully connected to HologramAgent.
 
 #### Step 1: Preparation
 
-Create an access token on the HomeAgent platform:
+Create an access token on the HologramAgent platform:
 
 ```bash
-# Create a device access token on the HomeAgent server
-curl -X POST http://<homeagent-server>:8080/api/v1/device/token \
+# Create a device access token on the HologramAgent server
+curl -X POST http://<hologram-server>:8080/api/v1/device/token \
   -H "Content-Type: application/json" \
   -d '{"device_id":"esp32-cam-1","name":"Front Door Camera","kind":"camera"}'
 # Returns: {"token":"ha-dev-token-xxxxx"}
@@ -716,7 +716,7 @@ static void uart_close(void *ctx) {
 }
 ```
 
-> Note: For UART passthrough, a TCP bridge program must run on the other end to forward serial data to the HomeAgent WebSocket port.
+> Note: For UART passthrough, a TCP bridge program must run on the other end to forward serial data to the HologramAgent WebSocket port.
 
 #### Step 3: Declare Device Capabilities and Command Handlers
 
@@ -762,7 +762,7 @@ ha_cmd_handler_def_t handlers[] = {
 ```c
 ha_config_t config = {
     .transport = transport,                 // Transport layer implementation
-    .server    = "192.168.1.100:9890",      // HomeAgent server address
+    .server    = "192.168.1.100:9890",      // HologramAgent server address
     .token     = "ha-dev-token-xxxxx",      // Token from Step 1
     .device = {
         .device_id = "esp32-cam-1",
@@ -801,15 +801,15 @@ while (1) {
 
 #### Step 5: Verify the Connection
 
-Check if the device is online on the HomeAgent server:
+Check if the device is online on the HologramAgent server:
 
 ```bash
 # List registered devices
-curl http://<homeagent-server>:8080/api/v1/device/list
+curl http://<hologram-server>:8080/api/v1/device/list
 # Expected output includes: {"device_id":"esp32-cam-1","status":"online",...}
 
 # Send a command to the device (test camerasue)
-curl -X POST http://<homeagent-server>:8080/api/v1/device/esp32-cam-1/cmd \
+curl -X POST http://<hologram-server>:8080/api/v1/device/esp32-cam-1/cmd \
   -H "Content-Type: application/json" \
   -d '{"cmd":"camerasue","args":"3"}'
 # Expected: {"status":"ok","result":"data:image/jpeg;base64,..."}
@@ -820,7 +820,7 @@ curl -X POST http://<homeagent-server>:8080/api/v1/device/esp32-cam-1/cmd \
 | Issue | Check |
 |-------|-------|
 | Connection failed | Verify `server` address and port are reachable; check `token` |
-| WS handshake failed | Verify HomeAgent server WebSocket support is enabled |
+| WS handshake failed | Verify HologramAgent server WebSocket support is enabled |
 | Command not responding | Confirm the command name is registered in `handlers` table; check `on_binary` |
 | Reconnection issues | `max_reconnect` controls retry count; -1 = infinite |
 | Low memory (embedded) | Define `HA_NO_ALLOC` to disable dynamic memory allocation |
@@ -875,4 +875,4 @@ core repository — so the MIT grant conflicts with nothing.
 Third-party components (Go dependencies: go-sqlite3, gojieba, bubbletea, … — MIT / BSD-3 /
 Apache-2.0) keep their own licenses. The platform-side model and inference runtime
 (Chinese-CLIP Apache-2.0, ONNX Runtime MIT) are not part of this SDK; their full license texts
-ship with the release packages under `/usr/share/doc/homeagent/licenses/`.
+ship with the release packages under `/usr/share/doc/hologram/licenses/`.

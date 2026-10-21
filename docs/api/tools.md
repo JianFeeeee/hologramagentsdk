@@ -14,7 +14,7 @@ ContentBlock 是多模态内容块（OpenAI 格式：text/image_url/audio_url）
 插件工具返回结果时可用 PluginSDK.SetToolBlocks 注入，让下一轮 LLM
 请求在 tool message 的 content 数组里带上图片/音频，实现"模型看图/听音频"。
 
-<small>`plugin.go:954`</small>
+<small>`plugin.go:1086`</small>
 
 ### `PluginSDK.RegisterTool`
 
@@ -33,7 +33,7 @@ RegisterTool registers a tool that the LLM can call.
 | [`ai_image`](../examples/index.md#ai_image) | `example/ai_image/plugin.go:159` | `s.RegisterTool(tp+"generate", sdk.ToolDef{` |
 | [`bili`](../examples/index.md#bili) | `example/bili/plugin.go:85` | `s.RegisterTool(tp+"video", sdk.ToolDef{` |
 
-<small>`plugin.go:557`</small>
+<small>`plugin.go:646`</small>
 
 ### `ToolCall`
 
@@ -43,7 +43,7 @@ type ToolCall struct { ID string `json:"id"` Name string `json:"name"` Plugin st
 
 ToolCall represents a model's request to call a tool.
 
-<small>`plugin.go:227`</small>
+<small>`plugin.go:257`</small>
 
 ### `ToolDef`
 
@@ -53,7 +53,7 @@ type ToolDef struct { Name string `json:"name"` Plugin string `json:"plugin,omit
 
 ToolDef describes a tool that the plugin exposes.
 
-<small>`plugin.go:279`</small>
+<small>`plugin.go:309`</small>
 
 ### `ToolHandler`
 
@@ -73,5 +73,5 @@ type ToolResult struct { CallID string `json:"call_id"` Name string `json:"name"
 
 ToolResult represents the result of a tool call.
 
-<small>`plugin.go:235`</small>
+<small>`plugin.go:265`</small>
 

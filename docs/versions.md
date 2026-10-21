@@ -117,7 +117,7 @@
 
 ### 生产环境实测的缺陷（不是理论问题）
 
-`journalctl -u homeagent | grep -c "非法 JSON 帧"` ⇒ **1038 条**，来源：
+`journalctl -u hologramagent | grep -c "非法 JSON 帧"` ⇒ **1038 条**，来源：
 
 | 插件 | 次数 | 本仓？ |
 |---|---|---|
@@ -204,7 +204,7 @@ install -m 0755 /tmp/hmapdev-new /usr/local/bin/hmapdev
 hmapdev --version                                  # 版本号
 strings /usr/local/bin/hmapdev | grep -c mgrStop   # ≥1 ⇒ 新模板已 embed
 diff <源码>/tools/hmapdev/templates/proc_main.go.tmpl \
-     ~/.homeagent/hmapdev/sdk/<ver>/tools/hmapdev/templates/proc_main.go.tmpl   # 必须无差异
+     ~/.hologram/hmapdev/sdk/<ver>/tools/hmapdev/templates/proc_main.go.tmpl   # 必须无差异
 ```
 
 ★ **`diff` 陷阱**：本机 PATH 上的 `diff` 是 HarmonyOS 工具链里的一个
@@ -274,7 +274,7 @@ hmapdev sdk list
 ## 维护（给 SDK 维护者）
 
 ```bash
-cd homeagent-sdk
+cd hologramagent-sdk
 go run ./tools/apidoc -pkgdir ./sdk -out /tmp/api.json
 go run ./tools/apidoc/gensite -api /tmp/api.json -out ./docs -examples ./example
 mkdocs serve     # 本地预览

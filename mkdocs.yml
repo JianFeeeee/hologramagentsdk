@@ -1,4 +1,4 @@
-# HomeAgent 插件 SDK 文档站配置。
+# HologramAgent 插件 SDK 文档站配置。
 #
 # 设计取舍：
 #   - 每页顶部都放「版本 + 编辑链接」，因为 SDK 与内核的协议版本会错配，
@@ -6,9 +6,9 @@
 #   - 中文检索依赖 jieba（已装）；英文走内置分词。两者都不要额外服务。
 #   - docs/api/*.md 是**生成物**（tools/apidoc/gensite），页首会写明，防止手改。
 
-site_name: HomeAgent 插件 SDK
-site_description: 用 Go 或 Lua 为 HomeAgent 编写插件 —— API 参考与开发指南
-site_url: https://sdk.homeagent.jianfgit.xyz/
+site_name: HologramAgent 插件 SDK
+site_description: 用 Go 或 Lua 为 HologramAgent 编写插件 —— API 参考与开发指南
+site_url: https://sdk.hologramagent.jianfgit.xyz/
 copyright: MIT 许可 · JianFeeeee
 
 # 主题覆盖目录：只覆盖 footer.html（补备案号，见该文件里的说明）。
@@ -95,14 +95,14 @@ extra:
     # 主仓已迁到 GitHub；gitcode 保留为国内镜像（源码同步）。
     # 两个链接都放，是因为国内直连 gitcode 更快，而海外/权威源看 GitHub。
     - icon: fontawesome/solid/code
-      link: https://github.com/JianFeeeee/homeagentsdk
+      link: https://github.com/JianFeeeee/hologramagentsdk
       name: SDK 源码（GitHub）
     - icon: fontawesome/solid/code-branch
-      link: https://github.com/JianFeeeee/homeagentsdk
+      link: https://github.com/JianFeeeee/hologramagentsdk
       name: gitcode 镜像（国内）
     - icon: fontawesome/solid/house
-      link: https://introduce.homeagent.jianfgit.xyz/
-      name: HomeAgent 介绍站
+      link: https://introduce.hologramagent.jianfgit.xyz/
+      name: HologramAgent 介绍站
   # 自定义检索端点在 docs/javascripts/api-search.js 里注册，
   # 索引文件由 gensite 产出：docs/assets/api-index.json
 

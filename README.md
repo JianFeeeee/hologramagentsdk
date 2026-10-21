@@ -1,15 +1,15 @@
-# HomeAgent SDK
+# HologramAgent SDK
 
-HomeAgent 插件开发 SDK，用于构建与 HomeAgent 平台交互的智能插件。
+HologramAgent 插件开发 SDK，用于构建与 HologramAgent 平台交互的智能插件。
 
-> 📖 **完整文档**：<https://sdk.homeagent.jianfgit.xyz/>
+> 📖 **完整文档**：<https://sdk.hologramagent.jianfgit.xyz/>
 >
 > 快速开始 / API 参考 / 指南 / 示例插件都在那里，**本 README 只是速览**，
-> 接口细节以文档站为准。直接进入：[快速开始](https://sdk.homeagent.jianfgit.xyz/guide/getting-started/)
-> · [API 参考](https://sdk.homeagent.jianfgit.xyz/api/) · [能力边界](https://sdk.homeagent.jianfgit.xyz/guide/capability-boundary/)
+> 接口细节以文档站为准。直接进入：[快速开始](https://sdk.hologramagent.jianfgit.xyz/guide/getting-started/)
+> · [API 参考](https://sdk.hologramagent.jianfgit.xyz/api/) · [能力边界](https://sdk.hologramagent.jianfgit.xyz/guide/capability-boundary/)
 >
-> 面向 agent 的纯文本入口：[`llms.txt`](https://sdk.homeagent.jianfgit.xyz/llms.txt)
-> （含全部 API 的 [`llms-full.txt`](https://sdk.homeagent.jianfgit.xyz/llms-full.txt)）。
+> 面向 agent 的纯文本入口：[`llms.txt`](https://sdk.hologramagent.jianfgit.xyz/llms.txt)
+> （含全部 API 的 [`llms-full.txt`](https://sdk.hologramagent.jianfgit.xyz/llms-full.txt)）。
 
 ## 版本与兼容性
 
@@ -471,19 +471,19 @@ func New(name string, sett SettingsAPI, regTool ToolRegistrar, regStage StageReg
 
 > ⚠️ **二进制的实际分发地址目前是 gitcode**（两个仓的 release 附件不同步）：
 > `hmapdev_linux_amd64` 等 5 个平台二进制 + `SHA256SUMS` 在
-> <https://github.com/JianFeeeee/homeagentsdk/releases>。
-> GitHub 侧（<https://github.com/JianFeeeee/homeagentsdk/releases>）从
+> <https://github.com/JianFeeeee/hologramagentsdk/releases>。
+> GitHub 侧（<https://github.com/JianFeeeee/hologramagentsdk/releases>）从
 > 下一个 SDK 版本（v1.4.0）起才会同步发布 —— 因为 SDK 仓**移仓后还没发过版**。
 > 源码与文档一律以 GitHub 为准，**只有二进制暂时还得到 gitcode 取**。
 
 > 改名说明：工具链原名 `plugindev`，自 1.2.0 起更名 `hmapdev`。
-> SDK 存储目录同时由 `~/.homeagent/plugindev/sdk` 迁到 `~/.homeagent/hmapdev/sdk`
+> SDK 存储目录同时由 `~/.hologram/plugindev/sdk` 迁到 `~/.hologram/hmapdev/sdk`
 > （旧目录会被自动沿用，不会丢已装版本）。
 
 ```bash
 # 从 release 附件下载（以 linux amd64 为例，<版本> 如 v1.3.0）
 # 当前实际分发地址是 gitcode（见下方说明）：
-curl -Lo hmapdev https://github.com/JianFeeeee/homeagentsdk/releases/download/<版本>/hmapdev_linux_amd64
+curl -Lo hmapdev https://github.com/JianFeeeee/hologramagentsdk/releases/download/<版本>/hmapdev_linux_amd64
 chmod +x hmapdev
 
 # 或从源码自己编
@@ -523,7 +523,7 @@ cd tools/hmapdev && go build -o hmapdev .
   "name_en": "Weather",
   "version": "1.0.0",
   "description": "天气查询插件",
-  "author": "HomeAgent",
+  "author": "HologramAgent",
   "entry": "plugin.bin",
   "tags": ["weather", "forecast"],
   "targets": "linux/amd64,windows/amd64",
@@ -865,15 +865,15 @@ target_include_directories(my_app PRIVATE ${HA_REMOTEDEVICE_INCLUDE_DIR})
 
 ### 快速接入指南
 
-以下是从零到设备成功接入 HomeAgent 的完整步骤。
+以下是从零到设备成功接入 HologramAgent 的完整步骤。
 
 #### 1. 准备工作
 
-在 HomeAgent 平台上创建接入令牌：
+在 HologramAgent 平台上创建接入令牌：
 
 ```bash
-# 在 HomeAgent 服务端创建一个设备接入令牌
-curl -X POST http://<homeagent-server>:8080/api/v1/device/token \
+# 在 HologramAgent 服务端创建一个设备接入令牌
+curl -X POST http://<hologram-server>:8080/api/v1/device/token \
   -H "Content-Type: application/json" \
   -d '{"device_id":"esp32-cam-1","name":"门口摄像头","kind":"camera"}'
 # 返回: {"token":"ha-dev-token-xxxxx"}
@@ -951,7 +951,7 @@ static void uart_close(void *ctx) {
 }
 ```
 
-> 注意：UART 透传时，另一端需运行一个 TCP 桥接程序，将串口数据转发到 HomeAgent 的 WebSocket 端口。
+> 注意：UART 透传时，另一端需运行一个 TCP 桥接程序，将串口数据转发到 HologramAgent 的 WebSocket 端口。
 
 #### 3. 声明设备能力和命令处理
 
@@ -998,7 +998,7 @@ ha_cmd_handler_def_t handlers[] = {
 ```c
 ha_config_t config = {
     .transport = transport,                 // 传输层实现
-    .server    = "192.168.1.100:9890",      // HomeAgent 服务端地址
+    .server    = "192.168.1.100:9890",      // HologramAgent 服务端地址
     .token     = "ha-dev-token-xxxxx",      // 第 1 步获取的令牌
     .device = {
         .device_id = "esp32-cam-1",
@@ -1037,15 +1037,15 @@ while (1) {
 
 #### 5. 验证连接
 
-在 HomeAgent 服务端检查设备是否在线：
+在 HologramAgent 服务端检查设备是否在线：
 
 ```bash
 # 查看已注册设备列表
-curl http://<homeagent-server>:8080/api/v1/device/list
+curl http://<hologram-server>:8080/api/v1/device/list
 # 预期输出包含: {"device_id":"esp32-cam-1","status":"online",...}
 
 # 向设备发送命令（测试 camerasue）
-curl -X POST http://<homeagent-server>:8080/api/v1/device/esp32-cam-1/cmd \
+curl -X POST http://<hologram-server>:8080/api/v1/device/esp32-cam-1/cmd \
   -H "Content-Type: application/json" \
   -d '{"cmd":"camerasue","args":"3"}'
 # 预期返回: {"status":"ok","result":"data:image/jpeg;base64,..."}
@@ -1056,7 +1056,7 @@ curl -X POST http://<homeagent-server>:8080/api/v1/device/esp32-cam-1/cmd \
 | 问题 | 检查点 |
 |------|--------|
 | 连接失败 | 确认 `server` 地址和端口可通；检查 `token` 是否正确 |
-| WS 握手失败 | 确认 HomeAgent 服务端已开启 WebSocket 支持 |
+| WS 握手失败 | 确认 HologramAgent 服务端已开启 WebSocket 支持 |
 | 命令无响应 | 确认 `handlers` 表中注册了对应命令名；检查 `on_binary` 是否配置 |
 | 断线重连 | `max_reconnect` 控制重连次数，-1 为无限重连 |
 | 内存不足（嵌入式） | 定义 `HA_NO_ALLOC` 宏禁用动态内存分配 |
@@ -1095,13 +1095,13 @@ curl -X POST http://127.0.0.1:9876/plugins \
 
 ## 文档
 
-- 文档站：**<https://sdk.homeagent.jianfgit.xyz/>**
-- 快速开始：[环境与工具链](https://sdk.homeagent.jianfgit.xyz/guide/getting-started/) · [第一个 Go 插件](https://sdk.homeagent.jianfgit.xyz/guide/first-plugin/) · [第一个 Lua 插件](https://sdk.homeagent.jianfgit.xyz/guide/first-lua-plugin/)
-- API 参考：[总览](https://sdk.homeagent.jianfgit.xyz/api/) · [工具](https://sdk.homeagent.jianfgit.xyz/api/tools/) · [阶段钩子](https://sdk.homeagent.jianfgit.xyz/api/stages/) · [记忆](https://sdk.homeagent.jianfgit.xyz/api/memory/) · [输入/输出通道](https://sdk.homeagent.jianfgit.xyz/api/channels/)
-- 指南：[能力边界（哪些 API 外部可用）](https://sdk.homeagent.jianfgit.xyz/guide/capability-boundary/) · [工具并发声明](https://sdk.homeagent.jianfgit.xyz/guide/parallel-tool-declaration/) · [流式多 tool_call](https://sdk.homeagent.jianfgit.xyz/guide/stream-tool-call-index/) · [场景记忆](https://sdk.homeagent.jianfgit.xyz/guide/scene-memory/) · [打包与发布](https://sdk.homeagent.jianfgit.xyz/guide/packaging/)
-- 版本与兼容：<https://sdk.homeagent.jianfgit.xyz/versions/>
-- 核心仓（内核 / 记忆 / 调度）：<https://github.com/JianFeeeee/HomeAgent>
-- 介绍站：<https://introduce.homeagent.jianfgit.xyz/>
+- 文档站：**<https://sdk.hologramagent.jianfgit.xyz/>**
+- 快速开始：[环境与工具链](https://sdk.hologramagent.jianfgit.xyz/guide/getting-started/) · [第一个 Go 插件](https://sdk.hologramagent.jianfgit.xyz/guide/first-plugin/) · [第一个 Lua 插件](https://sdk.hologramagent.jianfgit.xyz/guide/first-lua-plugin/)
+- API 参考：[总览](https://sdk.hologramagent.jianfgit.xyz/api/) · [工具](https://sdk.hologramagent.jianfgit.xyz/api/tools/) · [阶段钩子](https://sdk.hologramagent.jianfgit.xyz/api/stages/) · [记忆](https://sdk.hologramagent.jianfgit.xyz/api/memory/) · [输入/输出通道](https://sdk.hologramagent.jianfgit.xyz/api/channels/)
+- 指南：[能力边界（哪些 API 外部可用）](https://sdk.hologramagent.jianfgit.xyz/guide/capability-boundary/) · [工具并发声明](https://sdk.hologramagent.jianfgit.xyz/guide/parallel-tool-declaration/) · [流式多 tool_call](https://sdk.hologramagent.jianfgit.xyz/guide/stream-tool-call-index/) · [场景记忆](https://sdk.hologramagent.jianfgit.xyz/guide/scene-memory/) · [打包与发布](https://sdk.hologramagent.jianfgit.xyz/guide/packaging/)
+- 版本与兼容：<https://sdk.hologramagent.jianfgit.xyz/versions/>
+- 核心仓（内核 / 记忆 / 调度）：<https://github.com/JianFeeeee/HologramAgent>
+- 介绍站：<https://introduce.hologramagent.jianfgit.xyz/>
 
 > 文档站为自托管（国内直连，不必挂代理）。构建与部署见核心仓的
 > `deploy-sdk-site.sh`（`--check` 只比对、`--rollback` 回滚）。
@@ -1120,4 +1120,4 @@ SDK 以 **MIT** 发布，全文见 [LICENSE](LICENSE)。
 
 第三方组件（Go 依赖：go-sqlite3、gojieba、bubbletea 等，均为 MIT / BSD-3 / Apache-2.0）
 保持各自原有许可。平台侧的模型与推理运行时（Chinese-CLIP Apache-2.0、ONNX Runtime MIT）
-不属于本 SDK，其许可全文随发行包放在 `/usr/share/doc/homeagent/licenses/`。
+不属于本 SDK，其许可全文随发行包放在 `/usr/share/doc/hologram/licenses/`。

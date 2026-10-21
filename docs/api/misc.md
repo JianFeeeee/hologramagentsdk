@@ -79,7 +79,7 @@ controls which events are delivered.
 Subscribe(eventType EventType, handler EventHandler) func()
 ```
 
-<small>`plugin.go:378`</small>
+<small>`plugin.go:427`</small>
 
 ## `IOInjector`
 
@@ -110,7 +110,7 @@ for routing the agent's response.
 InjectInputMedia(source, channel, text string, blocks []ContentBlock)
 ```
 
-<small>`plugin.go:329`</small>
+<small>`plugin.go:378`</small>
 
 ### `IOInjector.InjectInputMediaOpts`
 
@@ -118,7 +118,7 @@ InjectInputMedia(source, channel, text string, blocks []ContentBlock)
 InjectInputMediaOpts(source, channel, text string, blocks []ContentBlock, opts InjectOptions)
 ```
 
-<small>`plugin.go:340`</small>
+<small>`plugin.go:389`</small>
 
 ### `IOInjector.InjectInputMediaSync`
 
@@ -126,7 +126,7 @@ InjectInputMediaOpts(source, channel, text string, blocks []ContentBlock, opts I
 InjectInputMediaSync(source, channel, text string, blocks []ContentBlock) string
 ```
 
-<small>`plugin.go:330`</small>
+<small>`plugin.go:379`</small>
 
 ### `IOInjector.InjectInputMediaSyncOpts`
 
@@ -134,7 +134,7 @@ InjectInputMediaSync(source, channel, text string, blocks []ContentBlock) string
 InjectInputMediaSyncOpts(source, channel, text string, blocks []ContentBlock, opts InjectOptions) string
 ```
 
-<small>`plugin.go:341`</small>
+<small>`plugin.go:390`</small>
 
 ### `IOInjector.InjectInputSync`
 
@@ -152,7 +152,7 @@ InjectInputSync 注入输入事件并同步等待 agent 回复，返回回复文
 | [`a2a`](../examples/index.md#a2a) | `example/a2a/plugin.go:345` | `reply := p.sdk.InjectInputSync(p.name, p.name,` |
 | [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:237` | `reply = p.sdk.InjectInputSync(p.name, p.name,` |
 
-<small>`plugin.go:325`</small>
+<small>`plugin.go:374`</small>
 
 ### `IOInjector.InjectInputSyncOpts`
 
@@ -160,7 +160,7 @@ InjectInputSync 注入输入事件并同步等待 agent 回复，返回回复文
 InjectInputSyncOpts(source, channel, text string, opts InjectOptions) string
 ```
 
-<small>`plugin.go:339`</small>
+<small>`plugin.go:388`</small>
 
 ### `IOInjector.InjectInterruptMedia`
 
@@ -168,7 +168,7 @@ InjectInputSyncOpts(source, channel, text string, opts InjectOptions) string
 InjectInterruptMedia(source, channel, text string, blocks []ContentBlock)
 ```
 
-<small>`plugin.go:331`</small>
+<small>`plugin.go:380`</small>
 
 ### `IOInjector.InjectInterruptMediaOpts`
 
@@ -176,7 +176,7 @@ InjectInterruptMedia(source, channel, text string, blocks []ContentBlock)
 InjectInterruptMediaOpts(source, channel, text string, blocks []ContentBlock, opts InjectOptions)
 ```
 
-<small>`plugin.go:342`</small>
+<small>`plugin.go:391`</small>
 
 ### `IOInjector.InjectInterruptText`
 
@@ -184,7 +184,7 @@ InjectInterruptMediaOpts(source, channel, text string, blocks []ContentBlock, op
 InjectInterruptText(source, channel, text string)
 ```
 
-<small>`plugin.go:320`</small>
+<small>`plugin.go:369`</small>
 
 ### `IOInjector.InjectInterruptTextOpts`
 
@@ -196,12 +196,12 @@ InjectInterruptTextOpts(source, channel, text string, opts InjectOptions)
 
 | 插件 | 位置 | 代码 |
 |---|---|---|
-| [`browser`](../examples/index.md#browser) | `example/browser/plugin.go:1319` | `p.sdk.InjectInterruptTextOpts(p.name, p.name,` |
-| [`calendar`](../examples/index.md#calendar) | `example/calendar/plugin.go:527` | `p.sdk.InjectInterruptTextOpts("calendar", "calendar", msg, sdk.InjectOptions{NoMemory: true})` |
+| [`browser`](../examples/index.md#browser) | `example/browser/plugin.go:1426` | `p.sdk.InjectInterruptTextOpts(p.name, p.name,` |
+| [`calendar`](../examples/index.md#calendar) | `example/calendar/plugin.go:528` | `p.sdk.InjectInterruptTextOpts("calendar", "calendar", msg, sdk.InjectOptions{NoMemory: true})` |
 | [`memo`](../examples/index.md#memo) | `example/memo/plugin.go:299` | `p.sdk.InjectInterruptTextOpts(p.name, p.name,` |
-| [`qq`](../examples/index.md#qq) | `example/qq/plugin.go:1493` | `p.sdk.InjectInterruptTextOpts(p.name, p.name, text, sdk.InjectOptions{` |
+| [`qq`](../examples/index.md#qq) | `example/qq/plugin.go:1894` | `p.sdk.InjectInterruptTextOpts(p.name, p.name, text, sdk.InjectOptions{` |
 
-<small>`plugin.go:338`</small>
+<small>`plugin.go:387`</small>
 
 ### `IOInjector.InjectText`
 
@@ -209,7 +209,13 @@ InjectInterruptTextOpts(source, channel, text string, opts InjectOptions)
 InjectText(source, channel, text string)
 ```
 
-<small>`plugin.go:321`</small>
+**示例插件里的真实用法**
+
+| 插件 | 位置 | 代码 |
+|---|---|---|
+| [`commondev`](../examples/index.md#commondev) | `example/commondev/sidecar.go:673` | `p.sdk.InjectText("commondev", inCh, text)` |
+
+<small>`plugin.go:370`</small>
 
 ### `IOInjector.InjectTextNoMemory`
 
@@ -221,9 +227,9 @@ InjectTextNoMemory(source, channel, text string)
 
 | 插件 | 位置 | 代码 |
 |---|---|---|
-| [`browser`](../examples/index.md#browser) | `example/browser/plugin.go:1114` | `p.sdk.InjectTextNoMemory(p.name, p.name, fmt.Sprintf("[浏览器 %s 已导航到 %s]", id, rawURL))` |
+| [`browser`](../examples/index.md#browser) | `example/browser/plugin.go:1142` | `p.sdk.InjectTextNoMemory(p.name, p.name, fmt.Sprintf("[浏览器 %s 已导航到 %s]", id, rawURL))` |
 
-<small>`plugin.go:322`</small>
+<small>`plugin.go:371`</small>
 
 ### `IOInjector.InjectTextOpts`
 
@@ -236,7 +242,7 @@ InjectTextOpts(source, channel, text string, opts InjectOptions)
 上面那些不带 opts 的方法等价于传零值 InjectOptions（记入记忆 + 不裁剪），
 保留它们是为了不破坏已有插件；新代码应当用 Opts 变体把意图写清楚。
 
-<small>`plugin.go:337`</small>
+<small>`plugin.go:386`</small>
 
 ### `IOInjector.SetToolBlocks`
 
@@ -247,7 +253,63 @@ SetToolBlocks(blocks []ContentBlock)
 SetToolBlocks 插件工具注入多模态内容块（image_url/audio_url），内核在下一条
 tool message 的 content 数组里带上这些块，让模型在后续轮次看到图/听到音频。
 
-<small>`plugin.go:328`</small>
+<small>`plugin.go:377`</small>
+
+## `KernelControlAPI`
+
+KernelControlAPI：插件请求**内核本身**重启或关机。
+
+## 为什么需要它
+
+有些状态变更只能靠重启内核生效（典型：改了 LLM 源、换了主密钥、
+升级了要重新装配的配置）。没有这条通道时，用户只能自己去 ssh 上敲
+systemctl —— 而 WebUI 是大多数人唯一会用的界面。
+
+## 语义边界（重要，别指望它做更多）
+
+这两个方法都是**异步**的：它们只把请求投递给内核，立刻返回。
+调用方（WebUI）应当先给用户一个明确回应（"正在重启，页面稍后自动重连"），
+而不是等待返回 —— 内核真的会在这几秒内消失。
+
+进程会怎么走：
+
+	RequestKernelRestart ⇒ 内核清理（停插件、flush、CloseAll）→ exit 42
+	                       → guard 用**当前二进制**重拉，不经过 systemd、
+	                         不计失败轮次（这就是"热更新"那条路）
+	RequestKernelShutdown ⇒ 内核清理 → 通知 guard 主动停机 → systemd 不再拉起
+
+★ 关机为什么不能用"guard 退出"实现：systemd 是 Restart=always，
+  guard 退出会被它无条件重新拉起。必须显式 `systemctl stop`）
+
+## 失败语义
+
+返回错误只表示**请求没被接受**（例如内核未装配控制通道、或该功能被禁用），
+不表示"没重启成功"——成功投递后本进程就会退出，返回值本身没有后续。
+
+| 方法 | 说明 |
+|---|---|
+| [`RequestKernelRestart`](#kernelcontrolapirequestkernelrestart) | RequestKernelRestart 请求重启内核（热重启，guard 重拉）。 |
+| [`RequestKernelShutdown`](#kernelcontrolapirequestkernelshutdown) | RequestKernelShutdown 请求关闭内核（systemd 不再拉起）。 |
+
+### `KernelControlAPI.RequestKernelRestart`
+
+```go
+RequestKernelRestart(reason string) error
+```
+
+RequestKernelRestart 请求重启内核（热重启，guard 重拉）。
+
+<small>`kernel.go:33`</small>
+
+### `KernelControlAPI.RequestKernelShutdown`
+
+```go
+RequestKernelShutdown(reason string) error
+```
+
+RequestKernelShutdown 请求关闭内核（systemd 不再拉起）。
+
+<small>`kernel.go:35`</small>
 
 ## `KnowledgeAPI`
 
@@ -410,9 +472,12 @@ PluginMgrAPI 提供插件管理能力（外部插件可调用）。
 
 | 方法 | 说明 |
 |---|---|
-| [`IsPluginDisabled`](#pluginmgrapiisplugindisabled) | IsPluginDisabled 查询插件是否被禁用。 |
+| [`IsPluginDisabled`](#pluginmgrapiisplugindisabled) | IsPluginDisabled 查询插件是否被**持久**禁用。 |
+| [`IsPluginRuntimeStopped`](#pluginmgrapiispluginruntimestopped) | IsPluginRuntimeStopped 查询插件是否处于运行态关闭。 |
 | [`ListLoadedPlugins`](#pluginmgrapilistloadedplugins) | ListLoadedPlugins 列出已加载插件。 |
 | [`ReloadOne`](#pluginmgrapireloadone) | ReloadOne 重载单个插件（停止后重新加载）。 |
+| [`StartPlugin`](#pluginmgrapistartplugin) | StartPlugin 运行态启动：现在拉起，**不解除持久禁用**。 |
+| [`StopPlugin`](#pluginmgrapistopplugin) | StopPlugin 运行态关闭：现在停掉，**不改持久状态**。重启后按 |
 
 ### `PluginMgrAPI.IsPluginDisabled`
 
@@ -420,9 +485,19 @@ PluginMgrAPI 提供插件管理能力（外部插件可调用）。
 IsPluginDisabled(name string) bool
 ```
 
-IsPluginDisabled 查询插件是否被禁用。
+IsPluginDisabled 查询插件是否被**持久**禁用。
 
-<small>`plugin.go:389`</small>
+<small>`plugin.go:438`</small>
+
+### `PluginMgrAPI.IsPluginRuntimeStopped`
+
+```go
+IsPluginRuntimeStopped(name string) bool
+```
+
+IsPluginRuntimeStopped 查询插件是否处于运行态关闭。
+
+<small>`plugin.go:465`</small>
 
 ### `PluginMgrAPI.ListLoadedPlugins`
 
@@ -432,7 +507,7 @@ ListLoadedPlugins() []string
 
 ListLoadedPlugins 列出已加载插件。
 
-<small>`plugin.go:387`</small>
+<small>`plugin.go:436`</small>
 
 ### `PluginMgrAPI.ReloadOne`
 
@@ -442,7 +517,292 @@ ReloadOne(name string) error
 
 ReloadOne 重载单个插件（停止后重新加载）。
 
-<small>`plugin.go:385`</small>
+<small>`plugin.go:434`</small>
+
+### `PluginMgrAPI.StartPlugin`
+
+```go
+StartPlugin(name string) error
+```
+
+StartPlugin 运行态启动：现在拉起，**不解除持久禁用**。
+
+被持久禁用的插件会被拒绝（提示先用 EnablePlugin）——
+持久禁用是用户的明确决定，运行态操作不该绕过它。
+
+<small>`plugin.go:463`</small>
+
+### `PluginMgrAPI.StopPlugin`
+
+```go
+StopPlugin(name string) error
+```
+
+StopPlugin 运行态关闭：现在停掉，**不改持久状态**。重启后按
+auto_start + disabled_plugins 正常决定。
+
+拒绝作用于 pluginmgr 自身与 webui（自锁/失联，内核层面拦死）。
+
+<small>`plugin.go:458`</small>
+
+## `RawFilesAPI`
+
+RawFilesAPI 让插件读写**随包分发的资源**（rawfile）。
+
+## 是什么
+
+`hmapdev build` 会把工程根 `rawfile/` 下的全部内容（以及 plg.json
+`rawfiles` 声明的外部路径）打进 .hmap；内核解包时保留路径，落到：
+
+	<插件目录>/rawfile/<原相对路径>
+
+本接口就是插件读这些资源的唯一入口。
+
+## 为什么不让插件自己拼路径
+
+插件**不知道自己的安装目录**：内核的 `PluginDir()` 是给插件管理器用的，
+不暴露给插件自身。而且"包内资源"与"运行期生成的文件"必须分开 ——
+前者只读、随升级替换，后者可写、跨升级保留。混在一个目录里，
+升级时会误删运行期数据，或把旧资源留在原地。
+
+所以：
+
+	RawFiles().Read("main/prompt.txt")   → 读**包内**资源（只读）
+	RawFiles().WorkDir()                 → 拿**可写**工作目录（运行期数据放这）
+
+## 安全边界
+
+所有路径都相对 rawfile/ 根，**必须拒绝路径穿越**（`../`）。
+资源文件来自包，包可能被替换 —— 让插件能借它读到 `/etc/shadow`
+就是一个真实的提权面。
+
+| 方法 | 说明 |
+|---|---|
+| [`Dir`](#rawfilesapidir) | Dir 返回包内资源的根目录（只读）。 |
+| [`Exists`](#rawfilesapiexists) | Exists 报告某个资源是否存在。 |
+| [`List`](#rawfilesapilist) | List 列出某个目录下的条目（相对 rawfile/ 根；"" 表示根）。 |
+| [`Read`](#rawfilesapiread) | Read 读一个包内资源（路径相对 rawfile/ 根）。 |
+| [`WorkDir`](#rawfilesapiworkdir) | WorkDir 返回一个**可写**目录，供插件放运行期生成的文件。 |
+
+### `RawFilesAPI.Dir`
+
+```go
+Dir() string
+```
+
+Dir 返回包内资源的根目录（只读）。
+
+给需要把整个目录交给外部工具的插件用（如把 node 目录的路径
+传给 exec.Command）。**不要往这里写东西** —— 它在包里，随升级替换。
+
+<small>`rawfiles.go:49`</small>
+
+### `RawFilesAPI.Exists`
+
+```go
+Exists(rel string) bool
+```
+
+Exists 报告某个资源是否存在。
+
+<small>`rawfiles.go:43`</small>
+
+### `RawFilesAPI.List`
+
+```go
+List(rel string) ([]string, error)
+```
+
+List 列出某个目录下的条目（相对 rawfile/ 根；"" 表示根）。
+
+返回的名字是**相对 path 的单层名**（不是全路径），目录名带 `/` 后缀。
+
+<small>`rawfiles.go:40`</small>
+
+### `RawFilesAPI.Read`
+
+```go
+Read(rel string) ([]byte, error)
+```
+
+Read 读一个包内资源（路径相对 rawfile/ 根）。
+
+例：Read("main/prompt.txt") 读 <插件目录>/rawfile/main/prompt.txt。
+
+<small>`rawfiles.go:35`</small>
+
+### `RawFilesAPI.WorkDir`
+
+```go
+WorkDir() string
+```
+
+WorkDir 返回一个**可写**目录，供插件放运行期生成的文件。
+
+与 Dir() 分开的原因：Dir() 里的东西随升级被整体替换，
+运行期数据放那里会在下次升级时丢失。
+
+<small>`rawfiles.go:55`</small>
+
+## `SecretsAPI`
+
+SecretsAPI 是插件访问**内核变量库**的接口。
+
+## 为什么要有它（去重）
+
+在此之前，commondev 插件自带了一整套加密存储（`secrets.json` +
+AES-256-GCM + 别名表 + `${ENV}` 解析），与内核的 `internal/security`
+**完全重复**：
+
+	             内核 security.Store        插件 unifiedSecretFile
+	  落盘        secrets.json               secrets.json
+	  加密        AES-256-GCM                AES-256-GCM
+	  别名        HMAC 自动派生              用户指定
+	  引用语法     @{sec_xxx}                 @{name}
+
+重复的代价不只是代码量：**两套变量库互不可见** —— 内核拦截时登记的
+变量，插件看不到；插件登记的，内核拦截不认识。结果是同一个凭据可能
+在两处各存一份，而使用者不知道哪个才是权威。
+
+## ★ 安全设计：明文的边界
+
+内核的硬约束 S1 是「不提供取回明文的接口」—— 理由是一旦 LLM 能取回，
+它就能把明文写回上下文，整层防护作废。
+
+那为什么插件可以拿到明文？因为**边界不在插件侧**：
+
+	① 内核在**插件 handler 之前**就把工具参数里的 @{别名} 填好了
+	   （`StageHost.ExecuteTool` → `security.FillMap`）—— 插件本来
+	   就能从 args 里读到明文，这是设计使然（否则插件无法用凭据）。
+	② 明文若被插件**返回**给内核，会被两处拦回别名：
+	   · `ContextEvent` 的 scrub（记忆/历史侧路）
+	   · provider 装饰器（出向，LLM 永不看到）
+
+两条都有判据钉住（`leakback_test.go`）。所以：
+
+	**暴露 Fill 不新增泄漏面** —— 它不是「开了一个口子」，
+	而是把「本来就存在的能力」从各插件自己实现改为统一接口。
+
+⚠️ 但绝不能暴露 `Reveal(alias) -> 明文` 这样的**按名字直取**接口：
+那会让插件（以及通过插件操纵它的 LLM）枚举别名并逐个取值。
+本接口刻意**没有**这样的方法 —— 见下面 Fill 与 List 的签名。
+
+## 与 Encrypt/Decrypt 的区别
+
+插件常把凭据存进自己的配置文件（如 pi 的 `auth.json`）。那些文件权限
+0600 但**明文落盘**。`Encrypt`/`Decrypt` 提供 at-rest 加密，
+密钥由内核统一管理，插件不必自持密钥（自持会让密钥散落、无法轮换）。
+
+| 方法 | 说明 |
+|---|---|
+| [`Available`](#secretsapiavailable) | Available 报告变量库是否可用（内核未启用安全模块时为 false）。 |
+| [`Decrypt`](#secretsapidecrypt) | Decrypt 解密由 Encrypt 产生的串。 |
+| [`Encrypt`](#secretsapiencrypt) | Encrypt 加密一段字节用于插件自己落盘（密钥由内核管理）。 |
+| [`Fill`](#secretsapifill) | Fill 把一段文本里的 @{别名} 换成明文。 |
+| [`Forget`](#secretsapiforget) | Forget 按别名删除一个变量。 |
+| [`List`](#secretsapilist) | List 列出变量库的元信息（别名/来源/备注/命中次数）—— **不含明文**。 |
+| [`Store`](#secretsapistore) | Store 把一个凭据登记进内核变量库，返回其**别名**。 |
+
+### `SecretsAPI.Available`
+
+```go
+Available() bool
+```
+
+Available 报告变量库是否可用（内核未启用安全模块时为 false）。
+
+★ 插件应据此**响亮失败**而不是静默降级 —— 例如
+「密钥不可用 ⇒ 拒绝明文存储」。
+
+<small>`secrets.go:100`</small>
+
+### `SecretsAPI.Decrypt`
+
+```go
+Decrypt(stored string) ([]byte, error)
+```
+
+Decrypt 解密由 Encrypt 产生的串。
+
+<small>`secrets.go:94`</small>
+
+### `SecretsAPI.Encrypt`
+
+```go
+Encrypt(plain []byte) (string, error)
+```
+
+Encrypt 加密一段字节用于插件自己落盘（密钥由内核管理）。
+返回的串带版本前缀，可直接存文件。
+
+<small>`secrets.go:91`</small>
+
+### `SecretsAPI.Fill`
+
+```go
+Fill(text string) (out string, replaced int, aliases []string)
+```
+
+Fill 把一段文本里的 @{别名} 换成明文。
+
+用途：插件需要把明文喂给**不经过内核参数回填**的地方 ——
+例如 commondev 的 enc_shell 要把命令经 **stdin** 送给 bash
+（不是 argv，避免本机其他进程从 /proc/<pid>/cmdline 读到明文）。
+
+★ 为什么这个方法是安全的（而不是"开了个取回明文的口子"）：
+插件**本来就**能从 `args` 里拿到内核填好的明文 ——
+内核在 handler 之前就填了。Fill 只是让插件能对**自己构造的文本**
+做同样的事（如读文件内容、拼一段脚本）。
+
+它**不是**按名字直取：要填谁必须先在文本里写出那个别名，
+而别名本身不泄漏明文（HMAC 派生）。想枚举就得先 List，
+而 List 只给元信息 —— 拿到别名后仍只能用，不能读回。
+
+返回替换处数与用到的别名（便于插件做输出脱敏时的比对）。
+
+<small>`secrets.go:87`</small>
+
+### `SecretsAPI.Forget`
+
+```go
+Forget(alias string) error
+```
+
+Forget 按别名删除一个变量。
+
+★ 变量库**不自动淘汰**（用户明确）：泄漏控制靠主动删除，不靠超时。
+所以凭据用完后应主动删。
+
+<small>`secrets.go:69`</small>
+
+### `SecretsAPI.List`
+
+```go
+List() []SecretInfo
+```
+
+List 列出变量库的元信息（别名/来源/备注/命中次数）—— **不含明文**。
+
+★ 刻意返回元信息而非值：调用方拿不到明文，只能引用。
+
+<small>`secrets.go:63`</small>
+
+### `SecretsAPI.Store`
+
+```go
+Store(value, note string) (alias string, err error)
+```
+
+Store 把一个凭据登记进内核变量库，返回其**别名**。
+
+之后在工具参数里写 @{别名}，内核会在调用插件前换回真实值。
+
+★ 只返回别名，不回显明文 —— 避免插件（或它转述给 LLM 的内容）
+顺带把明文带出去。
+
+note 是给人看的用途说明（如「Gitea 推送令牌」）。
+
+<small>`secrets.go:58`</small>
 
 ## `SettingsAPI`
 
@@ -454,6 +814,7 @@ ReloadOne 重载单个插件（停止后重新加载）。
 | [`Get`](#settingsapiget) | Get reads the plugin's own config value (config_<name> table). |
 | [`GetCore`](#settingsapigetcore) | GetCore reads the core config table. |
 | [`GetPlugin`](#settingsapigetplugin) | GetPlugin reads another plugin's config table. |
+| [`GetSecret`](#settingsapigetsecret) | GetSecret reads a value written by SetSecret (transparently decrypted). |
 | [`List`](#settingsapilist) | List returns all keys matching the given prefix. |
 | [`ListCore`](#settingsapilistcore) | ListCore lists core config keys matching the prefix. |
 | [`ListPlugin`](#settingsapilistplugin) | ListPlugin lists another plugin's config keys matching the prefix. |
@@ -462,6 +823,7 @@ ReloadOne 重载单个插件（停止后重新加载）。
 | [`Set`](#settingsapiset) | Set writes a config value to the plugin's own config table. |
 | [`SetCore`](#settingsapisetcore) | SetCore writes to the core config table. |
 | [`SetPlugin`](#settingsapisetplugin) | SetPlugin writes to another plugin's config table. |
+| [`SetSecret`](#settingsapisetsecret) | SetSecret writes a value that is ALWAYS encrypted at rest, regardless of |
 
 ### `SettingsAPI.DataDir`
 
@@ -473,7 +835,7 @@ DataDir returns the plugin-specific data directory (guaranteed to exist):
 <daemon data>/plugin_data/<plugin_name>. Plugins should persist any
 runtime files (generated images, caches, downloads) here.
 
-<small>`settings.go:25`</small>
+<small>`settings.go:40`</small>
 
 ### `SettingsAPI.Defs`
 
@@ -483,7 +845,7 @@ Defs(prefix string) []*ConfigDef
 
 Defs returns config definitions matching the prefix.
 
-<small>`settings.go:40`</small>
+<small>`settings.go:55`</small>
 
 ### `SettingsAPI.Dump`
 
@@ -493,7 +855,7 @@ Dump() map[string]interface{}
 
 Dump returns all config values.
 
-<small>`settings.go:43`</small>
+<small>`settings.go:58`</small>
 
 ### `SettingsAPI.Get`
 
@@ -513,7 +875,7 @@ GetCore(key string) (interface{}, error)
 
 GetCore reads the core config table.
 
-<small>`settings.go:14`</small>
+<small>`settings.go:29`</small>
 
 ### `SettingsAPI.GetPlugin`
 
@@ -523,7 +885,17 @@ GetPlugin(plugin, key string) (interface{}, error)
 
 GetPlugin reads another plugin's config table.
 
-<small>`settings.go:28`</small>
+<small>`settings.go:43`</small>
+
+### `SettingsAPI.GetSecret`
+
+```go
+GetSecret(key string) (string, error)
+```
+
+GetSecret reads a value written by SetSecret (transparently decrypted).
+
+<small>`settings.go:23`</small>
 
 ### `SettingsAPI.List`
 
@@ -533,7 +905,7 @@ List(prefix string) ([]string, error)
 
 List returns all keys matching the given prefix.
 
-<small>`settings.go:11`</small>
+<small>`settings.go:26`</small>
 
 ### `SettingsAPI.ListCore`
 
@@ -543,7 +915,7 @@ ListCore(prefix string) ([]string, error)
 
 ListCore lists core config keys matching the prefix.
 
-<small>`settings.go:20`</small>
+<small>`settings.go:35`</small>
 
 ### `SettingsAPI.ListPlugin`
 
@@ -553,7 +925,7 @@ ListPlugin(plugin, prefix string) ([]string, error)
 
 ListPlugin lists another plugin's config keys matching the prefix.
 
-<small>`settings.go:34`</small>
+<small>`settings.go:49`</small>
 
 ### `SettingsAPI.Plugins`
 
@@ -563,7 +935,7 @@ Plugins() []string
 
 Plugins returns a list of all plugin config namespaces.
 
-<small>`settings.go:46`</small>
+<small>`settings.go:61`</small>
 
 ### `SettingsAPI.RegisterDef`
 
@@ -573,7 +945,7 @@ RegisterDef(def ConfigDef)
 
 RegisterDef registers a config definition for UI display.
 
-<small>`settings.go:37`</small>
+<small>`settings.go:52`</small>
 
 ### `SettingsAPI.Set`
 
@@ -593,7 +965,7 @@ SetCore(key string, value interface{}) error
 
 SetCore writes to the core config table.
 
-<small>`settings.go:17`</small>
+<small>`settings.go:32`</small>
 
 ### `SettingsAPI.SetPlugin`
 
@@ -603,7 +975,26 @@ SetPlugin(plugin, key string, value interface{}) error
 
 SetPlugin writes to another plugin's config table.
 
-<small>`settings.go:31`</small>
+<small>`settings.go:46`</small>
+
+### `SettingsAPI.SetSecret`
+
+```go
+SetSecret(key string, value interface{}) error
+```
+
+SetSecret writes a value that is ALWAYS encrypted at rest, regardless of
+the key name. Use it when the key name is neutral (e.g. "blob", "conn")
+and so cannot be detected as sensitive automatically.
+
+Returns an error (not a silent plaintext write) when no master key is
+installed — a plugin that believes it stored a secret must not end up
+with plaintext on disk.
+
+The companion read is GetSecret. ConfigDef.Secret/Type=="password" and
+sensitive key names are encrypted automatically and do NOT need this.
+
+<small>`settings.go:20`</small>
 
 ## `SocialAPI`
 
@@ -680,7 +1071,29 @@ Append(evt TextEvent) error
 type AudioURL struct { URL string `json:"url"` }
 ```
 
-<small>`plugin.go:966`</small>
+<small>`plugin.go:1098`</small>
+
+### `AutoStartOnDemand`
+
+```go
+const AutoStartOnDemand
+```
+
+AutoStartOnDemand 表示启用但不自启：待 agent 显式拉起。
+
+★ 用它的插件必须配 skill，否则 agent 无从得知要先拉起。
+
+<small>`autostart.go:68`</small>
+
+### `AutoStartOnKernel`
+
+```go
+const AutoStartOnKernel
+```
+
+AutoStartOnKernel 表示伴随内核启动（缺少该字段时的默认形态）。
+
+<small>`autostart.go:64`</small>
 
 ### `EffectiveProxyAuth`
 
@@ -709,7 +1122,147 @@ Error 实现 error，便于工具同时走 (ToolError, error) 通道。
 | [`ai_image`](../examples/index.md#ai_image) | `example/ai_image/plugin.go:259` | `return map[string]interface{}{"isError": true, "content": "Request failed: " + err.Error()}, nil` |
 | [`browser`](../examples/index.md#browser) | `example/browser/plugin_test.go:15` | `if err == nil \|\| !strings.Contains(err.Error(), "timeout is required") {` |
 
-<small>`plugin.go:264`</small>
+<small>`plugin.go:294`</small>
+
+### `FacilityAgent`
+
+```go
+const FacilityAgent
+```
+
+FacilityAgent 是主 Agent 就绪（**最晚**的一个，通常在插件加载前）。
+
+<small>`facilities.go:63`</small>
+
+### `FacilityConfig`
+
+```go
+const FacilityConfig
+```
+
+FacilityConfig 是配置快照（cfg）就绪。
+
+<small>`facilities.go:37`</small>
+
+### `FacilityDocStore`
+
+```go
+const FacilityDocStore
+```
+
+FacilityDocStore 是文档记忆就绪。
+
+<small>`facilities.go:53`</small>
+
+### `FacilityKernelIO`
+
+```go
+const FacilityKernelIO
+```
+
+FacilityKernelIO 是 IOManager + EventBus 就绪。
+
+<small>`facilities.go:39`</small>
+
+### `FacilityKnowledge`
+
+```go
+const FacilityKnowledge
+```
+
+FacilityKnowledge 是知识库就绪。
+
+<small>`facilities.go:55`</small>
+
+### `FacilityLLM`
+
+```go
+const FacilityLLM
+```
+
+FacilityLLM 是多源 Provider 管理就绪。
+
+<small>`facilities.go:51`</small>
+
+### `FacilityLua`
+
+```go
+const FacilityLua
+```
+
+FacilityLua 是 Lua 协议适配 VM 就绪。
+
+<small>`facilities.go:43`</small>
+
+### `FacilityMemory`
+
+```go
+const FacilityMemory
+```
+
+FacilityMemory 是图记忆（含索引/社交图/蒸馏）就绪。
+
+<small>`facilities.go:41`</small>
+
+### `FacilityMultimodal`
+
+```go
+const FacilityMultimodal
+```
+
+FacilityMultimodal 是多模态向量空间就绪。
+
+<small>`facilities.go:57`</small>
+
+### `FacilityONNX`
+
+```go
+const FacilityONNX
+```
+
+FacilityONNX 是依存句法分析器就绪。
+
+<small>`facilities.go:59`</small>
+
+### `FacilityStageHost`
+
+```go
+const FacilityStageHost
+```
+
+FacilityStageHost 是阶段管道 + 插件注册表就绪。
+
+<small>`facilities.go:61`</small>
+
+### `FacilitySupervisor`
+
+```go
+const FacilitySupervisor
+```
+
+FacilitySupervisor 是代理生命周期守护就绪。
+
+<small>`facilities.go:45`</small>
+
+### `FacilityTextMemory`
+
+```go
+const FacilityTextMemory
+```
+
+FacilityTextMemory 是文本记忆就绪。
+
+<small>`facilities.go:49`</small>
+
+### `FacilityTracker`
+
+```go
+const FacilityTracker
+```
+
+FacilityTracker 是变更追踪（overlayfs）就绪。
+
+<small>`facilities.go:47`</small>
 
 ### `ImageURL`
 
@@ -717,7 +1270,34 @@ Error 实现 error，便于工具同时走 (ToolError, error) 通道。
 type ImageURL struct { URL string `json:"url"` Detail string `json:"detail,omitempty"` }
 ```
 
-<small>`plugin.go:961`</small>
+<small>`plugin.go:1093`</small>
+
+### `PluginSDK.KernelControl`
+
+```go
+func (s *PluginSDK) KernelControl() KernelControlAPI
+```
+
+KernelControl returns the kernel control API (restart / shutdown).
+
+可能为 nil（宿主没接这条通道，或插件没有 kernel-control 能力组）。
+调用方必须判 nil —— 拿到 nil 时应当如实告知用户"当前环境不支持"，
+而不是假装点了没反应的按钮还能用。
+
+<small>`plugin.go:889`</small>
+
+### `KnownFacilities`
+
+```go
+func KnownFacilities() []string
+```
+
+KnownFacilities 返回本 SDK 已知的全部设施名（供工具链校验插件声明）。
+
+★ 它让**打包期**就能发现"插件声明了不存在的设施名" —— 比运行期发现早得多
+（运行期发现意味着用户已经装上了那个永不启动的插件）。
+
+<small>`facilities.go:70`</small>
 
 ### `MemItem`
 
@@ -727,7 +1307,7 @@ type MemItem struct { Role string `json:"role"` Content string `json:"content"` 
 
 MemItem represents a memory item in stage context.
 
-<small>`plugin.go:220`</small>
+<small>`plugin.go:250`</small>
 
 ### `NormalizeProxyHost`
 
@@ -742,6 +1322,26 @@ NormalizeProxyHost 由插件名派生默认 Host 标签。
 
 <small>`proxy.go:202`</small>
 
+### `OnDemandNeedsSkill`
+
+```go
+const OnDemandNeedsSkill
+```
+
+OnDemandNeedsSkill 说明 auto_start=false 的插件为什么必须有 skill。
+
+这条不是"建议"而是**功能完整性的一部分**：
+
+	插件写了 auto_start=false 但没配 skill
+	  ⇒ 该插件的工具不出现在工具的初始清单里
+	  ⇒ 模型不知道它存在
+	  ⇒ 它永远不会被调用，也永远不会被拉起
+
+也就是说，缺少 skill 的按需插件等价于**没装**，但比没装更糟 ——
+它占着磁盘和安装记录，让人以为它可用。
+
+<small>`autostart.go:82`</small>
+
 ### `PluginSDK`
 
 ```go
@@ -751,7 +1351,7 @@ type PluginSDK struct { name string regTool ToolRegistrar regStage StageRegistra
 PluginSDK is the main API surface provided to plugins at runtime.
 It wraps tool registration, settings, memory, knowledge, LLM, and IO injection.
 
-<small>`plugin.go:436`</small>
+<small>`plugin.go:512`</small>
 
 ### `ProxyAuthHomeAgent`
 
@@ -759,7 +1359,7 @@ It wraps tool registration, settings, memory, knowledge, LLM, and IO injection.
 const ProxyAuthHomeAgent
 ```
 
-ProxyAuthHomeAgent 表示由 HomeAgent 统一保护：浏览器走门户会话
+ProxyAuthHomeAgent 表示由 HologramAgent 统一保护：浏览器走门户会话
 （homeagent_session cookie），非浏览器客户端走 X-API-Key。
 两者都没有时返回 401，而不是把请求透传给上游。
 
@@ -771,7 +1371,7 @@ ProxyAuthHomeAgent 表示由 HomeAgent 统一保护：浏览器走门户会话
 const ProxyAuthNone
 ```
 
-ProxyAuthNone 表示不经 HomeAgent 鉴权，直接把请求转发给上游。
+ProxyAuthNone 表示不经 HologramAgent 鉴权，直接把请求转发给上游。
 
 适用场景：上游自己有鉴权且调用方不是浏览器（设备/嵌入式客户端），
 或上游是刻意公开的服务。选用它意味着**信任上游自身的鉴权**，
@@ -785,20 +1385,20 @@ ProxyAuthNone 表示不经 HomeAgent 鉴权，直接把请求转发给上游。
 type ProxyDef struct { // Name 是同一插件内多条声明的唯一标识（如 "ui"、"api"）。 // 运行期由 RegisterProxy 的第一个参数填入；声明式由 …
 ```
 
-反向代理声明：插件告诉 HomeAgent「我起了个 HTTP 服务，请把它反代出去」。
+反向代理声明：插件告诉 HologramAgent「我起了个 HTTP 服务，请把它反代出去」。
 
 为什么需要：插件自带 Web UI / HTTP API 时，监听地址在插件自己的配置里
 （如 127.0.0.1:12100），外部无从得知；而 webui 的对外端口通常只有一个
 （默认 :8080，且常经 frp 单端口隧道穿透）。没有声明机制时，用户只能
 「知道端口 + 自己配转发」，插件换端口就失效。
 
-设计取舍——**声明式而非注册式**：声明写在 plugin.json 里，由 HomeAgent
+设计取舍——**声明式而非注册式**：声明写在 plugin.json 里，由 HologramAgent
 在加载插件时读取聚合，而不是让插件在运行期调 API 注册。理由：
  1. 静态可发现：未启动/已崩溃的插件，其服务声明依然可见（可给出准确报错
     「插件 X 声明了 ui 但目标 127.0.0.1:12100 不可达」，而不是静默 404）；
  2. 可版本化：声明随插件包一起分发、可 diff、可审计；
- 3. 旧内核无害：manifest 解析忽略未知字段，未支持该能力的 HomeAgent 读旧
-    插件、或旧 HomeAgent 读新插件都不会报错。
+ 3. 旧内核无害：manifest 解析忽略未知字段，未支持该能力的 HologramAgent 读旧
+    插件、或旧 HologramAgent 读新插件都不会报错。
 
 与 ToolDef / ChannelDef / ConfigDef 同族：SDK 定义声明契约，内核实现行为。
 声明方式与其它能力一致 —— 在 Start() 里调 RegisterProxy(name, def)，
@@ -860,13 +1460,33 @@ ProxyRegistrar 由内核注入（与 ToolRegistrar / InputChannelRegistrar 同�
 
 <small>`proxy.go:306`</small>
 
+### `PluginSDK.RawFiles`
+
+```go
+func (s *PluginSDK) RawFiles() RawFilesAPI
+```
+
+SetMemoryAPI sets the memory API (called by the core at startup).
+RawFiles 返回随包分发资源的读取接口（内核装配时注入）。
+
+未注入时返回 nil —— 那是旧内核或测试环境。插件应判空后**响亮失败**，
+而不是拿一个空实现继续（会表现为"资源读出来是空的"，与"资源不存在"难区分）。
+
+**示例插件里的真实用法**
+
+| 插件 | 位置 | 代码 |
+|---|---|---|
+| [`commondev`](../examples/index.md#commondev) | `example/commondev/sidecar.go:573` | `return p.sdk.RawFiles()` |
+
+<small>`plugin.go:799`</small>
+
 ### `PluginSDK.RegisterProxy`
 
 ```go
 func (s *PluginSDK) RegisterProxy(name string, def ProxyDef)
 ```
 
-RegisterProxy 声明一个需要 HomeAgent 反代出去的服务。
+RegisterProxy 声明一个需要 HologramAgent 反代出去的服务。
 
 与 RegisterTool / RegisterInputChannel / RegisterOutputChannel 同一风格：
 显式给名字 + 声明体。名字用于展示、日志与冲突提示（不参与路由 —— 路由键是
@@ -954,6 +1574,36 @@ strength、0 条记忆，场景召回返回空；而 declared 场景不进相似
 
 <small>`plugin.go:99`</small>
 
+### `SecretInfo`
+
+```go
+type SecretInfo struct { Alias string `json:"alias"` Source string `json:"source"` // intercepted | submitted Note string `json:"note,omitempty"` …
+```
+
+SecretInfo 是一条变量的元信息（**不含明文**）。
+
+<small>`secrets.go:104`</small>
+
+### `PluginSDK.Secrets`
+
+```go
+func (s *PluginSDK) Secrets() SecretsAPI
+```
+
+Social returns the social graph API (may be nil if not available).
+Secrets returns the kernel secret vault API.
+
+★ 内核未启用安全模块时它**不是 nil**，而是 Available() 返回 false 的
+实现 —— 这样插件可以统一地"先问 Available 再决定"，不必到处判空。
+
+**示例插件里的真实用法**
+
+| 插件 | 位置 | 代码 |
+|---|---|---|
+| [`commondev`](../examples/index.md#commondev) | `example/commondev/encstore.go:397` | `return p.sdk.Secrets()` |
+
+<small>`plugin.go:626`</small>
+
 ### `PluginSDK.SetProxyRegistrar`
 
 ```go
@@ -980,7 +1630,7 @@ JSON 写坏，工具却只回报 "command is required" 这类与真因无关的�
 （{"error":…}、{"isError":true,…}、显式 error 返回），见 core.isToolError。
 本类型是给**新写**的工具用的可选项，不是迁移要求。
 
-<small>`plugin.go:252`</small>
+<small>`plugin.go:282`</small>
 
 ### `PluginSDK.UnregisterOutputChannel`
 
@@ -993,7 +1643,7 @@ func (s *PluginSDK) UnregisterOutputChannel(name string) error
 
 UnregisterOutputChannel 注销一个输出通道（动态通道随资源生灭时必须调用）。
 
-<small>`plugin.go:643`</small>
+<small>`plugin.go:732`</small>
 
 ### `ValidProxyAuth`
 
@@ -1013,7 +1663,7 @@ func ValidProxyHostLabel(label string) bool
 
 ValidProxyHostLabel 校验子域名标签是否合法（DNS label 规则）。
 
-独立成导出函数：插件作者在写声明时、HomeAgent 在加载时、工具链在打包时
+独立成导出函数：插件作者在写声明时、HologramAgent 在加载时、工具链在打包时
 都要用同一套规则判定，避免三处各写一份而互相不一致。
 
 <small>`proxy.go:180`</small>
@@ -1036,7 +1686,7 @@ func ValidateProxyDef(d ProxyDef) string
 
 ValidateProxyDef 校验一条反代声明，返回人类可读的错误说明（合法时为空）。
 
-为什么要在 SDK 里做校验：HomeAgent 加载插件时必须能明确拒绝坏声明并说明
+为什么要在 SDK 里做校验：HologramAgent 加载插件时必须能明确拒绝坏声明并说明
 原因（而不是静默忽略导致用户以为配好了）；插件作者也需要在本地就能查出
 拼错的 Target/Host。同一套规则两端共用。
 
