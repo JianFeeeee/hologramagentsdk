@@ -302,7 +302,8 @@ resident_agents create
                        下任务给执行后端用 output_send__commondev_<br-id>(payload=…)，
                        执行后端的输出会回投到你的 commondev/<br-id>。
                        向上级（父 agent）汇报：有结论/卡住/需要决策时用 notify_parent；
-                       不越级：不要绕过分管直接给执行层下结论，也不要越过父 agent 自行拍板。"
+                       不越级：结论先报父 agent，不越过父 agent 直接给执行层下结论、
+                       也不自行拍板下级线的成败。"
 ```
 
 **★ 汇报方向是单向的**：驻留子 → 父 agent（`notify_parent`）→ 人。驻留子**不**向执行后端
