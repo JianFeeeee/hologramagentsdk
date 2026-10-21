@@ -170,3 +170,67 @@ func absUnderPackage(t *testing.T, rel string) string {
 	}
 	return a
 }
+
+// ===== 「本机有没有这个可执行文件」的前置条件（带可复现说明）=====
+//
+// ## 为什么需要这两条 helper
+//
+// 有两条判据要通过**产品自己的解析链**去起一个真进程：
+//
+//	TestPiMcpListOnFreshInstall     → p.piBin()  → 起 `pi mcp list --json`
+//	TestSwappingDriverSwapsBackend  → p.nodeBin() → 起 node 跑假 sidecar
+//
+// 机器上缺那个二进制时，它们原来直接 **FAIL**（而不是 skip）：
+//
+//	★ 无配置时不该报错: map[error:exec: "pi": executable file not found in $PATH …]
+//	★ 换驱动后启动失败（核心仍依赖 pi？）: 找不到 node（… 也可设 node_bin 或用 PATH）
+//
+// 这两条红**红在机器没装东西**，与被测代码无关 —— 即是「真红，但原因错了」。
+// 它威胁 CI：examples-tests job 会跑 commondev，某天 runner 缺 node/pi
+// 就会红，而红的原因跟被测代码无关。
+//
+// ## 处置口径（三条）
+//
+//  1. **有就必须真跑**：skip 只在"确实没有"时发生。判断用**产品自己的**
+//     piBin()/nodeBin() —— 不用另写一套 "LookPath 一下" 的判据，
+//     否则判据与产品行为会漂移（产品改了查找链，skip 判据还在看旧位置）。
+//  2. **缺就 skip 并说清三件事**：缺哪个二进制、这条原本会验证什么、
+//     装/配了什么之后才算真验过。不写一句"跳过"。
+//  3. skip 数变化必须如实记账（脚本会把 skip 名单打进日志）。
+
+// requirePiBinary 断言"产品能找到 pi"，否则 skip 并说明原始验什么、怎么补上。
+//
+// 判据用 p.piBin() 而不是 exec.LookPath("pi")：后者会忽略
+// `pi_bin` 配置与 `<插件数据>/runtime/pi` 这两条产品支持的来源，
+// 于是"用户配了 pi_bin 但 PATH 上没有"这种合法部署会被误判成缺失。
+func requirePiBinary(t *testing.T, p *Plugin) string {
+	t.Helper()
+	bin := p.piBin()
+	if _, err := exec.LookPath(bin); err != nil && !fileExists(bin) {
+		t.Skipf("跳过：本机找不到 pi 可执行文件（p.piBin() 解析到 %q，LookPath/stat 都失败）。"+
+			"本条判据原本要验证的是：**全新安装（无 mcp.json）时 pi_mcp_list 不得报错、应回空列表** —— "+
+			"它要真起一次 `pi mcp list --json` 才能判断，没有 pi 就没法验（不是被测代码有问题）。"+
+			"补上：装 pi（npm i -g @earendil-works/pi-coding-agent）、"+
+			"或把 <插件数据>/runtime/pi 放好、或用 settings 的 pi_bin 指到真实路径。", bin)
+	}
+	return bin
+}
+
+// requireNodeBinary 断言"产品能找到 node"，否则 skip 并说明原始验什么。
+//
+// 同样用 p.nodeBin()：产品支持 node_bin / 随包 rawfile/node/bin/node / PATH 三级，
+// 判据若只看 PATH 就会把"随包 node 已就位"的部署误判成缺失。
+func requireNodeBinary(t *testing.T, p *Plugin) string {
+	t.Helper()
+	bin := p.nodeBin()
+	if bin == "" {
+		t.Skipf("跳过：本机找不到 node（p.nodeBin() 三级链全部落空：settings.node_bin、" +
+			"<插件>/rawfile/node/bin/node、PATH 上的 node）。" +
+			"本条判据原本要验证的是：**换 driver.json 就能换后端，插件核心零改动** —— " +
+			"它用一个假 sidecar（node 脚本）端到端证明 startSidecar 真的按驱动声明" +
+			"拼参数/环境并把进程拉起来，没有 node 就没法验（不是被测代码有问题）。" +
+			"补上：装 node、或把随包 node 放到 <插件>/rawfile/node/bin/node、" +
+			"或用 settings 的 node_bin 指到真实路径。")
+	}
+	return bin
+}
