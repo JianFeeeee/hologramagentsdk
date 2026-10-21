@@ -1,7 +1,7 @@
 ---
 name: commondev-discipline
-description: commondev 主管式多仓库开发流水线的使用与开发纪律。当你要为某个工程开一条分支、把工程派给一个下属 agent、或用 pi 拉起执行 agent 干活时必读。核心动作：为每个工程对话新建驻留式子 agent 并把该工程的一对通道划给它（否则所有工程都挤在根 agent 上）。**git 托管平台的操作（Gitea/GitHub/GitLab）不在插件里，而在本文** —— 用 enc_shell + 保存的凭据调 curl/CLI 完成。也含 hmap 插件开发与部署纪律。
-version: 2.0.0
+description: commondev 主管式多仓库开发流水线的使用与开发纪律。当你要为某个工程开一条分支、把工程派给一个下属 agent、或拉起执行后端 agent（后端由 agent_cli 决定，可选 pi / zcode 等）干活时必读。核心动作：为每个工程对话新建驻留式子 agent 并把该工程的一对通道划给它（否则所有工程都挤在根 agent 上）。**git 托管平台的操作（Gitea/GitHub/GitLab）不在插件里，而在本文** —— 用 enc_shell + 保存的凭据调 curl/CLI 完成。也含 hmap 插件开发与部署纪律。
+version: 2.2.0
 author: HomeAgent
 ---
 
@@ -34,7 +34,7 @@ plugin_stop  name=commondev
 3. 确认都不在跑，再 `plugin_stop`
 
 ★ **不要在有 sidecar 在跑时直接 disable** —— 进程会变成孤儿。
-插件 `Stop()` 里有幂等全清（sidecar / pi 进程一个不留），但那是兜底，
+插件 `Stop()` 里有幂等全清（sidecar / 执行后端进程一个不留），但那是兜底，
 不是正常路径。
 
 ### 关闭不影响已做的活
@@ -54,7 +54,7 @@ plugin_stop  name=commondev
 >
 > | 层 | 负责 |
 > |---|---|
-> | **插件 commondev** | 项目台账、工作目录、pi 会话与通道、判据与变异复核、冲突预检、凭据保存与安全执行 |
+> | **插件 commondev** | 项目台账、工作目录、执行后端会话与通道、判据与变异复核、冲突预检、凭据保存与安全执行 |
 > | **本文（skill）** | **各 git 托管平台的认证头、API 端点、PR 与分支保护流程** |
 >
 > **插件里没有平台逻辑。** 操作 Gitea/GitHub/GitLab 等平台一律：
@@ -151,7 +151,7 @@ enc_shell(command="cd <repo> && git -c http.extraheader=\"Authorization: token @
 
 ### 15. Gitea 分支保护：让「必须复审」成为**机制**而非礼貌
 
-**光有流程约定不算机制** —— 执行 agent 可以直接推主干。必须让**平台**拦。
+**光有流程约定不算机制** —— 执行后端 agent 可以直接推主干（`git push` 到 `main` 本身不经过任何评审）。必须让**平台**拦。
 
 ```bash
 curl -s -X POST -H "Authorization: token @{t}" -H 'Content-Type: application/json'   -d '{"enable_push":false,"required_approvals":1,"block_admin_merge_override":true,"dismiss_stale_approvals":true}'   "http://host/api/v1/repos/jianf/MyProj/branch_protections?name=main"
@@ -161,7 +161,7 @@ curl -s -X POST -H "Authorization: token @{t}" -H 'Content-Type: application/jso
 
 | 开关 | 作用 | 缺了会怎样 |
 |---|---|---|
-| `enable_push: false` | 禁止直接推送 | 执行 agent 直推主干，绕过评审 |
+| `enable_push: false` | 禁止直接推送 | 执行后端 agent 可直接推主干（`git push main` 不看 PR 状态），绕过评审 |
 | `required_approvals: ≥1` | 至少一个审批 | 自己就能合 |
 | `block_admin_merge_override: true` | admin 也不能绕过 | 用 admin token 的人绕过一切 |
 | `dismiss_stale_approvals: true` | 新提交作废旧审批 | 先批准再改代码，批准白拿 |
@@ -203,9 +203,9 @@ enc_shell(command="curl -s -X POST -H \"Authorization: token @{t}\" -H 'Content-
 
 ## Usage: 第一部分 使用者纪律
 
-> **★ 设计总纲 ［已定］**：插件对 pi 做的事，本质就是
-> **「把给 pi 发消息包装一下、把 pi 返回包装一下」**，深度融合内核的 IO 抽象与中断系统
-> —— 即 **pi = 一个 Device**。**不要自己造调度器 / 会话路由 / 中断栈**，
+> **★ 设计总纲 ［已定］**：插件对执行后端 agent 做的事，本质就是
+> **「把给执行后端发消息包装一下、把执行后端返回包装一下」**，深度融合内核的 IO 抽象与中断系统
+> —— 即 **执行后端 agent = 一个 Device**（默认后端是 pi，也可能接 zcode / dsh 等）。**不要自己造调度器 / 会话路由 / 中断栈**，
 > 全部接到内核已有的那套上（`InjectInputTo` / `RegisterOutputChannel` / `InjectInterrupt*Opts`）。
 
 ### 21. 角色与单位
@@ -214,19 +214,33 @@ enc_shell(command="curl -s -X POST -H \"Authorization: token @{t}\" -H 'Content-
 |---|---|---|
 | **人** | 老板 | 只与主管对接 |
 | **主管** | 你（长期驻留的 HomeAgent 主 agent） | 拆任务、**定义判据**、复审、决定合入 |
-| **执行 agent** | 按工程拉起的一个 pi / dsh 实例 | 在某棵工作树里干活 |
+| **驻留子 agent** | 每条工程对话的项目分管（resident 子） | 只与执行后端 agent 打交道、向上（父 agent）汇报；不越级直接给执行层下结论 |
+| **执行后端 agent** | 按工程拉起的一个执行后端实例（由 `agent_cli` 决定，默认 pi，也可选 zcode / dsh 等） | 在某棵工作树里干活 |
 | **commondev 插件** | 外部独立插件 | 仓库/凭据/分支/PR/测试，全部机械化操作 |
+
+> **★ 四层不可混用**：人 ↔ 主管 ↔ **驻留子 agent（项目分管）** ↔ **执行后端 agent**。
+> 主管只对接项目分管，**不直接给执行层投任务**；项目分管只与执行后端打交道、
+> 有结论向父 agent 汇报。
+>
+> **⚠ 别把 `agentcli` 当成执行后端**：`agentcli` 插件管的是**交互式终端会话**
+> （创建 / 读 / 写终端），跟执行后端 agent **没有任何关系** —— 它既不拉起执行后端，
+> 也不参与工程投递。名字像而已，别混为一谈。
+>
+> **⚠ 执行层 ≠ pi**：后端由每条线自己的 `agent_cli` 决定（默认 pi，也可选 zcode / dsh 等），
+> **多条工程线可能各用不同后端**。凡指「执行层」一律写 **执行后端 agent** /
+> **执行后端会话**；只有 pi 专有的技术标识（`pi.prompt`、`PI_CODING_AGENT_DIR`、
+> sidecar 契约里的 pi、配置键名、`commondev_pi_*` 工具名）才保留 pi 的字面。
 
 **为何能用内核机制**（而不是自己造）：
 
-| 内核概念 | pi 侧对应 | 落点（内核已有） |
+| 内核概念 | 执行后端侧对应 | 落点（内核已有） |
 |---|---|---|
-| **给 pi 发消息** | `pi.prompt` / `steer` / `follow_up` | `InjectInputTo(source, "commondev/<id>", …)` |
-| **pi 返回** | sidecar 回调 / `tool_execution_*` / `agent_settled` | `InjectTextTo(source, "commondev/<id>", …)`（按 inputch Owner 路由） |
-| **中断 pi** | `steer`（插到当前轮之后） | `InjectInterruptTextOpts(..., Priority: L3)` |
-| **音声/图像产物** | pi 可产出的媒体 | `OutputCapabilities()` 声明 |
+| **给执行后端发消息** | `pi.prompt` / `steer` / `follow_up` | `InjectInputTo(source, "commondev/<id>", …)` |
+| **执行后端返回** | sidecar 回调 / `tool_execution_*` / `agent_settled` | `InjectTextTo(source, "commondev/<id>", …)`（按 inputch Owner 路由） |
+| **中断执行后端** | `steer`（插到当前轮之后） | `InjectInterruptTextOpts(..., Priority: L3)` |
+| **音声/图像产物** | 执行后端可产出的媒体 | `OutputCapabilities()` 声明 |
 
-⇒ **插件只做两件额外事**：① 把 pi 接成 Device；② 台账记 `session_id` 并断言未变。
+⇒ **插件只做两件额外事**：① 把执行后端接成 Device；② 台账记 `session_id` 并断言未变。
 调度/中断/路由/记忆策略**全是内核已经在做的事**。
 
 ### 22. 「工程对话」是一等对象
@@ -241,8 +255,8 @@ enc_shell(command="curl -s -X POST -H \"Authorization: token @{t}\" -H 'Content-
 │                ★ name = 分支名派生，**仅做可读性**，不承担唯一性
 │                  （派生后可能撞：`feat/a` 与 `feat.a` 都成 `feat_a`，所以必须带 hash）
 │                独立 clone（非 worktree、非 --reference）；合入后**整目录删除**
-├─ session_id   pi 会话（★ 续投的唯一依据）
-├─ runtime      local（默认，内嵌） | ssh（远端同样建目录拉 pi）
+├─ session_id   执行后端会话（★ 续投的唯一依据）
+├─ runtime      local（默认，内嵌） | ssh（远端同样建目录拉执行后端 agent）
 ├─ host         runtime=ssh 时的目标主机（**branch_open 时给**，见 §24.1）
 ├─ agent_cli    执行后端（默认 pi；其他 CLI 需自备 sidecar，见 §24.2）
 └─ channels     插件为该工程注册的一对通道
@@ -261,15 +275,23 @@ enc_shell(command="curl -s -X POST -H \"Authorization: token @{t}\" -H 'Content-
 
 ### 23. ★ 必做：为每个工程对话新建驻留子，并把通道划给它
 
-**★ 顺序很关键**：通道是**拉起 pi 拿到 session 之后**才注册的，所以你的动作是：
+**★ 顺序很关键**：通道是**拉起执行后端 agent 并拿到 session 之后**才注册的，所以你的动作是：
 
 ```
-建工程 ──► commondev_agent_up（拉起 pi，拿到 session_id）
+建工程 ──► commondev_agent_up（拉起执行后端 agent 并拿到 session_id）
             └─► 插件**此刻才**注册通道 inputch commondev/<id> + outputch commondev_<id>
                   └─► ★ 你建驻留子并把这对通道划给它
 ```
 
-**为何必须先有 session**：通道是“与某个具体 pi 会话对话的入口”，没 session 就是空壳。
+**严格三步，不许换顺序、不许合并**：
+
+| 步 | 动作 | 谁做 | 不做会怎样 |
+|---|---|---|---|
+| ① | `commondev_branch_open` → `commondev_agent_up` 拿到 `session_id` | 主管 | 没有会话，后续投递没有落点 |
+| ② | 插件注册该工程的一对通道（inputch `commondev/<id>` + outputch `commondev_<id>`） | 插件 | 通道不存在，`output_send__…` 指向空壳 |
+| ③ | 建驻留子（`dev-<br-id>`）并把这对通道**划入** | 主管（**内核工具，插件代劳不了**） | 输入全涌向根 agent，等于没拆 |
+
+**为何必须先有 session**：通道是“与某个具体执行后端会话对话的入口”，没 session 就是空壳。
 顺序错了（先建子）会拿到一个指向不存在通道的 `output_send__…`。
 
 **插件只能把通道登记出来；「划入（assign）」只有内核能做。** 所以这一步**必须由你（agent）
@@ -281,13 +303,19 @@ resident_agents create
     input_chs       = commondev/<br-id>       ← 划入该 inputch（可用斜杠）
     allowed_outputs = commondev_<br-id>       ← 授权该 outputch（★ 下划线，见下）
     capacity        = 64
-    task_prompt     = "你在 <workdir> 推进 <work>。
-                       下任务给自己用 output_send__commondev_<br-id>(payload=…)，
-                       pi 的结果会回投到你的 commondev/<br-id>；
-                       有结论用 notify_parent 汇报。"
+    task_prompt     = "你是 <project> 分支 <branch> 的项目分管，在 <workdir> 推进 <work>。
+                       下任务给执行后端用 output_send__commondev_<br-id>(payload=…)，
+                       执行后端的输出会回投到你的 commondev/<br-id>。
+                       向上级（父 agent）汇报：有结论/卡住/需要决策时用 notify_parent；
+                       不越级：结论只报父 agent，不直接对人拍板、
+                       也不让执行后端越过你联系上级；执行后端的产出一律由你收口。"
 ```
 
-**★ 下任务不需要新工具**：给 pi 发消息就是子调**内核原生的输出门**
+**★ 汇报方向是单向的**：驻留子 → 父 agent（`notify_parent`）→ 人。驻留子**不**向执行后端
+要结论、**不**越级直接对执行层拍板；反过来，主管也**不**绕过分管给执行后端投任务
+（那正是本节要防的错）—— 投递一律走该工程的 `output_send__commondev_<br-id>`。
+
+**★ 下任务不需要新工具**：给执行后端发消息就是子调**内核原生的输出门**
 `output_send__commondev_<br-id>(payload="…")` ⇒ 打到插件的通道 handler ⇒ 插件
 查台账拿到 `session_id` 后 `sidecar.prompt()`。**插件不提供 `agent_send` 之类的工具**。
 
@@ -319,8 +347,9 @@ resident_agents create
 
 ### 24. 形态选择、自包含运行时与远端环境
 
-**默认本地内嵌**（进程内 pi 实例）；通过配置 `runtime=ssh` 切到**远程**，
-远端**同样创建目录并在该目录拉起 pi**。
+**默认本地内嵌**（`agent_cli=pi` 时是**进程内 pi 实例**，换后端则为该后端的 sidecar）；
+通过配置 `runtime=ssh` 切到**远程**，
+远端**同样创建目录并在该目录拉起执行后端 agent**（默认 pi）。
 
 **★ 自包含运行时**：插件**自带独立的 node 与独立的 pi**，都装在**插件工作目录**，
 **pi 的插件也装到这个目录** —— 不靠宿主机的 node/pi，也不污染用户的 `~/.pi`。
@@ -465,7 +494,7 @@ commondev_pi_mcp_add/remove/list
 
 ```
 ssh 不通          → 报错（配置问题，不是缺环境）
-无 pi / 无 node   → ★ 注入 L3「远端 <host> 未装 X，是否安装？」→ **你（agent）去问用户**
+无执行后端 / 无 node → ★ 注入 L3「远端 <host> 未装 X，是否安装？」→ **你（agent）去问用户**
 目录不可写        → 报错（权限问题，需人处理）
 ```
 
@@ -478,16 +507,16 @@ ssh 不通          → 报错（配置问题，不是缺环境）
 
 ### 28. 投递纪律（**这是最容易犯的错**）
 
-**每个工程的投递必须落到同一个 `session_id`。** 实测反例（别重犯）：
+**每个工程的投递必须落到同一个 `session_id`。**（与后端是 pi 还是 zcode 无关，规则一样） 实测反例（别重犯）：
 
 | 错法 | 后果 |
 |---|---|
-| 漏传 `--session-id` | `pi` **静默开新会话** —— 你以为在催上一次，其实是把活派给了陌生人 |
+| 漏传 `--session-id` | 后端 CLI（默认 `pi`）**静默开新会话** —— 你以为在催上一次，其实是把活派给了陌生人 |
 | 两个进程**并发**同 `--session-id` | 会话文件被写坏：`user A`/`user B` 相邻，`assistant B` 在前、`assistant A` 落在最后 ⇒ B 那轮的模型上下文里**根本没有 A 的用户消息**，树链交错 |
 
 ⇒ 投递前先拿台账里的 `session_id`，投完**断言它没变**；一个 session **绝不并发投递**。
 这两条插件侧已做成结构性保证（单一投递队列 + 断言），你做主管时**不要绕过插件**直接
-去敲 `pi -p`。
+去敲后端 CLI（默认就是 `pi -p`）。
 
 **★ 另外两条实测硬经验（别再踩）：**
 
@@ -790,7 +819,7 @@ commondev_review_result()          ← 取结论
 |---|---|---|
 | `pass` | 正向全过 **且**全部变异被咬住 | 可以进下一步 |
 | **`pass_with_gaps`** | 正向过，但**有变异没被咬住**或**判据没变异规则** | **不能当通过** —— 去补判据/变异，再复核 |
-| `fail` | 有判据没过 | 打回执行 agent |
+| `fail` | 有判据没过 | 打回执行后端 agent |
 
 ★ **`pass_with_gaps` 就是"你的判据有盲区"**。把它当绿色勾，
 就是在给自己攒一次大的意外。
@@ -851,7 +880,7 @@ commondev_review_result()          ← 取结论
 3. **token 不进 remote URL**：拼接仅用于**单次命令**（`pushURLWithToken`），
    clone 出来的 remote 不带凭据 —— 否则删掉临时目录也删不掉凭据。
 4. **不要硬编码 token**：走 `Settings()` 或宿主注入。
-5. **拉起 pi 时隔离端口**：内层 pi 会尝试监听 A2A/ACP 端口并打 `EADDRINUSE`，
+5. **拉起执行后端（默认 pi）时隔离端口**：内层 pi 会尝试监听 A2A/ACP 端口并打 `EADDRINUSE`，
    显式设 `PI_CODING_AGENT_SESSION_DIR` / `PI_A2A_PORT` / `PI_ACP_PORT`。
 
 ### 40. ★ 孤儿清理（插件有自己的硬约束）
@@ -860,7 +889,7 @@ commondev_review_result()          ← 取结论
 （`resident-subagent-design.md` §10，写成判据）。
 
 **插件对自己拉起的进程必须同样硬**：`Stop()` 必须是**幂等的全清** ——
-pi 进程、sidecar、ssh 会话、workdir（含凭据残留检查）一个不留。
+执行后端进程（默认 pi）、sidecar、ssh 会话、workdir（含凭据残留检查）一个不留。
 写成判据：`TestStopKillsAllRuntimes`（变异：删掉某个清理 → 必须报红）。
 
 ### 41. 参考资料（**别凭记忆写 API**）
@@ -883,7 +912,7 @@ pi 进程、sidecar、ssh 会话、workdir（含凭据残留检查）一个不�
 ## Notes: 红牌（做了就是错）
 
 1. **不划通道就当派了活** —— 登记 ≠ 划入；不划则所有输入涌向根 agent。
-2. **绕过插件直接敲 `pi -p`** —— 漏 `--session-id` 会静默开新会话。
+2. **绕过插件直接敲后端 CLI（默认 `pi -p`）** —— 漏 `--session-id` 会静默开新会话。
 3. **并发投同一个 session** —— 会写坏会话（实测）。
 4. **没有变异阶段的复核** —— 等于给假绿充值。
 5. **凭据写进 `config.db` 或 remote URL**。
