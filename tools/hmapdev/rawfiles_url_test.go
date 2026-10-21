@@ -39,6 +39,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -964,4 +965,299 @@ func TestBuildExitsNonZeroOnRawfileFailure(t *testing.T) {
 	}
 	// 变异点：删掉 cmdBuild 里 validateRawFileDecls 失败分支的 exitIfBuildFailed()
 	//         → 上面 err == nil → 红（退出码 0）。
+}
+
+// ---------------------------------------------------------------------------
+// 判据 16：真 CLI 级端到端 —— 本地 from 声明在真实 build 路径上必须可用
+// ---------------------------------------------------------------------------
+
+// buildProbePlugin 造一个**能真正编译通过**的最小插件工程，返回工程目录。
+//
+// 为什么不能像上面那条判据一样只写 `package main`：那条只走到 rawfile
+// 校验就退出了（校验在编译之前），而本判据要走到**打包**，所以插件必须
+// 真的能编过。用 example/memo 的 plugin.go 作源（只读复制，不改仓库）。
+func buildProbePlugin(t *testing.T, plgJSON string) string {
+	t.Helper()
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	memoSrc := filepath.Join(repoRoot, "example", "memo", "plugin.go")
+	src, err := os.ReadFile(memoSrc)
+	if err != nil {
+		t.Fatalf("读 %s 失败（判据的前提变了？）: %v", memoSrc, err)
+	}
+	proj := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(proj, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("plugin.go", string(src))
+	write("go.mod", "module probe\n\ngo 1.25.0\n\n"+
+		"require github.com/JianFeeeee/homeagentsdk v0.0.0\n\n"+
+		"replace github.com/JianFeeeee/homeagentsdk => "+repoRoot+"\n")
+	write("plg.json", plgJSON)
+	return proj
+}
+
+// hmapNames 读一个 .hmap，返回条目名 → 内容。
+func hmapNames(t *testing.T, p string) map[string][]byte {
+	t.Helper()
+	zr, err := zip.OpenReader(p)
+	if err != nil {
+		t.Fatalf("打开 .hmap 失败: %v", err)
+	}
+	defer zr.Close()
+	out := map[string][]byte{}
+	for _, f := range zr.File {
+		rc, err := f.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := io.ReadAll(rc)
+		rc.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		out[f.Name] = b
+	}
+	return out
+}
+
+// TestCLILocalRawfileFromIsPackaged 是真 **CLI 级** 端到端判据。
+//
+// ## 它守的是什么（这是一个真实存在过的 100% 失效 bug）
+//
+// `rawfiles: ["legacy.txt"]` —— 文档里最朴素、`hmapdev init` 模板引导人写的
+// 形式 —— 在真实 build 路径上**必然失败**：
+//
+//	error: rawfiles: rawfiles 路径逃出工程目录: "legacy.txt"
+//
+// 根因：逃脱检查用 `HasPrefix(cleanAbs, cleanRoot+"/")`，而真实调用方传的
+// root 就是 "."。于是 cleanRoot="."、cleanAbs="legacy.txt"，
+// `HasPrefix("legacy.txt", "./")` 恒假 ⇒ 任何 from 都被判成逃逸。
+//
+// ★ 为什么既有单测全绿：它们给 collectRawFiles 传的是 t.TempDir()（绝对路径），
+// 永远踩不到 root="." 这条真实路径。**只有真跑二进制**才能暴露 —— 这正是
+// 本判据存在的理由，也是"直接调函数"一类判据的系统性盲区。
+func TestCLILocalRawfileFromIsPackaged(t *testing.T) {
+	if testing.Short() {
+		t.Skip("需要编译 hmapdev 二进制并真编插件，-short 下跳过")
+	}
+	bin := filepath.Join(t.TempDir(), "hmapdev")
+	bc := exec.Command("go", "build", "-o", bin, ".")
+	bc.Dir = "."
+	if out, err := bc.CombinedOutput(); err != nil {
+		t.Fatalf("编译 hmapdev 失败: %v\n%s", err, out)
+	}
+
+	proj := buildProbePlugin(t, `{
+  "name": "probe", "name_en": "Probe", "name_zh": "探针",
+  "version": "0.0.1", "description": "d", "author": "a",
+  "entry": "plugin.so", "targets": "linux/amd64",
+  "rawfiles": ["legacy.txt"]
+}`)
+	// 三种本地 from 形态一次覆盖：单文件字符串、目录对象、工程根下 rawfile/ 默认全收
+	if err := os.WriteFile(filepath.Join(proj, "legacy.txt"), []byte("hello-legacy"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(proj, "assets", "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(proj, "assets", "sub", "x.txt"), []byte("from-assets"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(proj, "rawfile"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(proj, "rawfile", "default.txt"), []byte("default-dir"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := exec.Command(bin, "build", "--no-bundle", "--target", "linux/amd64")
+	cmd.Dir = proj
+	t.Setenv(rawFileCacheEnv, t.TempDir())
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("★ 本地 from 声明的构建失败（退出码非 0）—— 文档里的写法在真实 CLI 上不可用。\n"+
+			"构建输出:\n%s", out)
+	}
+	// 报错里不能出现"逃出工程目录"（修根因前的症状）
+	if strings.Contains(string(out), "逃出工程目录") {
+		t.Fatalf("★ 本地声明的合法路径被误判为逃逸。构建输出:\n%s", out)
+	}
+
+	hp := filepath.Join(proj, "dist", "probe_linux_amd64.hmap")
+	ents := hmapNames(t, hp)
+
+	// (1) 字符串声明 → rawfile/<basename>
+	if b, ok := ents["rawfile/legacy.txt"]; !ok {
+		t.Errorf("★ 包内没有 rawfile/legacy.txt（实际条目 %v）—— 字符串声明未生效", keysOfBytes(ents))
+	} else if string(b) != "hello-legacy" {
+		t.Errorf("rawfile/legacy.txt 内容不对: %q", b)
+	}
+
+	// (2) 工程根 rawfile/ 默认全收（这条同时验证 root 绝对化后默认目录遍历仍正确）
+	if b, ok := ents["rawfile/default.txt"]; !ok {
+		t.Errorf("★ 包内没有 rawfile/default.txt（rawfile/ 默认目录未收）: %v", keysOfBytes(ents))
+	} else if string(b) != "default-dir" {
+		t.Errorf("rawfile/default.txt 内容不对: %q", b)
+	}
+
+	// (3) ★ 包内条目名不得被绝对路径污染（root 绝化后被带进 zip 名是这次
+	//     修改最可能引入的副作用，必须显式钉住）
+	for name := range ents {
+		if !strings.HasPrefix(name, "rawfile/") && name != "plugin.json" && name != "plugin.bin" &&
+			name != "README.md" && name != "LICENSE" {
+			t.Errorf("★ 意外的包内条目 %q", name)
+		}
+		if strings.HasPrefix(name, "rawfile/") && strings.Contains(name, proj) {
+			t.Errorf("★ 包内条目名被工程绝对路径污染: %q", name)
+		}
+		if strings.HasPrefix(name, "/") || strings.Contains(name, "..") {
+			t.Errorf("★ 包内条目名是绝对路径或含 ..: %q", name)
+		}
+	}
+
+	// (4) 目录对象声明（{from: assets}）也要能落成 rawfile/assets/sub/x.txt。
+	//     与 (1)(2) 分开走一次 build，避免同一个 plg.json 里既有单文件又有目录时
+	//     判断不出是谁生效。
+	proj2 := buildProbePlugin(t, `{
+  "name": "probe2", "name_en": "Probe2", "name_zh": "探针2",
+  "version": "0.0.1", "description": "d", "author": "a",
+  "entry": "plugin.so", "targets": "linux/amd64",
+  "rawfiles": [ { "from": "assets" } ]
+}`)
+	if err := os.MkdirAll(filepath.Join(proj2, "assets", "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(proj2, "assets", "sub", "x.txt"), []byte("from-assets"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd2 := exec.Command(bin, "build", "--no-bundle", "--target", "linux/amd64")
+	cmd2.Dir = proj2
+	out2, err := cmd2.CombinedOutput()
+	if err != nil {
+		t.Fatalf("★ {from: assets} 的构建失败:\n%s", out2)
+	}
+	ents2 := hmapNames(t, filepath.Join(proj2, "dist", "probe2_linux_amd64.hmap"))
+	if b, ok := ents2["rawfile/assets/sub/x.txt"]; !ok {
+		t.Errorf("★ 目录声明未保留结构（期望 rawfile/assets/sub/x.txt，实际 %v）", keysOfBytes(ents2))
+	} else if string(b) != "from-assets" {
+		t.Errorf("rawfile/assets/sub/x.txt 内容不对: %q", b)
+	}
+
+	// 变异点：把 collectRawFiles 入口的 filepath.Abs(root) 去掉
+	//         → 第一个 build 就报"逃出工程目录"、退出码非 0 → 上面 t.Fatalf 红。
+}
+
+func keysOfBytes(m map[string][]byte) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sortStrings(out)
+	return out
+}
+
+// ---------------------------------------------------------------------------
+// 判据 17：local 与 url 撞名的**端到端**版（原来只直接调函数）
+// ---------------------------------------------------------------------------
+
+// TestCLILocalAndURLNameCollision 把「本地条目与 url 条目落到同一包内路径」
+// 这件事放到真 CLI 上验一次。
+//
+// 为什么需要端到端版：直接调 collectRawFiles 的判据把 preflight
+// （ensureRawFileDownloads）绕过去了 —— 它手动填 decls[i].materialized。
+// 也就是说"真实 build 里 materialized 到底有没有被填上、撞名在真实路径上
+// 会不会被检出"这整条链，此前没有任何判据覆盖。而这条链上有一个隐性的
+// 顺序依赖：必须先预取、后收集（collectRawFiles 对未预取的 url 条目会报错）。
+//
+// 两种结局都必须在真 CLI 上成立：
+//
+//	· 内容不同 → 非零退出 + 报错点名冲突（不静默取一边）
+//	· 内容相同 → 成功，且包内该路径只有一条
+func TestCLILocalAndURLNameCollision(t *testing.T) {
+	if testing.Short() {
+		t.Skip("需要编译 hmapdev 二进制并起 HTTP 服务，-short 下跳过")
+	}
+	bin := filepath.Join(t.TempDir(), "hmapdev")
+	bc := exec.Command("go", "build", "-o", bin, ".")
+	bc.Dir = "."
+	if out, err := bc.CombinedOutput(); err != nil {
+		t.Fatalf("编译 hmapdev 失败: %v\n%s", err, out)
+	}
+
+	remoteBytes := []byte("REMOTE-CONTENT")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write(remoteBytes)
+	}))
+	defer srv.Close()
+	sum := shaOf(remoteBytes)
+
+	plgFor := func() string {
+		return `{
+  "name": "probe", "name_en": "Probe", "name_zh": "探针",
+  "version": "0.0.1", "description": "d", "author": "a",
+  "entry": "plugin.so", "targets": "linux/amd64",
+  "rawfiles": [
+    "dup.txt",
+    { "name": "dup.txt", "url": "` + srv.URL + `/dup", "sha256": "` + sum + `" }
+  ]
+}`
+	}
+
+	// (a) 内容不同 → 必须非零退出
+	proj := buildProbePlugin(t, plgFor())
+	if err := os.WriteFile(filepath.Join(proj, "dup.txt"), []byte("LOCAL-CONTENT"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(bin, "build", "--no-bundle", "--target", "linux/amd64")
+	cmd.Dir = proj
+	t.Setenv(rawFileCacheEnv, t.TempDir())
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("★ local 与 url 撞名且内容不同，构建**成功**了 —— 会静默取一边\n输出:\n%s", out)
+	}
+	if !strings.Contains(string(out), "冲突") {
+		t.Errorf("报错应点名冲突，实际输出:\n%s", out)
+	}
+
+	// (b) 内容相同 → 必须成功，且包内该路径只有一条
+	proj2 := buildProbePlugin(t, plgFor())
+	if err := os.WriteFile(filepath.Join(proj2, "dup.txt"), remoteBytes, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd2 := exec.Command(bin, "build", "--no-bundle", "--target", "linux/amd64")
+	cmd2.Dir = proj2
+	t.Setenv(rawFileCacheEnv, t.TempDir())
+	out2, err := cmd2.CombinedOutput()
+	if err != nil {
+		t.Fatalf("★ 内容相同时应去重成功，实际失败:\n%s", out2)
+	}
+	hp := filepath.Join(proj2, "dist", "probe_linux_amd64.hmap")
+	zr, err := zip.OpenReader(hp)
+	if err != nil {
+		t.Fatalf("打开 .hmap 失败: %v", err)
+	}
+	defer zr.Close()
+	n := 0
+	for _, f := range zr.File {
+		if f.Name == "rawfile/dup.txt" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("★ 去重后 rawfile/dup.txt 应只有 1 条，实际 %d 条（内核解包后取哪份取决于顺序）", n)
+	}
+
+	// 变异点：把 collectRawFiles 里"内容相同则去重"改成一律报错 → (b) 红；
+	//         把冲突报错改成静默覆盖 → (a) 红。
+	//         把 cmdBuild 里的 ensureRawFileDownloads 删掉 → (a)(b) 都红
+	//         （collectRawFiles 会报"url 来源尚未预取"）。
 }

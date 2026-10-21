@@ -148,6 +148,26 @@ type rawEntry struct {
 func collectRawFiles(root string, decls []RawFileDecl) ([]rawEntry, error) {
 	var out []rawEntry
 
+	// ★ 入口先把 root 规范成**绝对路径**（并据此重算 cleanRoot）。
+	//
+	// 为什么必须在这一行上做，而不能在各个比较点上打补丁：
+	// 逃脱检查原来是 `strings.HasPrefix(cleanAbs, cleanRoot+os.PathSeparator)`，
+	// 而真实调用方传的 root 就是 "."（buildTarget 里 `collectRawFiles(".", ...)`）。
+	// 于是 cleanRoot="."、cleanAbs="legacy.txt"，前缀比较是
+	// `HasPrefix("legacy.txt", "./")` —— **恒假** ⇒ 任何 `from` 都判成"逃出
+	// 工程目录"。后果是 `"rawfiles": ["legacy.txt"]`（文档里最朴素的写法）
+	// 在真实 CLI 上 100% 失败，而直接给 collectRawFiles 传 t.TempDir() 的
+	// 单测全部绿 —— 这就是它对单测隐形的原因。
+	//
+	// 绝对 root 还有个附带好处：所有 rawEntry.src 都变成绝对路径，
+	// 与 cwd 解耦 ⇒ 构建中途 chdir 也不会读错文件。zip 条目名仍由
+	// filepath.Rel 派生（见下），不会把绝对路径带进包里。
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return nil, fmt.Errorf("解析工程根路径失败（root=%q）: %w", root, err)
+	}
+	root = absRoot
+
 	// ① 默认目录
 	defDir := filepath.Join(root, RawFilesDir)
 	if fi, err := os.Stat(defDir); err == nil && fi.IsDir() {
@@ -224,6 +244,9 @@ func collectRawFiles(root string, decls []RawFileDecl) ([]rawEntry, error) {
 				"rawfiles 不接受绝对路径: %q（请写成相对工程根的路径）", from)
 		}
 		abs := filepath.Join(root, from)
+		// cleanRoot 必须基于**已绝对化的 root** 重算（不是 entry 时那个原值）。
+		// 这就是上面那句 absRoot 的意义：只给 abs 加绝对化而留下相对 cleanRoot
+		// 等于白改 —— 前缀比较仍会拿 "legacy.txt" 去比 "./"。
 		cleanRoot := filepath.Clean(root)
 		cleanAbs := filepath.Clean(abs)
 		if cleanAbs != cleanRoot && !strings.HasPrefix(cleanAbs, cleanRoot+string(os.PathSeparator)) {
