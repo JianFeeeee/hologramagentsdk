@@ -26,9 +26,16 @@ package main
 //	{
 //	  "rawfiles": [
 //	    "config/defaults.json",          // 字符串：源路径，落到 rawfile/defaults.json
-//	    { "from": "assets", "exclude": ["assets/tmp"] }
+//	    { "from": "assets", "exclude": ["assets/tmp"] },
+//	    // ↓ 外部依赖（url 来源）：构建时下载 + sha256 强制校验，仓库里不留大文件
+//	    { "name": "runtime", "url": "https://host/rt.tar.gz",
+//	      "sha256": "…64 hex…", "os": "linux", "arch": "amd64",
+//	      "format": "tar.gz", "strip_prefix": "package/" }
 //	  ]
 //	}
+//
+// url 来源的语义（缓存/平台过滤/构建期展开）全部在 rawfiles_fetch.go，
+// 文件头写清了为什么这么拆（为什么下载不在本文件的 collectRawFiles 里做）。
 //
 // ## 为什么统一落到 rawfile/ 下
 //
@@ -55,10 +62,43 @@ const RawFilesDir = "rawfile"
 const RawFilesPrefix = "rawfile"
 
 // RawFileDecl 是一条 rawfiles 声明（支持字符串与对象两种写法）。
+//
+// 两种来源，互斥：
+//
+//	from  工程内的本地路径（目录或单文件）——**默认来源**，旧写法逐字兼容
+//	url   外部下载（可选的 format/strip_prefix 让归档在**构建期**展开）
+//
+// url 来源的全部 I/O 见 rawfiles_fetch.go 的文件头注释。
 type RawFileDecl struct {
 	From     string   `json:"from"`
 	Exclude  []string `json:"exclude,omitempty"`
 	Optional bool     `json:"optional,omitempty"`
+
+	// ↓ 外部依赖（url 来源）
+
+	// Name 是包内路径（相对 rawfile/ 根），如 "node/bin/node"、"pi"。
+	// 包内条目为 rawfile/<name>[ /<归档内相对路径> ]。
+	Name string `json:"name,omitempty"`
+	// URL 是资源来源。与 from 互斥。
+	URL string `json:"url,omitempty"`
+	// SHA256 是**下载到的原始字节**的校验和（64 位 hex，大小写不敏感）。
+	// 必填：不校验的下载等于信任传输通道，且出问题毫无症状。
+	SHA256 string `json:"sha256,omitempty"`
+	// OS/Arch 按**构建目标**过滤（空 = 不限；都有则必须同时匹配）。
+	OS   string `json:"os,omitempty"`
+	Arch string `json:"arch,omitempty"`
+	// Format 是归档格式：zip / tar.gz / 空（按 url 后缀推断）。
+	// 非归档（单文件）留空即可。
+	Format string `json:"format,omitempty"`
+	// StripPrefix 是展开时剥掉的前缀（如 npm 包的 "package/"）。
+	StripPrefix string `json:"strip_prefix,omitempty"`
+
+	// ↓ 运行期记账（不来自 JSON），由 ensureRawFileDownloads 填。
+
+	// materialized 是这条声明最终贡献的包内条目（归档展开后可能很多条）。
+	materialized []rawEntry
+	// skipped 报告本条因平台不匹配被跳过（不下载、不进包）。
+	skipped bool
 }
 
 // UnmarshalJSON 同时接受 `"path"` 与 `{"from": "path"}` 两种写法。
@@ -87,6 +127,13 @@ func (d *RawFileDecl) UnmarshalJSON(b []byte) error {
 type rawEntry struct {
 	src string // 磁盘路径
 	zip string // zip 内条目名（保留路径）
+
+	// mode 非 0 时覆盖写入 .hmap 的权限位。
+	//
+	// 为什么需要它：下载到缓存的单文件权限由**缓存目录**决定（可能是 0600），
+	// 而随包资源里最典型的是 node 可执行文件 —— 权限丢了就是"包里有文件
+	// 但运行期起不来"。归档来源不需要它（展开时已按归档内 mode 落盘）。
+	mode os.FileMode
 }
 
 // collectRawFiles 收集要打包的资源。
@@ -137,9 +184,30 @@ func collectRawFiles(root string, decls []RawFileDecl) ([]rawEntry, error) {
 
 	// ② 显式声明
 	for _, d := range decls {
+		// url 来源：全部 I/O 已在 ensureRawFileDownloads 里做完，这里只读账。
+		//
+		// ★ 这里**绝不联网、绝不下载**。原因见 rawfiles_fetch.go 文件头：
+		// collectRawFiles 被 bundle 模式每平台调一次、单目标模式每 target 调一次，
+		// 在其中下载会让同一资源被拉 N 次，且让"打包到一半才联网失败"
+		// 留下半成品 .hmap。
+		if strings.TrimSpace(d.URL) != "" {
+			if d.skipped {
+				continue // 平台不匹配：已在预取阶段报过"跳过"
+			}
+			if len(d.materialized) == 0 {
+				// 没经过预取就调 collectRawFiles（如测试直接调用）—— 必须
+				// 报错而不是静默少资源：少资源的包运行期才炸，且症状指向别处。
+				return nil, fmt.Errorf(
+					"rawfile %q 的 url 来源尚未预取（应先调 ensureRawFileDownloads）—— "+
+						"否则包内会缺这份资源而构建照旧\"成功\"", d.Name)
+			}
+			out = append(out, d.materialized...)
+			continue
+		}
+
 		from := strings.TrimSpace(d.From)
 		if from == "" {
-			return nil, fmt.Errorf("rawfiles 有条目缺 from")
+			return nil, fmt.Errorf("rawfiles 有条目缺 from（也没有 url）")
 		}
 		// ★ from 的语义：**相对 plg.json 所在目录（工程根）**。
 		//
@@ -216,14 +284,77 @@ func collectRawFiles(root string, decls []RawFileDecl) ([]rawEntry, error) {
 
 	sort.Slice(out, func(i, j int) bool { return out[i].zip < out[j].zip })
 	// 撞名检测：两条来源落到同一包内路径 —— 不报的话"我改的没生效"极难查
+	//
+	// ★ 列表用**最终列表**而不是 map 去重：map 只能发现重复，无法从 []rawEntry
+	// 里删掉一项；而"内容相同则去重"需要真的删（否则包里会出现两条同名条目，
+	// 内核解包后哪个在上面取决于顺序）。
+	kept := make([]rawEntry, 0, len(out))
 	seen := map[string]string{}
 	for _, e := range out {
-		if prev, dup := seen[e.zip]; dup {
-			return nil, fmt.Errorf("rawfile 目标冲突: %q 同时来自 %s 与 %s", e.zip, prev, e.src)
+		prev, dup := seen[e.zip]
+		if !dup {
+			seen[e.zip] = e.src
+			kept = append(kept, e)
+			continue
 		}
-		seen[e.zip] = e.src
+		// 内容**完全相同**时去重：典型场景是"工作区里还留着展开好的本地
+		// rawfile/node/，同时 plg.json 又声明了 url 来源"。此时两份字节一致，
+		// 报错只会逼人删目录（而那目录可能是本机跑 e2e 需要的）。
+		// 内容不同则必须报错：静默取一边会让"我改的没生效"不可查。
+		same, cmpErr := sameFileContent(prev, e.src)
+		if cmpErr == nil && same {
+			fmt.Printf("  rawfile 去重 %s（本地与 url 来源内容一致，取其一）\n", e.zip)
+			continue
+		}
+		return nil, fmt.Errorf(
+			"rawfile 目标冲突: %q 同时来自 %s 与 %s 且内容不同 —— "+
+				"删掉其中一份（要保留打开后的本地目录请从 plg.json 去掉对应 url 声明）",
+			e.zip, prev, e.src)
 	}
-	return out, nil
+	return kept, nil
+}
+
+// sameFileContent 比较两个文件内容是否逐字节相同（长度不同直接返回 false）。
+func sameFileContent(a, b string) (bool, error) {
+	fa, err := os.Open(a)
+	if err != nil {
+		return false, err
+	}
+	defer fa.Close()
+	fb, err := os.Open(b)
+	if err != nil {
+		return false, err
+	}
+	defer fb.Close()
+	sa, err := fa.Stat()
+	if err != nil {
+		return false, err
+	}
+	sb, err := fb.Stat()
+	if err != nil {
+		return false, err
+	}
+	if sa.Size() != sb.Size() {
+		return false, nil
+	}
+	bufA := make([]byte, 64*1024)
+	bufB := make([]byte, 64*1024)
+	for {
+		na, errA := io.ReadFull(fa, bufA)
+		nb, errB := io.ReadFull(fb, bufB)
+		if na != nb || string(bufA[:na]) != string(bufB[:nb]) {
+			return false, nil
+		}
+		if errA == io.EOF || errA == io.ErrUnexpectedEOF {
+			return true, nil
+		}
+		if errA != nil {
+			return false, errA
+		}
+		if errB != nil && errB != io.EOF && errB != io.ErrUnexpectedEOF {
+			return false, errB
+		}
+	}
 }
 
 // writeRawEntries 把资源写进 zip（**保留路径**）。
@@ -240,6 +371,11 @@ func writeRawEntries(w *zip.Writer, entries []rawEntry) error {
 		hdr, err := zip.FileInfoHeader(info)
 		if err != nil {
 			return err
+		}
+		if e.mode != 0 {
+			// 覆盖权限位：下载来的单文件统一 0755（暂不提供 mode 字段），
+			// 否则缓存目录的 0600 会让随包 node 变成不可执行。
+			hdr.SetMode(e.mode)
 		}
 		hdr.Method = zip.Deflate
 		hdr.Name = e.zip // ← 完整路径，不是 Base
