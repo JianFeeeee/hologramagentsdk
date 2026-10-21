@@ -4,7 +4,7 @@
   "name_en": "Plugin Dev Toolchain",
   "version": "1.0.0",
   "description": "把 hmapdev 工具链封装成 Agent 可调用的工具：脚手架生成插件工程、构建打包 .hmap、管理 SDK 版本。配合 plugin_install 即可让 Agent 自己做完「新建插件 → 构建 → 安装」全流程。",
-  "author": "HomeAgent",
+  "author": "HologramAgent",
   "entry": "plugin.so",
   "tags": [
     "plugindev",

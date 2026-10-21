@@ -4,7 +4,7 @@
   "name_en": "Lua Demo",
   "version": "0.1.0",
   "description": "Lua 插件全功能示例：工具(no_memory/cleaner) + 阶段钩子 + 通道 + 数据类 API",
-  "author": "HomeAgent",
+  "author": "HologramAgent",
   "entry": "main.lua",
   "tags": ["luademo"],
   "targets": "lua"

@@ -4,7 +4,7 @@
   "name_en": "sanitizer",
   "version": "0.1.0",
   "description": "清洗 LLM 输出中的工具调用残留（思维泄漏）",
-  "author": "HomeAgent SDK",
+  "author": "HologramAgent SDK",
   "entry": "plugin.so",
   "tags": ["sanitizer"],
   "targets": "linux/amd64",

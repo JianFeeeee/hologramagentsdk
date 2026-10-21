@@ -4,7 +4,7 @@
   "name_en": "Weather",
   "version": "1.0.0",
   "description": "天气查询插件（基于 wttr.in），支持实时天气和未来预报",
-  "author": "HomeAgent",
+  "author": "HologramAgent",
   "entry": "plugin.so",
   "tags": [
     "weather",

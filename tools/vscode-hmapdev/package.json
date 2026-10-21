@@ -1,7 +1,7 @@
 {
   "name": "hmapdev-vscode",
-  "displayName": "HomeAgent Plugin Dev (hmapdev)",
-  "description": "调试与构建 HomeAgent 插件工程：plg.json 校验、SDK 版本解析、hmapdev 构建/运行、内核日志跟随。",
+  "displayName": "HologramAgent Plugin Dev (hmapdev)",
+  "description": "调试与构建 HologramAgent 插件工程：plg.json 校验、SDK 版本解析、hmapdev 构建/运行、内核日志跟随。",
   "version": "0.1.0",
   "publisher": "JianFeeeee",
   "license": "AGPL-3.0-only",
@@ -71,7 +71,7 @@
       }
     ],
     "configuration": {
-      "title": "HomeAgent Plugin Dev",
+      "title": "HologramAgent Plugin Dev",
       "properties": {
         "hmapdev.path": {
           "type": "string",

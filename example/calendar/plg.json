@@ -4,7 +4,7 @@
   "name_en": "Calendar",
   "version": "1.1.0",
   "description": "日历事件管理，支持提醒和重复事件",
-  "author": "HomeAgent",
+  "author": "HologramAgent",
   "entry": "plugin.so",
   "tags": [
     "calendar",
