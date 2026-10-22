@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/JianFeeeee/homeagentsdk/meta"
+	"github.com/JianFeeeee/hologramagentsdk/meta"
 )
 
 // 工具链必须能报出自己的版本。

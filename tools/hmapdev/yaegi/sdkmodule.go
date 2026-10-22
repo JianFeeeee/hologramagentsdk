@@ -16,8 +16,14 @@ import "strings"
 // 只认新名 ⇒ 旧插件查不到路径 ⇒ 退化成「找不到 SDK」的兜底分支，
 // 而那是**静默**的：没有报错，只是行为不再是预期那条。
 var sdkModuleNames = []string{
+	// 当前名（本仓 go.mod 已改名）
+	"github.com/JianFeeeee/hologramagentsdk",
+	// 改名前的 GitHub 名（存量插件的 go.mod 里写的仍是它）
 	"github.com/JianFeeeee/homeagentsdk",
+	// 迁移前的 gitcode 名
 	"gitcode.com/JianFeeeee/homeagent-sdk",
+	// gitcode 已同步改名后的路径
+	"gitcode.com/JianFeeeee/hologramagentsdk",
 }
 
 // isSDKModule 报告 s 是否含 SDK 模块名。

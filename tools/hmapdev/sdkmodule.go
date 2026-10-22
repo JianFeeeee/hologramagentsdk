@@ -2,6 +2,26 @@ package main
 
 import "strings"
 
+// sdkModuleNames 是**所有**需要被识别为 SDK 的 module path —— 单一数据源。
+//
+// 三层历史叠加，全部都要认：
+//
+//	github.com/JianFeeeee/hologramagentsdk   当前名（仓库与 module 均已改）
+//	github.com/JianFeeeee/homeagentsdk       改名前（GitHub 旧名）
+//	gitcode.com/JianFeeeee/homeagent-sdk     最早（gitcode 旧名）
+//	gitcode.com/JianFeeeee/hologramagentsdk  gitcode 改名后
+//
+// ★ 为什么必须集中在一处（2026-10-22 实测）：原先 sdkModulePath 与
+// containsSDKModule 各写了一份字面量列表，仓改名时只改了一份，
+// 另一份漏改 ⇒ CI 红而本地绿（`isSDKModule("...hologramagentsdk") = false`）。
+// 两份列表的存在本身就是缺陷，合并成一个常量。
+var sdkModuleNames = []string{
+	"github.com/JianFeeeee/hologramagentsdk",
+	"github.com/JianFeeeee/homeagentsdk",
+	"gitcode.com/JianFeeeee/homeagent-sdk",
+	"gitcode.com/JianFeeeee/hologramagentsdk",
+}
+
 // sdkModulePath 报告 mod 是否为 HologramAgent SDK 的 module path，
 // 是则返回规范化的模块名。
 //
@@ -27,10 +47,7 @@ func sdkModulePath(mod string) (string, bool) {
 	if mod == "" {
 		return "", false
 	}
-	for _, name := range []string{
-		"github.com/JianFeeeee/homeagentsdk",
-		"gitcode.com/JianFeeeee/homeagent-sdk",
-	} {
+	for _, name := range sdkModuleNames {
 		if strings.Contains(mod, name) {
 			return name, true
 		}
@@ -49,10 +66,7 @@ func isSDKModule(mod string) bool {
 // 与 isSDKModule 分开：那个判「单个 module path 是不是 SDK」，
 // 这个判「整份文件里有没有引用 SDK」——用途不同，别合并。
 func containsSDKModule(text string) bool {
-	for _, name := range []string{
-		"github.com/JianFeeeee/homeagentsdk",
-		"gitcode.com/JianFeeeee/homeagent-sdk",
-	} {
+	for _, name := range sdkModuleNames {
 		if strings.Contains(text, name) {
 			return true
 		}
