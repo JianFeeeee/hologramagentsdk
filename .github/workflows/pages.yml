@@ -5,9 +5,13 @@
 #     不维护第二份配置，否则两边迟早漂移。
 #   - 自托管站仍由 deploy/scripts/deploy-sdk-site.sh 推 106，本文件不碰它。
 #
-# 基址通过环境变量覆盖（而不是给 Pages 单写一套配置）：
-#   SITE_BASE_URL      → gensite 生成的 llms.txt 里的绝对链接
-#   MKDOCS_SITE_URL    → mkdocs 的 site_url（canonical / sitemap）
+# 基址不写死：本仓在 GitHub 上叫 hologramagentsdk（与台账里的 homeagentsdk
+# 不同：GitHub 侧改名过，旧名靠 redirect 生效）。写死仓库名一旦再改名就会
+# 静默产出一整套指向 404 的 llms.txt / sitemap —— 从 GITHUB_REPOSITORY 推导，
+# 名字变了也不用改这里。具体值在 build 步骤里算（Pages 域名要求小写）。
+#
+# SITE_BASE_URL    → gensite 生成的 llms.txt 里的绝对链接
+# MKDOCS_SITE_URL  → mkdocs 的 site_url（canonical / sitemap）
 #
 # 权限最小化：只读仓库 + 写 Pages。id-token 是 deploy-pages 的 OIDC 要求。
 name: Pages
@@ -29,8 +33,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SITE_BASE_URL: https://jianfeeeee.github.io/homeagentsdk
-  MKDOCS_SITE_URL: https://jianfeeeee.github.io/homeagentsdk/
+  GOFLAGS: -buildvcs=false
 
 jobs:
   build:
@@ -54,7 +57,14 @@ jobs:
         run: python3 -m pip install --quiet mkdocs-material
 
       - name: 生成并构建站点
-        run: tools/apidoc/build.sh
+        run: |
+          set -euo pipefail
+          # Pages 域名是小写的 <owner>.github.io/<repo>；GITHUB_REPOSITORY_OWNER
+          # 保留原始大小写（这里是 JianFeeeee），故必须转小写，否则基址是死链。
+          repo="${GITHUB_REPOSITORY#*/}"
+          base="https://${GITHUB_REPOSITORY_OWNER,,}.github.io/${repo}"
+          echo "站点基址: $base"
+          SITE_BASE_URL="$base" MKDOCS_SITE_URL="$base/" tools/apidoc/build.sh
 
       - uses: actions/configure-pages@v5
 
