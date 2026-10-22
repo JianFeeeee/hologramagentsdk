@@ -4,6 +4,19 @@
 
 SDK 里的取值枚举。其中带「仅内置」标注的取值在内核侧会被夹到较低级别。
 
+## AutoStartOnKernel 等
+
+| 名称 | 说明 |
+|---|---|
+| `AutoStartOnKernel` | AutoStartOnKernel 表示伴随内核启动（缺少该字段时的默认形态）。 |
+| `AutoStartOnDemand` | AutoStartOnDemand 表示启用但不自启：待 agent 显式拉起。 |
+
+## OnDemandNeedsSkill
+
+| 名称 | 说明 |
+|---|---|
+| `OnDemandNeedsSkill` |  |
+
 ## FacilityConfig 等
 
 | 名称 | 说明 |
@@ -22,6 +35,13 @@ SDK 里的取值枚举。其中带「仅内置」标注的取值在内核侧会�
 | `FacilityONNX` | FacilityONNX 是依存句法分析器就绪。 |
 | `FacilityStageHost` | FacilityStageHost 是阶段管道 + 插件注册表就绪。 |
 | `FacilityAgent` | FacilityAgent 是主 Agent 就绪（**最晚**的一个，通常在插件加载前）。 |
+
+## ProxyAuthHomeAgent 等
+
+| 名称 | 说明 |
+|---|---|
+| `ProxyAuthHomeAgent` | ProxyAuthHomeAgent 表示由 HologramAgent 统一保护：浏览器走门户会话 |
+| `ProxyAuthNone` | ProxyAuthNone 表示不经 HologramAgent 鉴权，直接把请求转发给上游。 |
 
 ## StageOnInput 等
 
@@ -95,24 +115,4 @@ SDK 里的取值枚举。其中带「仅内置」标注的取值在内核侧会�
 | `CapImage` |  |
 | `CapAudio` |  |
 | `CapStructured` |  |
-
-## ProxyAuthHomeAgent 等
-
-| 名称 | 说明 |
-|---|---|
-| `ProxyAuthHomeAgent` | ProxyAuthHomeAgent 表示由 HologramAgent 统一保护：浏览器走门户会话 |
-| `ProxyAuthNone` | ProxyAuthNone 表示不经 HologramAgent 鉴权，直接把请求转发给上游。 |
-
-## AutoStartOnKernel 等
-
-| 名称 | 说明 |
-|---|---|
-| `AutoStartOnKernel` | AutoStartOnKernel 表示伴随内核启动（缺少该字段时的默认形态）。 |
-| `AutoStartOnDemand` | AutoStartOnDemand 表示启用但不自启：待 agent 显式拉起。 |
-
-## OnDemandNeedsSkill
-
-| 名称 | 说明 |
-|---|---|
-| `OnDemandNeedsSkill` |  |
 

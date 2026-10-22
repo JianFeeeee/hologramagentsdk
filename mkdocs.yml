@@ -8,7 +8,10 @@
 
 site_name: HologramAgent 插件 SDK
 site_description: 用 Go 或 Lua 为 HologramAgent 编写插件 —— API 参考与开发指南
-site_url: https://sdk.hologramagent.jianfgit.xyz/
+# 站点基址可用 MKDOCS_SITE_URL 覆盖：自托管（默认）与 GitHub Pages 共用同一份配置。
+# 用 !ENV 而不是两份配置文件，是因为 Pages 与自托管的内容必须逐字一致 ——
+# 两份配置迟早会漂移（改了一边忘另一边），而这里只有基址这一个变量。
+site_url: !ENV [MKDOCS_SITE_URL, "https://sdk.hologramagent.jianfgit.xyz/"]
 copyright: MIT 许可 · JianFeeeee
 
 # 主题覆盖目录：只覆盖 footer.html（补备案号，见该文件里的说明）。

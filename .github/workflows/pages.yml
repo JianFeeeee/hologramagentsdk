@@ -1,0 +1,74 @@
+# GitHub Pages：把插件 SDK 文档站也发布到 GitHub 上。
+#
+# 与自托管站（https://sdk.hologramagent.jianfgit.xyz/）的关系：
+#   - **内容逐字相同** —— 同一个 build.sh、同一份 mkdocs.yml，只换基址。
+#     不维护第二份配置，否则两边迟早漂移。
+#   - 自托管站仍由 deploy/scripts/deploy-sdk-site.sh 推 106，本文件不碰它。
+#
+# 基址通过环境变量覆盖（而不是给 Pages 单写一套配置）：
+#   SITE_BASE_URL      → gensite 生成的 llms.txt 里的绝对链接
+#   MKDOCS_SITE_URL    → mkdocs 的 site_url（canonical / sitemap）
+#
+# 权限最小化：只读仓库 + 写 Pages。id-token 是 deploy-pages 的 OIDC 要求。
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Pages 发布不能并发：两个部署同时跑会互相覆盖，
+# 且 cancel-in-progress 会把已上传的 artifact 打断成坏状态。
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  SITE_BASE_URL: https://jianfeeeee.github.io/homeagentsdk
+  MKDOCS_SITE_URL: https://jianfeeeee.github.io/homeagentsdk/
+
+jobs:
+  build:
+    name: 构建文档站
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      # ★ build.sh 会先用 go run 跑 apidoc/gensite（文档页是生成物），
+      #   再跑 mkdocs。所以 Go 与 Python 两个工具链缺一不可 ——
+      #   只装 mkdocs 会退化成「渲染仓库里那份可能已过时的 docs/」。
+      - name: 安装 mkdocs
+        run: python3 -m pip install --quiet mkdocs-material
+
+      - name: 生成并构建站点
+        run: tools/apidoc/build.sh
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site_build
+
+  deploy:
+    name: 发布
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
