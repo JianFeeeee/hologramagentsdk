@@ -4,7 +4,7 @@ package meta
 
 var (
 	// Version 是 HologramAgent SDK 版本号。
-	// 通过 `-ldflags="-X github.com/JianFeeeee/hologramagentsdk/meta.Version=vX.Y.Z"` 注入。
+	// 通过 `-ldflags="-X github.com/JianFeeeee/homeagentsdk/meta.Version=vX.Y.Z"` 注入。
 	//
 	// 版本号语义：**SDK 版本跟随核心的中版本，patch 位恒为 .0**。
 	// 整条核心 1.1.x 线（1.1.0、1.1.1、1.1.7…）共用 SDK 1.1.0；
@@ -61,30 +61,23 @@ var (
 
 	// SDKModule 是本 SDK 仓当前的 Go module path。
 	//
-	// 历史沿革（改判定逻辑前必读）：
-	//   1. 最初：`gitcode.com/JianFeeeee/homeagent-sdk`
-	//   2. 2026-10-08 托管地迁到 GitHub：`github.com/JianFeeeee/homeagentsdk`
-	//   3. 2026-10 产品改名 HomeAgent → HologramAgent，module 随之变为当前值。
+	// ★ 2026-10-08 随托管地迁移：`gitcode.com/JianFeeeee/homeagent-sdk`
+	//   → `github.com/JianFeeeee/homeagentsdk`（仓库迁到 GitHub）。
 	//
-	// ❗存量插件的 go.mod 里可能是第 1 或第 2 个名字（本机实测仍有工作区在用
-	//   第 2 个）。因此凡是要「识别 SDK 模块」的判定必须**三个名字都接受**
-	//   （见 hmapdev 的 sdkModulePath 助手 / sdkModuleNames 列表），不能只认新名——
-	//   只认新名会让存量插件被当成「不是 SDK 模块」而静默走错分支
-	//   （不写 replace、yaegi 找不到 SDK 源码路径，且**不报错**）。
-	SDKModule = "github.com/JianFeeeee/hologramagentsdk"
+	// ❗已有插件的 go.mod 里写的仍是旧路径（本机实测 qq/vanblog/mcquery/
+	//   fileproc/mail-bridge 五个插件工作区全是 gitcode.com/...）。
+	//   因此凡是要「识别 SDK 模块」的判定必须**两种都接受**
+	//   （见 hmapdev 的 sdkModulePath 助手），不能只认新名——
+	//   只认新名会让旧插件被当成「不是 SDK 模块」而静默走错分支。
+	SDKModule = "github.com/JianFeeeee/homeagentsdk"
 
-	// LegacySDKModule 是**最初**的 SDK module path（gitcode 时代），仍需被识别。
-	//
-	// 刻意保留旧值、不随改名更新：它的用途就是「认得出迁移前的存量插件」。
-	// 中间那一代 `github.com/JianFeeeee/homeagentsdk` 见 SDKModule 注释第 2 条，
-	// 识别列表里同样要保留。
+	// LegacySDKModule 是迁移前的 SDK module path，仍需被识别。
 	LegacySDKModule = "gitcode.com/JianFeeeee/homeagent-sdk"
 
 	// CoreModule 是核心仓的 Go module path，供 hmapdev 生成 go.mod 时使用。
 	//
-	// ★ 2026-10 随核心仓改名同步：HomeAgent → HologramAgent
-	//   （github.com/JianFeeeee/HomeAgent → github.com/JianFeeeee/HologramAgent）。
-	//   漏改这里 = hmapdev 生成的 go.mod 指向一个不存在的模块，构建直接失败。
+	// ★ 2026-10-08 随主仓托管地迁移而更新：仓库在 GitHub
+	//   （github.com/JianFeeeee/HologramAgent），module 路径同步。
 	//   注意它与 SDKModule 不是同一个仓：插件只依赖 SDK，**不依赖主仓**，
 	//   所以改本常量不影响任何已有插件。
 	CoreModule = "github.com/JianFeeeee/HologramAgent"

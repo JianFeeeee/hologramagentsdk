@@ -30,7 +30,6 @@
 | `qq_get_history` | 取群/私聊最近历史消息 |
 | `qq_list_chats` | 会话列表（按最新消息排序，带未读数与摘要） |
 | `qq_mark_read` | 把某会话未读数清零 |
-| `qq_send_file` | 发文件/图片（私聊或群聊） |
 | `qq_get_groups` | 群列表，可按关键词搜 |
 | `qq_get_friends` | 好友列表，可按昵称/备注搜 |
 | `qq_get_recent_contacts` | 最近有消息的联系人与群 |

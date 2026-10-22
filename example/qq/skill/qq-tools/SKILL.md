@@ -26,9 +26,8 @@ QQ 插件在 **HTTP 端口上监听 NapCat 推送**。用户发来的 QQ 消息*
 | `qq_get_history` | 按会话拉最近历史（**群聊传 group_id，私聊传 user_id**） |
 | `qq_list_chats` | 会话列表，按最新消息排序，带未读数与摘要 |
 | `qq_mark_read` | 清零某会话未读数 |
-| `output_send__qq` | 主动发消息（群/私聊由 meta 决定） |
+| `output_send__qq` | **发消息、发图、发文件、发表情都走它**（type 决定形态，群/私聊由 meta 决定；payload 传数组可一次发多条） |
 | `qq_list_stickers` | 列出收藏表情包（index + url + 已缓存的 desc/mood） |
-| `qq_send_sticker` | 发表情：传 `index`（来自 list_stickers）或直接传 `url` |
 | `qq_describe_sticker` | 给表情记录内容/情绪描述（先用 see_image 看，再记） |
 | `qq_add_sticker` | 把别人发的表情收藏到自己账号（message_id / url / file） |
 | `qq_remove_sticker` | 从收藏里删表情（index / url），清理误收 |
@@ -101,10 +100,17 @@ NapCat 的表情接口是 `fetch_custom_face`（收藏表情，返回的是**图
 ```
 qq_list_stickers count=20
   → [{index:1, url:"https://p.qpic.cn/...", desc:"猫翻白眼", mood:"无语"}, ...]
-qq_send_sticker user_id=2198972886 index=1
 ```
 
-也可以 `output_send__qq` 用 `type=sticker` + 表情 URL 直接发。
+发表情同样走 `output_send__qq`，两种写法都行：
+
+```
+# 按收藏序号（推荐：不用记 URL，表情库变了也不会错）
+output_send__qq type=sticker payload="" meta={"user_id":2198972886,"sticker_index":1}
+
+# 直接给 URL
+output_send__qq type=sticker payload="https://p.qpic.cn/..." meta={"user_id":2198972886}
+```
 
 ### 别人发的表情，可以收进自己收藏
 

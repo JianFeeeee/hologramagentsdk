@@ -156,9 +156,9 @@ var qqMessageIDRe = regexp.MustCompile(`message_id=(-?\d+)`)
 
 // 默认只开放公共信息与当前 QQ 会话所需能力。日历、邮件、记忆、知识库、
 // 主机文件/命令、设备、配置、插件管理及 QQ 联系人/跨会话列表均不在白名单中。
-const defaultPublicToolAllowlist = `["output_send__qq","output_list_channels","qq_get_message","qq_get_history","qq_mark_read","qq_get_group_member_info","qq_get_group_files","qq_video_download","weather_*","browser_search","browser_fetch","browser_render","ocr_*","multimodal_*","qq_download_file","qq_read_document","qq_get_download_tasks","qq_list_stickers","qq_send_sticker","qq_add_sticker","qq_describe_sticker","qq_get_groups","qq_resolve_name","seemedia_*","see_image","see_video","hear_audio","bili_*","music_*","ai_image_*"]`
+const defaultPublicToolAllowlist = `["output_send__qq","output_list_channels","qq_get_message","qq_get_history","qq_mark_read","qq_get_group_member_info","qq_get_group_files","qq_video_download","weather_*","browser_search","browser_fetch","browser_render","ocr_*","multimodal_*","qq_download_file","qq_read_document","qq_get_download_tasks","qq_list_stickers","qq_add_sticker","qq_describe_sticker","qq_get_groups","qq_resolve_name","seemedia_*","see_image","see_video","hear_audio","bili_*","music_*","ai_image_*"]`
 
-const defaultGroupToolAllowlists = `{"*":["output_send__qq","output_list_channels","qq_get_message","qq_get_history","qq_mark_read","qq_get_group_member_info","qq_get_group_files","qq_video_download","weather_*","browser_search","browser_fetch","browser_render","ocr_*","multimodal_*","qq_download_file","qq_read_document","qq_get_download_tasks","qq_list_stickers","qq_send_sticker","qq_add_sticker","qq_describe_sticker","qq_get_groups","qq_resolve_name","seemedia_*","see_image","see_video","hear_audio","bili_*","music_*","ai_image_*"]}`
+const defaultGroupToolAllowlists = `{"*":["output_send__qq","output_list_channels","qq_get_message","qq_get_history","qq_mark_read","qq_get_group_member_info","qq_get_group_files","qq_video_download","weather_*","browser_search","browser_fetch","browser_render","ocr_*","multimodal_*","qq_download_file","qq_read_document","qq_get_download_tasks","qq_list_stickers","qq_add_sticker","qq_describe_sticker","qq_get_groups","qq_resolve_name","seemedia_*","see_image","see_video","hear_audio","bili_*","music_*","ai_image_*"]}`
 
 const (
 	// 单轮 QQ 触发的工具调用总数上限（0 = 不限制）。只作跑飞兜底，
@@ -607,20 +607,6 @@ type 枚举: text（文字）/ voice（语音转文字后发送）/ image（图�
 	}, p.handleGetMessage)
 
 	p.regTool(s, sdk.ToolDef{
-		Name: tp + "send_file", Description: "发送文件/图片到QQ（私聊或群聊）。文件先复制到remote目录供NapCat容器访问。",
-		Parameters: map[string]interface{}{
-			"type": "object", "properties": map[string]interface{}{
-				"group_id": map[string]interface{}{"type": "integer", "description": "目标群号（与user_id二选一）"},
-				"user_id":  map[string]interface{}{"type": "integer", "description": "目标QQ号（与group_id二选一）"},
-				"file":     map[string]interface{}{"type": "string", "description": "本地文件路径"},
-				"name":     map[string]interface{}{"type": "string", "description": "文件名（可选，默认取原文件名）"},
-				"as_image": map[string]interface{}{"type": "boolean", "description": "作为图片发送（true）还是作为文件（false，默认）"},
-			},
-		},
-		NoMemory: true,
-	}, p.handleSendFile)
-
-	p.regTool(s, sdk.ToolDef{
 		Name: tp + "list_stickers", Description: "列出我收藏的QQ表情包（NapCat fetch_custom_face）。返回表情图片地址列表，" +
 			"可用 qq_send_sticker 发送。表情是'图'不是'文件'——发出去在 QQ 里显示为表情图。",
 		Parameters: map[string]interface{}{
@@ -630,21 +616,6 @@ type 枚举: text（文字）/ voice（语音转文字后发送）/ image（图�
 		},
 		NoMemory: true,
 	}, p.handleListStickers)
-
-	p.regTool(s, sdk.ToolDef{
-		Name: tp + "send_sticker", Description: "发送QQ表情包（私聊或群聊）。表情来源两种：传 url 直接发指定表情图；" +
-			"或传 index 按 qq_list_stickers 列表里的序号发（1 开始）。表情按图片段发送，QQ 会渲染成表情。",
-		Parameters: map[string]interface{}{
-			"type": "object", "properties": map[string]interface{}{
-				"group_id": map[string]interface{}{"type": "integer", "description": "目标群号（与 user_id 二选一）"},
-				"user_id":  map[string]interface{}{"type": "integer", "description": "目标QQ号（与 group_id 二选一）"},
-				"url":      map[string]interface{}{"type": "string", "description": "表情图片地址（qq_expression URL）"},
-				"index":    map[string]interface{}{"type": "integer", "description": "从 list_stickers 结果里选的序号（1 开始）"},
-				"count":    map[string]interface{}{"type": "integer", "description": "按 index 取时先拉取的表情数量（默认 20）"},
-			},
-		},
-		NoMemory: true,
-	}, p.handleSendSticker)
 
 	p.regTool(s, sdk.ToolDef{
 		Name: tp + "describe_sticker", Description: "给收藏表情记录**内容与情绪描述**（缓存到插件配置，之后 qq_list_stickers 会带出来）。" +
@@ -2566,24 +2537,35 @@ func (p *Plugin) handleChannelOutput(args map[string]interface{}) (interface{}, 
 	rawType, _ := args["type"].(string)
 	meta, _ := args["meta"].(string)
 	log.Printf("[qq] handleChannelOutput type=%s payload_len=%d meta=%s", rawType, len(payload), meta)
-	if payload == "" || rawType == "" {
-		return nil, fmt.Errorf("payload 和 type 参数不能为空")
+	if rawType == "" {
+		return nil, fmt.Errorf("type 参数不能为空")
 	}
 
 	// 解析 meta
 	var groupID, userID int64
 	var replyTo int64
+	// stickerIndex 让 type=sticker 时可直接按收藏序号选表情 —— 这项能力原先只存在于
+	// 独立的 qq_send_sticker 工具里，但"发一条消息"本来就是输出门的语义，
+	// 不该另开一个工具（用户 2026-10-22 拍板收回独立 tool）。
+	var stickerIndex int64
 	if meta != "" {
 		var m struct {
-			GroupID int64 `json:"group_id"`
-			UserID  int64 `json:"user_id"`
-			ReplyTo int64 `json:"reply_to"`
+			GroupID      int64 `json:"group_id"`
+			UserID       int64 `json:"user_id"`
+			ReplyTo      int64 `json:"reply_to"`
+			StickerIndex int64 `json:"sticker_index"`
 		}
 		if err := json.Unmarshal([]byte(meta), &m); err == nil {
 			groupID = m.GroupID
 			userID = m.UserID
 			replyTo = m.ReplyTo
+			stickerIndex = m.StickerIndex
 		}
+	}
+	// payload 通常不能为空，但 type=sticker 且 meta 指定了 sticker_index 时
+	// 真实 URL 由插件从收藏里取，payload 允许留空。
+	if payload == "" && !(rawType == "sticker" && stickerIndex > 0) {
+		return nil, fmt.Errorf("payload 不能为空")
 	}
 	if groupID == 0 && userID == 0 {
 		return nil, fmt.Errorf("meta 中需要 group_id 或 user_id 字段。用 output_send__qq_help 查看格式说明")
@@ -2661,6 +2643,17 @@ func (p *Plugin) handleChannelOutput(args map[string]interface{}) (interface{}, 
 		}
 
 	case "image", "file", "sticker":
+		// sticker + meta.sticker_index ⇒ 从收藏表情里按序号取 URL
+		if rawType == "sticker" && stickerIndex > 0 && payload == "" {
+			faces, ferr := p.fetchCustomFaces(int(stickerIndex))
+			if ferr != nil {
+				return nil, ferr
+			}
+			if int(stickerIndex) > len(faces) {
+				return nil, fmt.Errorf("表情序号 %d 超出范围（当前收藏 %d 个）", stickerIndex, len(faces))
+			}
+			payload = faces[stickerIndex-1]
+		}
 		uri := payload
 		if !strings.HasPrefix(payload, "http://") && !strings.HasPrefix(payload, "https://") &&
 			!strings.HasPrefix(payload, "file://") {
@@ -2784,74 +2777,12 @@ func normalizeIMText(s string) string {
 	return s
 }
 
-func (p *Plugin) handleSendFile(args map[string]interface{}) (interface{}, error) {
-	// 用 argPeerID（0 视为未提供）：旧的 convInt64 会把 group_id=0 当成
-	// "发往群 0"，于是文件发不出去还报得含糊 —— 同一个零值缺陷，见 argPeerID 注释。
-	gid, hasGroup := argPeerID(args, "group_id")
-	uid, hasUser := argPeerID(args, "user_id")
-	if !hasGroup && !hasUser {
-		return nil, fmt.Errorf("需要 group_id（群）或 user_id（私聊）：私聊请只传 user_id，不要传 group_id=0")
-	}
-	if hasGroup && hasUser {
-		return nil, fmt.Errorf("group_id 与 user_id 只能二选一")
-	}
-	filePath, _ := args["file"].(string)
-	if filePath == "" {
-		return nil, fmt.Errorf("need file path")
-	}
-	name, _ := args["name"].(string)
-	if name == "" {
-		name = filepath.Base(filePath)
-	}
-	name = sanitizeFilename(name)
-	asImage, _ := args["as_image"].(bool)
-
-	// copy to remote dir for NapCat container access
-	dest := filepath.Join(p.remoteDir, name)
-	srcData, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("read file: %w", err)
-	}
-	if err := os.WriteFile(dest, srcData, 0644); err != nil {
-		return nil, fmt.Errorf("write remote: %w", err)
-	}
-
-	uri := fmt.Sprintf("file:///app/files/%s", name)
-	var cqMsg string
-	if asImage {
-		cqMsg = fmt.Sprintf("[CQ:image,file=%s]", uri)
-	} else {
-		cqMsg = fmt.Sprintf("[CQ:file,file=%s,title=%s]", uri, name)
-	}
-
-	params := map[string]interface{}{"message": cqMsg}
-	if hasGroup {
-		params["group_id"] = gid
-		return p.napcat("send_group_msg", params)
-	}
-	params["user_id"] = uid
-	return p.napcat("send_private_msg", params)
-}
-
-// ======== 表情包（NapCat fetch_custom_face） ========
-//
-// NapCat 的表情接口只有一个：`fetch_custom_face` —— 拉取账号**收藏的表情**，
-// 返回的是表情图片地址（https://p.qpic.cn/qq_expression/...），不含 mface 的
-// emoji_id / key（那两个只在收到别人发表情时才有，是客户端私有字段）。
-// 所以发送走 **image 段**带 URL：QQ 会按表情图渲染，不是普通图片气泡。
-
-// stickerDesc 是**模型看过表情之后**记录下来的语义标签。
-//
-// 为什么需要：NapCat 的 fetch_custom_face 只返回图片 URL，没有任何名称/情绪
-// 信息 —— 模型无从判断"哪张适合现在发"。方案是把判断结果**缓存**下来：
-// 第一次由模型用 see_image(url) 看，再调 qq_describe_sticker 记录 desc/mood；
-// 之后每次 list 都自带描述，模型可直接按情绪挑选。
+// stickerDesc 是给收藏表情记录的内容与情绪描述。
 type stickerDesc struct {
 	Desc string `json:"desc"` // 画面内容：画的是什么、什么梗
 	Mood string `json:"mood"` // 情绪/场合：开心、无语、嘲讽、撒娇…
 }
 
-// loadStickerDescs 从插件配置读缓存；坏数据按空处理，不影响表情功能。
 func (p *Plugin) loadStickerDescs() {
 	p.stickerMu.Lock()
 	defer p.stickerMu.Unlock()
@@ -2970,53 +2901,6 @@ func (p *Plugin) handleListStickers(args map[string]interface{}) (interface{}, e
 	}, nil
 }
 
-// handleSendSticker 发表情：url 直发，或按 index 从收藏里挑。
-func (p *Plugin) handleSendSticker(args map[string]interface{}) (interface{}, error) {
-	gid, hasGroup := argPeerID(args, "group_id")
-	uid, hasUser := argPeerID(args, "user_id")
-	if !hasGroup && !hasUser {
-		return nil, fmt.Errorf("需要 group_id（群）或 user_id（私聊）：私聊请只传 user_id，不要传 group_id=0")
-	}
-	if hasGroup && hasUser {
-		return nil, fmt.Errorf("group_id 与 user_id 只能二选一")
-	}
-
-	url, _ := args["url"].(string)
-	if url == "" {
-		idx64, err := convInt64(args["index"])
-		if err != nil || idx64 < 1 {
-			return nil, fmt.Errorf("需要 url 或 index（1 开始，来自 qq_list_stickers）")
-		}
-		count := int(idx64)
-		if c, e := convInt64(args["count"]); e == nil && int(c) > count {
-			count = int(c)
-		}
-		faces, err := p.fetchCustomFaces(count)
-		if err != nil {
-			return nil, err
-		}
-		if int(idx64) > len(faces) {
-			return nil, fmt.Errorf("表情序号 %d 超出范围（当前收藏 %d 个）", idx64, len(faces))
-		}
-		url = faces[idx64-1]
-	}
-	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
-		return nil, fmt.Errorf("表情地址必须是 http(s) URL，收到 %q", url)
-	}
-
-	msg := map[string]interface{}{"message": fmt.Sprintf("[CQ:image,file=%s]", url)}
-	if hasGroup {
-		msg["group_id"] = gid
-		return p.napcat("send_group_msg", msg)
-	}
-	msg["user_id"] = uid
-	return p.napcat("send_private_msg", msg)
-}
-
-// addFaceByFile 把已放到 remote 目录的图片加入收藏表情。
-//
-// NapCat 的 add_custom_face 只认**它自己能读到的路径**（容器里的 /app/files），
-// 与 send_file 是同一个共享目录约定，所以先落地到 p.remoteDir 再传 file:///app/files。
 func (p *Plugin) addFaceByFile(fileName string) (bool, error) {
 	raw, err := p.napcat("add_custom_face", map[string]interface{}{
 		"file": "/app/files/" + fileName,
