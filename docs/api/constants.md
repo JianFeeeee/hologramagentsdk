@@ -36,12 +36,14 @@ SDK 里的取值枚举。其中带「仅内置」标注的取值在内核侧会�
 | `FacilityStageHost` | FacilityStageHost 是阶段管道 + 插件注册表就绪。 |
 | `FacilityAgent` | FacilityAgent 是主 Agent 就绪（**最晚**的一个，通常在插件加载前）。 |
 
-## ProxyAuthHomeAgent 等
+## ProxyAuthAgent 等
 
 | 名称 | 说明 |
 |---|---|
-| `ProxyAuthHomeAgent` | ProxyAuthHomeAgent 表示由 HologramAgent 统一保护：浏览器走门户会话 |
-| `ProxyAuthNone` | ProxyAuthNone 表示不经 HologramAgent 鉴权，直接把请求转发给上游。 |
+| `ProxyAuthAgent` | 表示由内核统一保护：浏览器走门户会话，非浏览器客户端走 X-API-Key |
+| `ProxyAuthNone` | 表示不经内核鉴权，直接把请求转发给上游 |
+| `ProxyAuthAgentLegacy` | **仅用于兼容读取**的旧值 `"homeagent"`，存量 plugin.json 里写的仍是它；不要在新声明里用 |
+| `ProxyAuthHomeAgent` | 旧常量名，等价于 `ProxyAuthAgent`（Deprecated） |
 
 ## StageOnInput 等
 

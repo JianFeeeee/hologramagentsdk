@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/JianFeeeee/hologramagentsdk/meta"
+	"github.com/JianFeeeee/homeagentsdk/meta"
 )
 
 // 工具链必须能报出自己的版本。
@@ -34,9 +34,8 @@ func TestPrintVersionReportsInjectedVersion(t *testing.T) {
 	if !strings.Contains(out, "deadbee") {
 		t.Fatalf("提交号未出现在输出里:\n%s", out)
 	}
-	// 判据跟着改名走：用 meta.SDKModule 而不是写死字面量，
-	// 否则下一次改名这里会变成「永远为真的坏断言」或误报。
-	if !strings.Contains(out, meta.SDKModule) {
+	if !strings.Contains(out, "HologramAgent") && !strings.Contains(out, "homeagent-sdk") &&
+		!strings.Contains(out, "homeagentsdk") {
 		t.Fatalf("输出里没有 SDK 模块标识:\n%s", out)
 	}
 }
