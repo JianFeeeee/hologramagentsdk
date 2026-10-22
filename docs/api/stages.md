@@ -80,7 +80,7 @@ RegisterStage registers a handler for a pipeline stage.
 |---|---|---|
 | [`cmd`](../examples/index.md#cmd) | `example/cmd/plugin.go:221` | `s.RegisterStage(sdk.StageBeforeToolcall, func(ctx *sdk.StageContext) error {` |
 | [`memo`](../examples/index.md#memo) | `example/memo/plugin.go:152` | `s.RegisterStage(sdk.StagePreAction, p.stagePreAction)` |
-| [`qq`](../examples/index.md#qq) | `example/qq/plugin.go:940` | `s.RegisterStage(sdk.StageOnInput, p.onInputAuthContext, sdk.StageScopeGlobal)` |
+| [`qq`](../examples/index.md#qq) | `example/qq/plugin.go:1040` | `s.RegisterStage(sdk.StageOnInput, p.onInputAuthContext, sdk.StageScopeGlobal)` |
 | [`sanitizer`](../examples/index.md#sanitizer) | `example/sanitizer/plugin.go:52` | `s.RegisterStage(sdk.StageOnInput, func(ctx *sdk.StageContext) error {` |
 
 <small>`plugin.go:660`</small>

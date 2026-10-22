@@ -85,7 +85,13 @@ func writeAgentEntrypoints(docsDir, siteDir string) (int, error) {
 		return entries[i].rel < entries[j].rel
 	})
 
-	base := "https://sdk.hologramagent.jianfgit.xyz"
+	// 站点基址：默认是自托管域名（106 上的部署）。
+	// GitHub Pages 构建时由 SITE_BASE_URL 覆盖成 https://<owner>.github.io/<repo> ——
+	// 否则 llms.txt 里的绝对链接会把读者从 Pages 带去自托管站，跨站且版本可能不一致。
+	base := strings.TrimRight(os.Getenv("SITE_BASE_URL"), "/")
+	if base == "" {
+		base = "https://sdk.hologramagent.jianfgit.xyz"
+	}
 	var idx strings.Builder
 	fmt.Fprintf(&idx, llmsHeader, base+"/llms-full.txt")
 	for _, e := range entries {

@@ -122,7 +122,7 @@ InjectInterruptTextOpts(source, channel, text string, opts InjectOptions)
 | [`browser`](../examples/index.md#browser) | `example/browser/plugin.go:1426` | `p.sdk.InjectInterruptTextOpts(p.name, p.name,` |
 | [`calendar`](../examples/index.md#calendar) | `example/calendar/plugin.go:528` | `p.sdk.InjectInterruptTextOpts("calendar", "calendar", msg, sdk.InjectOptions{NoMemory: true})` |
 | [`memo`](../examples/index.md#memo) | `example/memo/plugin.go:299` | `p.sdk.InjectInterruptTextOpts(p.name, p.name,` |
-| [`qq`](../examples/index.md#qq) | `example/qq/plugin.go:1894` | `p.sdk.InjectInterruptTextOpts(p.name, p.name, text, sdk.InjectOptions{` |
+| [`qq`](../examples/index.md#qq) | `example/qq/plugin.go:2002` | `p.sdk.InjectInterruptTextOpts(p.name, p.name, text, sdk.InjectOptions{` |
 
 <small>`plugin.go:387`</small>
 
@@ -399,7 +399,7 @@ InjectInterruptTextOpts 注入可抢占当前处理的中断文本。
 | [`browser`](../examples/index.md#browser) | `example/browser/plugin.go:1426` | `p.sdk.InjectInterruptTextOpts(p.name, p.name,` |
 | [`calendar`](../examples/index.md#calendar) | `example/calendar/plugin.go:528` | `p.sdk.InjectInterruptTextOpts("calendar", "calendar", msg, sdk.InjectOptions{NoMemory: true})` |
 | [`memo`](../examples/index.md#memo) | `example/memo/plugin.go:299` | `p.sdk.InjectInterruptTextOpts(p.name, p.name,` |
-| [`qq`](../examples/index.md#qq) | `example/qq/plugin.go:1894` | `p.sdk.InjectInterruptTextOpts(p.name, p.name, text, sdk.InjectOptions{` |
+| [`qq`](../examples/index.md#qq) | `example/qq/plugin.go:2002` | `p.sdk.InjectInterruptTextOpts(p.name, p.name, text, sdk.InjectOptions{` |
 
 <small>`plugin.go:960`</small>
 
@@ -625,7 +625,7 @@ handler: receives args map with keys: payload (string), type (string), meta (str
 | [`a2a`](../examples/index.md#a2a) | `example/a2a/plugin.go:57` | `if err := s.RegisterOutputChannel(p.name, 1, "A2A Agent 互联通道（外部 agent 查询的回复由此返回）", sdk.ChannelDef{}, func(args…` |
 | [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:57` | `s.RegisterOutputChannel(p.name, 1, "ACP Agent 互联通道（外部 agent 会话的回复由此返回）", sdk.ChannelDef{}, func(args map[strin…` |
 | [`commondev`](../examples/index.md#commondev) | `example/commondev/plugin.go:1291` | `if err := p.sdk.RegisterOutputChannel(outCh, sdk.CapText,` |
-| [`qq`](../examples/index.md#qq) | `example/qq/plugin.go:513` | `s.RegisterOutputChannel("qq", sdk.CapText\|sdk.CapFile\|sdk.CapImage\|sdk.CapAudio,` |
+| [`qq`](../examples/index.md#qq) | `example/qq/plugin.go:546` | `s.RegisterOutputChannel("qq", sdk.CapText\|sdk.CapFile\|sdk.CapImage\|sdk.CapAudio,` |
 
 <small>`plugin.go:721`</small>
 
