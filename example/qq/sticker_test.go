@@ -12,8 +12,9 @@ import (
 
 // NapCat 的表情接口只有 fetch_custom_face（收藏表情 URL 列表）+ 消息段发送，
 // 没有"按 id 发表情"的独立 action。这两条用例钉住：
-//   ① list 能把 fetch_custom_face 的 data[] 解析成带 index 的列表
-//   ② send 能按 index 取到 URL，并以 image 段发到正确端点
+//
+//	① list 能把 fetch_custom_face 的 data[] 解析成带 index 的列表
+//	② send 能按 index 取到 URL，并以 image 段发到正确端点
 type stickerNapCat struct {
 	mu      sync.Mutex
 	actions []string
@@ -83,11 +84,15 @@ func TestListStickersParsesURLsWithOneBasedIndex(t *testing.T) {
 	}
 }
 
+// 表情发送能力已并入 outputch（用户 2026-10-22 拍板收回独立 tool）：
+// 原先的 qq_send_sticker(index=N) 现在是 output_send__qq + type=sticker +
+// meta.sticker_index=N。本测试改为走 outputch 的真实入口，确保迁移后行为不变。
 func TestSendStickerByIndexUsesImageSegment(t *testing.T) {
 	p, f := newStickerPlugin(t)
-	if _, err := p.handleSendSticker(map[string]interface{}{
-		"user_id": float64(2198972886),
-		"index":   float64(2),
+	if _, err := p.handleChannelOutput(map[string]interface{}{
+		"payload": "",
+		"type":    "sticker",
+		"meta":    `{"user_id":2198972886,"sticker_index":2}`,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -109,15 +114,21 @@ func TestSendStickerByIndexUsesImageSegment(t *testing.T) {
 
 func TestSendStickerRejectsMissingTarget(t *testing.T) {
 	p, _ := newStickerPlugin(t)
-	if _, err := p.handleSendSticker(map[string]interface{}{"url": "https://x/y"}); err == nil {
+	if _, err := p.handleChannelOutput(map[string]interface{}{
+		"payload": "https://x/y",
+		"type":    "sticker",
+		"meta":    `{}`,
+	}); err == nil {
 		t.Fatal("没有 group_id/user_id 时应报错")
 	}
 }
 
 func TestSendStickerRejectsIndexOutOfRange(t *testing.T) {
 	p, _ := newStickerPlugin(t)
-	if _, err := p.handleSendSticker(map[string]interface{}{
-		"user_id": float64(1), "index": float64(9),
+	if _, err := p.handleChannelOutput(map[string]interface{}{
+		"payload": "",
+		"type":    "sticker",
+		"meta":    `{"user_id":1,"sticker_index":9}`,
 	}); err == nil {
 		t.Fatal("序号越界时应报错")
 	}
