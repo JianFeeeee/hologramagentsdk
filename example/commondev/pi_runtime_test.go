@@ -252,8 +252,15 @@ func TestCorruptPiMcpIsNotSilentlyOverwritten(t *testing.T) {
 }
 
 // ★★ 判据：`pi_mcp_list` 在无配置时给空列表。
+//
+// 它要**真起一次** `pi mcp list --json`（handlePiMCPList → runPiMCP →
+// exec.Command(p.piBin(), ...)），所以机器上必须有 pi。
+// 缺的时候原来直接 FAIL，而红的原因是"机器没装 pi"，与被测代码无关 ——
+// 那会让 CI 的 examples-tests job 误报。现在缺则 skip 并说明（见
+// requirePiBinary）。★ 有 pi 时**必须真跑**，skip 不是绕过主路径的借口。
 func TestPiMcpListOnFreshInstall(t *testing.T) {
 	p := newPiPlugin(t)
+	requirePiBinary(t, p)
 	res, err := p.handlePiMCPList(map[string]interface{}{})
 	if err != nil {
 		t.Fatal(err)

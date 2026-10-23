@@ -55,3 +55,10 @@ docs/llms-full.txt
 # `git add -A` 提交，几百 KB 的会话流水就永久进了历史 —— 它既不是源码
 # 也不是可复现的产物，且含对话原文。
 .pi-sessions/
+# ★ commondev 的 zcode sidecar 会往**工程线工作目录**（一个 git 仓库）里写两样东西：
+#     .zcode/config.json        会话库指向（storage.sessionDbPath）
+#     .zcode-sessions/          会话 sqlite 库
+# 不忽略的话，插件的「工作树干净」检查会因为这些未跟踪文件误报，
+# 而它们本质是 agent 的运行时产物（同 .pi-sessions/），不是工程内容。
+.zcode/
+.zcode-sessions/

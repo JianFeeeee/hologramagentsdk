@@ -11,8 +11,11 @@ package main
 // 这类"参数被吞"比报错危险得多：报错会立刻发现，吞掉会一路错下去。
 
 import (
+	"archive/zip"
 	"bufio"
+	"bytes"
 	"encoding/json"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -268,43 +271,159 @@ func (t *testRawFiles) WorkDir() string {
 	return d
 }
 
-// ★★★ 判据：**sidecar 脚本必须随包分发**，且查找链能找到它。
+// ★★★ 判据：**sidecar 脚本随包分发**（真打一个 .hmap，验 zip 里有那个条目）。
 //
-// 实测发现的真缺陷（2026-10-15）：打包只收 `rawfile/` 与 `skill/`，
-// 而 `sidecar.mjs` 在**工程根** ⇒ 没进包。同时 `runtime/pi/` 在部署时
-// 没人创建 ⇒ 插件的数据目录里也没有脚本。
+// ## 实测发现的真缺陷（2026-10-15）
 //
+// 打包只收 `rawfile/` 与 `skill/`，而 `sidecar.mjs` 在**工程根** ⇒ 没进包。
+// 同时 `runtime/pi/` 在部署时没人创建 ⇒ 插件的数据目录里也没有脚本。
 // 后果：插件装得上、工具都在、但 `agent_up` **必然失败**，报
-// 「找不到 pi 的 sidecar 脚本: /home/xxx/plugin_data/commondev/runtime/pi/sidecar.mjs」
+// 「找不到 pi 的 sidecar 脚本: <插件数据>/runtime/pi/sidecar.mjs」
 // —— 一个用户从没听说过的路径。属于"能装不能跑"。
-func TestSidecarScriptShipsWithPackage(t *testing.T) {
-	// ① 脚本必须在 rawfile/ 下（随包分发通道）
-	rel := filepath.Join("rawfile", "runtime", "pi", "sidecar.mjs")
-	if _, err := os.Stat(rel); err != nil {
-		t.Fatalf("★ sidecar 脚本未随包分发（应放在 %s）: %v", rel, err)
+//
+// ## 为什么判据在**打包层**（而不是检查工作区里有没有 rawfile/…）
+//
+// `rawfile/.gitignore` 写的是 `*`：rawfile/ 的内容**完全不进版本库**。
+// 所以"工程目录里 rawfile/runtime/pi/ 存不存在"取决于**这台机器有没有
+// 事先准备资源**，跟提交的东西对不对无关 —— 干净克隆下它必然不存在。
+//
+// 拿它当断言会得到两个都不对的结果：本地有资源 → 假绿（证明不了打包会带上），
+// CI 没资源 → 常红（红的理由与缺陷无关）。**它不是判据，是环境快照。**
+//
+// 真正要守的是“**打包产物里有没有**”。那就必须真跑打包：
+// 在临时目录摆一个插件工程（只放**跟踪进版本库**的东西 + 按文档准备 rawfile），
+// 用本仓当前 hmapdev 构建，读产出的 .hmap，断言 zip 里有那个条目，
+// 且条目内容与工程根的权威副本**逐字节相同**。
+// 这才是 "随包分发" 的可验证形式。
+//
+// ★ 不允许在测试里往**真** rawfile/ 写假文件—— 那是造假通过且污染工作区。
+//
+//	一切都在 t.TempDir() / 临时目录里做。
+//
+// ★ 夹具需要**能构建 hmapdev**（拉 tools/hmapdev 的依赖，如 yaegi）。
+//
+//	没网且没有模块缓存时这条会红 —— 那是**环境**限制，但仍然要红而不是
+//	skip：本判据守的正是“资源到底有没有进包”，静默跳过它等于把整个
+//	rawfile 通道的守卫撤了（本仓历史上就是以“skip 而非零退”丢过一次守卫）。
+//	解法写在失败文案里（设 GOPROXY 或预先 `go mod download`）。
+func TestPackageShipsSidecarScript(t *testing.T) {
+	dev := buildHostHmapdevForTest(t)
+
+	// 摆一个最小插件工程。**只靠跟踪进版本库的文件** + rawfile 的源。
+	// 用普通文件拷贝而不是 symlink：hmapdev 会遍历工程目录，
+	// symlink 行为在不同系统上不一致，拷贝换来确定性。
+	plug := t.TempDir()
+	copyTrackedProject(t, ".", plug)
+
+	// 按文档准备随包资源：pi 的 sidecar + driver 描述。
+	// （rawfile/ 是“由构建方自行准备”的通道 —— 它就是用户/构建脚本该干的事。）
+	runtimeDir := filepath.Join(plug, "rawfile", "runtime", "pi")
+	if err := os.MkdirAll(runtimeDir, 0o755); err != nil {
+		t.Fatal(err)
 	}
-	// ② 内容必须与工程根的权威副本一致（防止改了根那份忘了同步）
-	root, err := os.ReadFile("sidecar.mjs")
-	if err != nil {
-		t.Skipf("读不到根 sidecar.mjs: %v", err)
+	srcSidecar := mustReadFile(t, "sidecar.mjs")
+	if err := os.WriteFile(filepath.Join(runtimeDir, "sidecar.mjs"), srcSidecar, 0o644); err != nil {
+		t.Fatal(err)
 	}
-	shipped, err := os.ReadFile(rel)
+
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(root) != string(shipped) {
-		t.Error("★ rawfile/ 里的 sidecar.mjs 与工程根不一致（改了根那份没同步？）")
+
+	outDir := filepath.Join(t.TempDir(), "out")
+	cmd := exec.Command(dev, "build", "--no-bundle", "--target", "linux/amd64",
+		"--outdir", outDir, "--sdk-path", repoRoot)
+	cmd.Dir = plug
+	cmd.Env = append(os.Environ(), "GOFLAGS=-buildvcs=false")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("hmapdev build 失败: %v\n%s", err, out)
+	}
+
+	hmaps, _ := filepath.Glob(filepath.Join(outDir, "*.hmap"))
+	if len(hmaps) == 0 {
+		t.Fatalf("未产出 .hmap（%s 下为空）", outDir)
+	}
+	zr, err := zip.OpenReader(hmaps[0])
+	if err != nil {
+		t.Fatalf("打开 %s: %v", hmaps[0], err)
+	}
+	defer zr.Close()
+
+	const want = "rawfile/runtime/pi/sidecar.mjs"
+	var got []byte
+	var names []string
+	for _, f := range zr.File {
+		names = append(names, f.Name)
+		if f.Name != want {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			t.Fatalf("读 zip 条目 %s: %v", want, err)
+		}
+		got, err = io.ReadAll(rc)
+		rc.Close()
+		if err != nil {
+			t.Fatalf("读 zip 条目 %s: %v", want, err)
+		}
+	}
+	if got == nil {
+		t.Fatalf("★ 包里没有 %s —— 装上去 agent_up 会失败。包内条目: %v", want, names)
+	}
+	// ★ 内容必须与工程根的权威副本逐字节相同（防止打了旧副本进去）
+	if !bytes.Equal(got, srcSidecar) {
+		t.Errorf("★ 包里的 sidecar.mjs 与工程根不一致（打包用了旧副本？）")
+	}
+	t.Logf("✅ .hmap 里有 %s（%d 字节），与工程根逐字节一致；包内条目 %v",
+		want, len(got), names)
+}
+
+// ★★ 判据：**工作区里若有 rawfile/ 副本，必须与跟踪源逐字节一致**。
+//
+// 这条与上面那条是两个不同的风险：上面守"打包会不会带"，
+// 这条守"带了的那份是不是**当前**的"。后者只在**已准备过资源的工作区**里
+// 才有意义 —— 干净克隆下没有副本可查，那就**如实说明**而不是假装通过。
+//
+// 不能写成无条件 t.Skip：那样本机“改了根那份忘了同步”也测不出来了。
+func TestReadyRawfileCopyMatchesTrackedSource(t *testing.T) {
+	srcSidecar := mustReadFile(t, "sidecar.mjs")
+
+	rel := filepath.Join("rawfile", "runtime", "pi", "sidecar.mjs")
+	shipped, err := os.ReadFile(rel)
+	if err != nil {
+		t.Logf("ℹ️  %s 不存在（干净克隆的正常状态：rawfile/ 内容不进版本库）。"+
+			"本条判据无可查对象 ⇒ 不适用；\"打包会不会带上\"由 "+
+			"TestPackageShipsSidecarScript 真打 .hmap 守。", rel)
+		return
+	}
+	if !bytes.Equal(srcSidecar, shipped) {
+		t.Errorf("★ %s 与工程根不一致（改了根那份忘了同步到 rawfile/）—— "+
+			"这一份会被打包发出，与单测/SSH e2e 跑的不是同一份代码", rel)
 	}
 }
 
 // ★★★ 判据：**查找链能找到随包脚本**（这是 agent_up 能跑的前提）。
 //
 // 直接调 locateSidecarScript —— 判据必须测真实入口，不能只检查文件存在。
+//
+// 夹具在 t.TempDir() 里**摆出解包后的插件目录布局**（rawfile/runtime/pi/sidecar.mjs），
+// 不依赖工作区里真有没有 rawfile 资源 —— 否则干净克隆下这条会红，
+// 而它红的原因（本机没准备资源）与它想守的东西（查找链通不通）无关。
 func TestLocateSidecarScriptFindsShippedCopy(t *testing.T) {
 	p := newFlowPlugin(t)
-	// 让 rawFiles() 指向工程目录（模拟解包后的插件目录）
-	root, _ := os.Getwd()
-	p.sdk.SetRawFilesAPI(&testRawFiles{root: filepath.Join(root, "rawfile")})
+	// 造解包后的布局：<插件>/rawfile/runtime/pi/sidecar.mjs
+	pluginDir := t.TempDir()
+	rawRoot := filepath.Join(pluginDir, "rawfile")
+	shippedDir := filepath.Join(rawRoot, "runtime", "pi")
+	if err := os.MkdirAll(shippedDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(shippedDir, "sidecar.mjs"),
+		mustReadFile(t, "sidecar.mjs"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p.sdk.SetRawFilesAPI(&testRawFiles{root: rawRoot})
 
 	drv := builtinPiDriver()
 	// cliDir 指向一个**不存在**的目录（模拟全新部署没人建 runtime/pi）
@@ -319,6 +438,10 @@ func TestLocateSidecarScriptFindsShippedCopy(t *testing.T) {
 	}
 	if _, err := os.Stat(got); err != nil {
 		t.Errorf("★ 返回的路径不可读: %v", err)
+	}
+	// ★ 必须是 rawfile 那条（②），不是回退到可执行文件目录（③）
+	if !strings.Contains(got, "rawfile") {
+		t.Errorf("★ 命中的不是随包路径（②）：%s", got)
 	}
 }
 
@@ -373,10 +496,10 @@ func TestMissingSidecarErrorIsActionable(t *testing.T) {
 // 「找不到 ZCode CLI」，用户只能记得设环境变量。SSH 场景更糟：
 // 本地与远端的路径本来就不同，而当时只有一个全局 env 可用。
 func TestZcodeCLIPathIsDeclarable(t *testing.T) {
-	// ① driver.json 必须声明 cliPath
-	b, err := os.ReadFile("rawfile/runtime/zcode/driver.json")
+	// ① driver.json 必须声明 cliPath（读跟踪的权威描述，不是 rawfile 部署路径）
+	b, err := os.ReadFile(filepath.Join("examples", "custom-cli", "zcode", "driver.json"))
 	if err != nil {
-		t.Fatalf("zcode driver.json 不存在: %v", err)
+		t.Fatalf("缺跟踪的 zcode driver.json: %v", err)
 	}
 	var d driverSpec
 	if err := json.Unmarshal(b, &d); err != nil {
@@ -411,9 +534,11 @@ func TestZcodeCLIPathIsDeclarable(t *testing.T) {
 // 契约（参考实现与本文件注释都写明）：首轮不传 --resume，
 // 从 `{type:"result"}` 行取回 `sess_...`，之后才用它续谈。
 func TestZcodeSidecarDoesNotResumeOnFirstTurn(t *testing.T) {
-	src, err := os.ReadFile("rawfile/runtime/zcode/sidecar.mjs")
+	// 读**跟踪的参考实现**（rawfile/ 不进版本库，干净克隆下不存在；
+	// 拿部署路径当判据会在 CI 上变成无条件 skip = 假绿）。
+	src, err := os.ReadFile(filepath.Join("examples", "custom-cli", "zcode", "sidecar.mjs"))
 	if err != nil {
-		t.Skipf("读不到 zcode sidecar: %v", err)
+		t.Fatalf("读不到跟踪的 zcode 参考实现: %v", err)
 	}
 	s := string(src)
 	// 必须存在区分「插件标签」与「真实会话 id」的两个变量。
@@ -453,12 +578,12 @@ process.stdout.write(JSON.stringify({type:"result",sessionId:sid,response:"ok"})
 	}
 
 	// ★ 必须绝对路径：下面把 cmd.Dir 设成 work，相对路径会解析到 work 下。
-	sidecar, err := filepath.Abs(filepath.Join("rawfile", "runtime", "zcode", "sidecar.mjs"))
+	sidecar, err := filepath.Abs(filepath.Join("examples", "custom-cli", "zcode", "sidecar.mjs"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(sidecar); err != nil {
-		t.Skipf("sidecar 不存在: %v", err)
+		t.Fatalf("跟踪的 zcode 参考实现不存在: %v", err)
 	}
 
 	work := filepath.Join(dir, "work")
@@ -636,22 +761,35 @@ func findNodeForTest(t *testing.T) string {
 //
 // 判据必须覆盖**两条来源**且断言二者解析结果一致（同一套默认值填充），
 // 否则会出现"本机覆盖能用、随包分发不能用"这种只在部分机器复现的问题。
+//
+// ## 夹具为什么不直接读工作区的 rawfile/
+//
+// 与 TestPackageShipsSidecarScript / TestLocateSidecarScriptFindsShippedCopy 同理：
+// rawfile/ 不进版本库，干净克隆下不存在 ⇒ 直接读它不能作为判据（本地假绿、CI 常红）。
+// 这里把**跟踪进版本库的** `examples/custom-cli/zcode/driver.json`
+// 拷进 t.TempDir() 里的 `rawfile/runtime/zcode/`，摆出与解包后完全相同的布局，
+// 再走真实入口 `loadDriver`/`loadShippedDriver` —— 组件拼接错、回退没接上，照样会红。
 func TestShippedDriverIsLoadable(t *testing.T) {
-	// ① 随包确实带了 zcode 的 driver.json
-	rfDir, err := filepath.Abs(filepath.Join("rawfile", "runtime", "zcode"))
+	// ① 跟踪的权威描述存在（它才是“随包那份”的源）
+	trackedDriver := filepath.Join("examples", "custom-cli", "zcode", "driver.json")
+	trackedBytes, err := os.ReadFile(trackedDriver)
 	if err != nil {
+		t.Fatalf("★ 缺跟踪的 zcode driver.json（%s）: %v", trackedDriver, err)
+	}
+
+	// ② 摆出解包后的布局：<插件>/rawfile/runtime/zcode/driver.json
+	pluginDir := t.TempDir()
+	rfDir := filepath.Join(pluginDir, "rawfile", "runtime", "zcode")
+	if err := os.MkdirAll(rfDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	shipped := filepath.Join(rfDir, "driver.json")
-	if _, err := os.Stat(shipped); err != nil {
-		t.Fatalf("★ 随包缺少 zcode driver.json（新鲜部署上 zcode 不可用）: %v", err)
+	if err := os.WriteFile(shipped, trackedBytes, 0o644); err != nil {
+		t.Fatal(err)
 	}
 
-	// ② 通过真实 SDK 的 RawFiles 接口读到它
+	// ③ 通过真实 SDK 的 RawFiles 接口读到它
 	//    （loadShippedDriver 走的就是 p.sdk.RawFiles()，路径拼接错了这里会红）
-	// rfDir = <commondev>/rawfile/runtime/zcode
-	//   三次 Dir：zcode → runtime → rawfile → <commondev>
-	pluginDir := filepath.Dir(filepath.Dir(filepath.Dir(rfDir))) // .../commondev
 	p := newTestPluginWithRawfiles(t, filepath.Join(pluginDir, "rawfile"))
 	rel := filepath.ToSlash(filepath.Join("runtime", "zcode", "driver.json"))
 	if !p.rawFiles().Exists(rel) {
@@ -774,9 +912,14 @@ func (f *fsRawFiles) List(rel string) ([]string, error) {
 // 断言错误文本里同时出现：① "找不到 ZCode CLI" ② 声明过的那个路径 ③ 修复指引。
 func TestZcodeMissingCLIErrorIsActionable(t *testing.T) {
 	node := findNodeForTest(t)
-	sidecar, err := filepath.Abs(filepath.Join("rawfile", "runtime", "zcode", "sidecar.mjs"))
+	// 读**跟踪的参考实现**：这条判据跑的是 sidecar 自己的错误文案，
+	// 与"这台机器有没有准备 rawfile/ 资源"无关。
+	sidecar, err := filepath.Abs(filepath.Join("examples", "custom-cli", "zcode", "sidecar.mjs"))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if _, err := os.Stat(sidecar); err != nil {
+		t.Fatalf("跟踪的 zcode 参考实现不存在: %v", err)
 	}
 	work := t.TempDir()
 	missing := filepath.Join(t.TempDir(), "definitely-not-here", "zcode.cjs")

@@ -178,6 +178,47 @@ jobs:
               "$(stat -c %s "$f" | awk '{print $1/1024}')" "$(basename "$f")"
           done
 
+  # ── 示例插件的**单元测试** ──
+  #
+  # 为什么单独一个 job：`example/*/` 每个都是独立 go module（各有 go.mod），
+  # 根模块的 `go test ./...` **进不去**它们。所以上面 go job 的 examples 绿
+  # 不代表任何示例的测试跑过 —— 2026-10-21 实测，干净克隆下 commondev 有
+  # 8 条红、recoverydiag 有 1 条红，而 CI 全绿，因为从来没跑。
+  #
+  # 判定逻辑全部在 package/test-examples.sh 里（逐 module 跑、数 PASS/SKIP
+  # 条数、空跑判 EMPTY 并非零退），这里只负责调用。
+  examples-tests:
+    name: Examples unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      # ★ 与其它 job 一致钉 1.25：20 个 example/*/go.mod 都要求 go 1.25.0，
+      #   而根 go.mod 写的是 1.21.0（runner 上 GOTOOLCHAIN=local，不会自动升）。
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.25'
+          cache: true
+
+      # recoverydiag 的夹具要用 sqlite3 CLI 造一个真实形状的 config.db
+      # （被测代码自己也是调 sqlite3）。没有它，那几条夹具判据会 skip ——
+      # 而脚本会把"整个目录 PASS 0 条"判成 EMPTY 而非零退，不会静默变绿。
+      # 这里装上，让它们在 CI 上真的跑起来。
+      - name: 安装 sqlite3（recoverydiag 夹具依赖）
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq sqlite3
+          sqlite3 --version
+
+      # commondev 的打包层判据（TestPackageShipsSidecarScript）会用本仓源码**现场
+      # 构建 hmapdev** 再真打一个 .hmap。runner 自带 node，所以 sidecar 行为
+      # 判据（TestZcodeSidecarArgvBehavior 等）会真跑而不是 skip。
+      - name: 逐目录跑 example 单元测试
+        run: |
+          set -euo pipefail
+          bash package/test-examples.sh
+
   # ── 一致性与文档 ──
   consistency:
     name: Consistency & docs

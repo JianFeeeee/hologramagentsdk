@@ -86,7 +86,9 @@ func TestZcodeFullPipeline(t *testing.T) {
 	}
 
 	// ★ 用**随包分发**的 driver.json 解析描述（不是测试里手拼参数）
-	rawRoot := filepath.Join(mustAbs(t, "."), "rawfile")
+	//   夹具：把跟踪的 driver.json / sidecar.mjs 摆成解包后的布局 ——
+	//   rawfile/ 不进版本库，直接读它会让这条 e2e 在干净克隆上假红。
+	rawRoot := stageShippedRuntime(t)
 	pz := newTestPluginWithRawfiles(t, rawRoot)
 	pz.path = filepath.Join(base, "commondev") // 用户目录空 → 强制走随包
 	drv, cliDir, err := pz.loadDriver("zcode")
@@ -235,8 +237,8 @@ func TestZcodeOverSSH(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// ★ 走**真实** loadDriver + locateSidecarScript（随包来源）
-	rawRoot := filepath.Join(mustAbs(t, "."), "rawfile")
+	// ★ 走**真实** loadDriver + locateSidecarScript（随包来源，同上用夹具布局）
+	rawRoot := stageShippedRuntime(t)
 	pz := newTestPluginWithRawfiles(t, rawRoot)
 	pz.path = filepath.Join(base, "commondev")
 	drv, cliDir, err := pz.loadDriver("zcode")
@@ -380,9 +382,9 @@ func TestZcodeOverSSHWithPerHostEndpoints(t *testing.T) {
 	// pushSidecar 从 <插件数据>/runtime/<cli>/<script> 取本地脚本 ——
 	// 放真实随包脚本进去（推的必须是真脚本，否则远端跑的是空文件）。
 	{
-		src, err := os.ReadFile(filepath.Join(mustAbs(t, "."), "rawfile", "runtime", "zcode", "sidecar.mjs"))
+		src, err := os.ReadFile(filepath.Join(mustAbs(t, "."), "examples", "custom-cli", "zcode", "sidecar.mjs"))
 		if err != nil {
-			t.Fatalf("读随包 sidecar 失败: %v", err)
+			t.Fatalf("读跟踪的 zcode 参考实现失败: %v", err)
 		}
 		d := p.driverDir("zcode")
 		if err := os.MkdirAll(d, 0o755); err != nil {

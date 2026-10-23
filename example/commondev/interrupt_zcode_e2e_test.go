@@ -37,9 +37,12 @@ func TestRealZcodeInterruptKillsChildAndClearsHandle(t *testing.T) {
 	if _, err := os.Stat(nodeBin); err != nil {
 		t.Skipf("内嵌 node 不存在: %v", err)
 	}
-	sidecarPath := filepath.Join(root, "rawfile", "runtime", "zcode", "sidecar.mjs")
+	// 读**跟踪的参考实现**：rawfile/ 不进版本库，干净克隆下不存在。
+	// 原来读 rawfile 部署路径 ⇒ 打开开关的人会得到"文件不存在"的假红，
+	// 而它想守的是"取消真的杀了子进程"，与资源有没有准备好无关。
+	sidecarPath := filepath.Join(root, "examples", "custom-cli", "zcode", "sidecar.mjs")
 	if _, err := os.Stat(sidecarPath); err != nil {
-		t.Fatalf("zcode sidecar 不存在: %v", err)
+		t.Fatalf("跟踪的 zcode 参考实现不存在: %v", err)
 	}
 
 	dir := t.TempDir()
