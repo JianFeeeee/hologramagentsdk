@@ -641,3 +641,115 @@ func TestOnRemoveOnlyDeletesDefaultExports(t *testing.T) {
 		t.Fatalf("默认导出目录应被清理: %v", err)
 	}
 }
+
+// ---- ★ 评论输出 header 的精确回归 ----
+//
+// ## 曾存在的缺陷（实装验收时打真 API 发现）
+//
+// tools.go 的评论 header 写成 `"视频 %s（av%d）评论共 …"` + `ref, ref.AID`，
+// 而 videoRef.String()（bvid.go）本身已经返回 "BV1GJ411x7h7 (av80433022)"，
+// 于是 av 号被拼了两次：
+//
+//	视频 BV1GJ411x7h7 (av80433022)（av80433022）评论共 238372 条，按热度排序：
+//
+// ## 为什么它能活到实装才被发现
+//
+// 43 条测试没有一条断言过评论输出的**正文 header** —— 所有失败路径用例都在
+// 断言 err 与错误信息，成功路径只看 total/returned/pages_fetched 这些结构化
+// 字段。⇒ 正文渲染是测试盲区。
+//
+// ## 为什么断言用「精确匹配 + 计数」而不是 strings.Contains
+//
+// `Contains(content, "评论共")` 对重复拼接照样绿（这正是不该用的写法）。
+// 精确比对整行 + 计数 av 出现次数，才能咬住"多拼一次"。
+func TestCommentsHeaderRendersVideoRefOnce(t *testing.T) {
+	// 真实世界用例（用户实装验收时打的视频）：BV1GJ411x7h7 / aid 80433022
+	const wantBVID = "BV1GJ411x7h7"
+	const wantAID = 80433022
+
+	p, _, _ := newTestPlugin(t, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		total := r.URL.Query().Get("ps")
+		_ = total
+		_, _ = w.Write([]byte(`{"code":0,"data":{
+			"page":{"count":238372,"size":20,"pn":1},
+			"replies":[{"rpid":1,"mid":9,"ctime":1600000000,"like":3,"rcount":0,
+				"member":{"uname":"某人","mid":"9"},"content":{"message":"第一条"}}]}}`))
+	}))
+
+	res, err := p.handleComments(map[string]interface{}{"video": wantBVID})
+	if err != nil {
+		t.Fatalf("报错: %v", err)
+	}
+	content := res.(map[string]interface{})["content"].(string)
+	firstLine := strings.SplitN(content, "\n", 2)[0]
+
+	// ① 整行精确匹配：把格式钉死（任何多余/缺失字符都会红）。
+	wantHeader := "视频 BV1GJ411x7h7 (av80433022) 评论共 238372 条，按热度排序："
+	if firstLine != wantHeader {
+		t.Fatalf("评论 header 不精确:\n  got  = %q\n  want = %q", firstLine, wantHeader)
+	}
+
+	// ② 计数断言：av 号只能出现一次（重复拼接的缺陷在这里必红）。
+	if n := strings.Count(firstLine, "av80433022"); n != 1 {
+		t.Fatalf("header 里 av80433022 出现 %d 次, want 1（重复渲染缺陷）: %q", n, firstLine)
+	}
+	if n := strings.Count(content, "av80433022"); n != 1 {
+		t.Fatalf("正文里 av80433022 出现 %d 次, want 1: %q", n, content)
+	}
+}
+
+// 410 行的「暂无评论」分支同样必须只渲染一次（这条分支真实调用时也会走到）。
+func TestCommentsEmptyHeaderRendersVideoRefOnce(t *testing.T) {
+	p, _, _ := newTestPlugin(t, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// page.count=0 且 replies 为空 ⇒ 走「暂无评论」那条分支。
+		_, _ = w.Write([]byte(`{"code":0,"data":{"page":{"count":0,"size":20,"pn":1},"replies":[]}}`))
+	}))
+
+	res, err := p.handleComments(map[string]interface{}{"video": "BV1GJ411x7h7"})
+	if err != nil {
+		t.Fatalf("无评论不算错误: %v", err)
+	}
+	content := res.(map[string]interface{})["content"].(string)
+	firstLine := strings.SplitN(content, "\n", 2)[0]
+
+	wantHeader := "视频 BV1GJ411x7h7 (av80433022) 暂无评论（接口返回 code=0，page.count=0）"
+	if firstLine != wantHeader {
+		t.Fatalf("暂无评论 header 不精确:\n  got  = %q\n  want = %q", firstLine, wantHeader)
+	}
+	if n := strings.Count(content, "av80433022"); n != 1 {
+		t.Fatalf("正文里 av80433022 出现 %d 次, want 1（重复渲染缺陷）: %q", n, content)
+	}
+	if n := strings.Count(content, "av"); n != 1 {
+		t.Fatalf("正文里 \"av\" 出现 %d 次, want 1: %q", n, content)
+	}
+}
+
+// 排序标签也要钉住：header 里 hot→热度 / time→时间 不能错位。
+// 这条同时防"改了格式串却把参数顺序搞乱"。
+func TestCommentsHeaderSortLabel(t *testing.T) {
+	for _, c := range []struct {
+		sortArg string
+		want    string
+	}{
+		{"hot", "按热度排序"},
+		{"", "按热度排序"}, // 默认 hot
+		{"time", "按时间排序"},
+	} {
+		p, _, _ := newTestPlugin(t, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"code":0,"data":{"page":{"count":5,"size":20,"pn":1},
+				"replies":[{"rpid":1,"member":{"uname":"u"},"content":{"message":"m"},"ctime":1600000000}]}}`))
+		}))
+		args := map[string]interface{}{"video": "BV1GJ411x7h7"}
+		if c.sortArg != "" {
+			args["sort"] = c.sortArg
+		}
+		res, err := p.handleComments(args)
+		if err != nil {
+			t.Fatalf("sort=%q 报错: %v", c.sortArg, err)
+		}
+		firstLine := strings.SplitN(res.(map[string]interface{})["content"].(string), "\n", 2)[0]
+		if !strings.Contains(firstLine, c.want) {
+			t.Errorf("sort=%q 的 header 缺 %q: %q", c.sortArg, c.want, firstLine)
+		}
+	}
+}
