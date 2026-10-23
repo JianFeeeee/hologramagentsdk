@@ -515,9 +515,11 @@ func (p *Plugin) handleSeenCheck(args map[string]interface{}) (interface{}, erro
 			"video": ref.String(),
 		}, nil
 	}
+	// 结构化字段 bvid 保持真值：平台没给 bvid 时这里就是空串，不拿 avN 冒充。
+	// 只有**给人看的正文**（上面的 content）走 displayID() 兜底。
 	return map[string]interface{}{
 		"content": fmt.Sprintf("命中：%s 已见过。\n标题：%s\nUP主：%s\n时长：%s\n分P：%d\n首次见到：%s\n最近见到：%s\n累计取回：%d 次",
-			rec.BVID, rec.Title, rec.UP, hhmmss(rec.Duration), rec.Pages, rec.FirstSeen, rec.LastSeen, rec.SeenCount),
+			rec.displayID(), rec.Title, rec.UP, hhmmss(rec.Duration), rec.Pages, rec.FirstSeen, rec.LastSeen, rec.SeenCount),
 		"hit":        true,
 		"video":      ref.String(),
 		"bvid":       rec.BVID,
@@ -546,7 +548,7 @@ func (p *Plugin) handleSeenList(args map[string]interface{}) (interface{}, error
 	fmt.Fprintf(&b, "本地查重台账（共 %d 条，显示 %d 条）：\n", p.st.count(), len(recs))
 	for i, r := range recs {
 		fmt.Fprintf(&b, "%2d. %s  %s  | UP %s | %s | 首次 %s | 取回 %d 次\n",
-			i+1, r.BVID, clip(r.Title, 60), r.UP, hhmmss(r.Duration), r.FirstSeen, r.SeenCount)
+			i+1, r.displayID(), clip(r.Title, 60), r.UP, hhmmss(r.Duration), r.FirstSeen, r.SeenCount)
 	}
 	out := make([]interface{}, 0, len(recs))
 	for _, r := range recs {
