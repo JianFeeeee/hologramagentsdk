@@ -18,16 +18,30 @@ package main
 // 必须把"没有真正中断"如实回给调用方。否则用户以为停了、实际还在跑。
 
 import (
+	"bufio"
+	"encoding/json"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
 // ★★★ sidecar 必须实现 interrupt，且 pi 用的是 session.abort()
+//
+// ## 为什么只看**跟踪的源**，不看 rawfile/ 下的部署路径
+//
+// 这条判据原本还查 `rawfile/runtime/pi/sidecar.mjs`（部署路径）。那是错的：
+// `rawfile/.gitignore` 写的是 `*`，rawfile/ 的内容**完全不进版本库**，
+// 干净克隆下那两条路径必然不存在 ⇒ 判据在 CI 上永远红，
+// 而它红的理由（文件不存在）与它想守的东西（interrupt 有没有实现）**毫无关系**。
+//
+// 静态契约要盯的是**进版本库的那份源**；"部署路径里到底有没有它"
+// 是**打包层**的事，由 ssh_wiring_test.go 的 TestPackageShipsSidecarScript
+// 真打一个 .hmap 验 zip 条目来守。两件事分开，各自盯自己那层。
 func TestPiSidecarImplementsInterrupt(t *testing.T) {
 	for _, path := range []string{
-		"sidecar.mjs",                    // 单测/SSH e2e 用
-		"rawfile/runtime/pi/sidecar.mjs", // 部署用（hmapdev 打进 rawfile）
+		"sidecar.mjs", // 权威源：单测/SSH e2e 与 hmapdev 打包都以它为源
 	} {
 		b, err := os.ReadFile(path)
 		if err != nil {
@@ -77,7 +91,7 @@ func TestPiSidecarImplementsInterrupt(t *testing.T) {
 
 // ★★★ zcode 是子进程模式，取消 = 整组杀掉当前回合
 func TestZcodeSidecarInterruptKillsChild(t *testing.T) {
-	b, err := os.ReadFile("rawfile/runtime/zcode/sidecar.mjs")
+	b, err := os.ReadFile("examples/custom-cli/zcode/sidecar.mjs")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,13 +112,12 @@ func TestZcodeSidecarInterruptKillsChild(t *testing.T) {
 	}
 }
 
-// ★★★ 三个 sidecar 必须语法合法（node --check 之外的静态兜底：
+// ★★★ 两个 sidecar 必须语法合法（node --check 之外的静态兜底：
 // 至少不能有重复声明这类必炸错误）
 func TestSidecarsHaveNoDuplicateDecl(t *testing.T) {
 	for _, path := range []string{
 		"sidecar.mjs",
-		"rawfile/runtime/pi/sidecar.mjs",
-		"rawfile/runtime/zcode/sidecar.mjs",
+		"examples/custom-cli/zcode/sidecar.mjs",
 	} {
 		b, err := os.ReadFile(path)
 		if err != nil {
@@ -162,4 +175,79 @@ func TestAgentInterruptNeverLiesAboutSuccess(t *testing.T) {
 	if m2["note"] == nil {
 		t.Fatal("sidecar 没跑时应给出 note 说明")
 	}
+}
+
+// ★★★ 行为判据：zcode 的 interrupt 在**没有在跑的回合**时必须如实回 false。
+//
+// ## 为什么必须补这一条（变异测出来的缺口）
+//
+// 把 `if (!currentChild) return {ok:true, interrupted:false, ...}` 改成
+// `interrupted: true` 之后，**整套默认测试全绿**：那条语义只在
+// `HA_ZCODE_E2E=1` 的 e2e 里被断言，而 e2e 默认 skip。
+// 也就是说"不谎报"这条最关键的纪律，在 CI 的默认路径上是**零覆盖**。
+//
+// ## 为什么用行为而不是 grep 源码
+//
+// grep `interrupted: false` 只证明那个字面串在文件里，
+// 把它挪到一个永不执行的分支、或加个 `!` 反转，grep 都咬不住
+// （本仓已有三次同类教训：字面串判据把变量改个名就绕过）。
+// 这里**真起 sidecar 进程**发一条 interrupt，读它**实际回的 JSON**。
+//
+// 不需要真 zcode CLI：interrupt 在没有 currentChild 时直接返回，
+// 根本走不到 spawn CLI 那一步。
+func TestZcodeInterruptWithoutRunningTurnDoesNotLie(t *testing.T) {
+	node := findNodeForTest(t)
+	sidecar := absUnderPackage(t, filepath.Join("examples", "custom-cli", "zcode", "sidecar.mjs"))
+
+	work := t.TempDir()
+	cmd := exec.Command(node, sidecar, "--workdir", work, "--session-id", "br-lie", "--mode", "guarded")
+	cmd.Dir = work
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() }()
+
+	// 不发 prompt —— 直接问 interrupt（此刻没有任何在跑的回合）
+	req, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "interrupt"})
+	if _, err := stdin.Write(append(req, '\n')); err != nil {
+		t.Fatalf("写 stdin: %v", err)
+	}
+
+	sc := bufio.NewScanner(stdout)
+	sc.Buffer(make([]byte, 1<<20), 1<<20)
+	var res map[string]any
+	for sc.Scan() {
+		var m map[string]any
+		if json.Unmarshal(sc.Bytes(), &m) != nil {
+			continue
+		}
+		if id, _ := m["id"].(float64); id != 1 {
+			continue
+		}
+		if e, ok := m["error"].(map[string]any); ok {
+			t.Fatalf("interrupt 返回错误（不应）：%v", e)
+		}
+		res, _ = m["result"].(map[string]any)
+		break
+	}
+	if res == nil {
+		t.Fatal("没等到 interrupt 的应答")
+	}
+	if v, _ := res["interrupted"].(bool); v {
+		t.Fatalf("★ 没有在跑的回合却回了 interrupted=true —— 谎报成功：%v", res)
+	}
+	if reason, _ := res["reason"].(string); reason != "no_running_turn" {
+		t.Errorf("reason 应为 no_running_turn（让调用方能分辨「没有任务」与「杀失败」），实际 %q: %v",
+			reason, res)
+	}
+	t.Logf("✅ 无回合时如实回报: %v", res)
 }

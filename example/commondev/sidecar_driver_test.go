@@ -209,6 +209,11 @@ func TestSessionNameFlagRespected(t *testing.T) {
 // 断言 startSidecar 用**它的**参数与环境把它拉起来，且 call 能拿到结果。
 func TestSwappingDriverSwapsBackend(t *testing.T) {
 	p := newTestPluginForShell(t)
+	// 假 sidecar 是 node 脚本 ⇒ 本机必须有 node（产品三级链：node_bin /
+	// 随包 rawfile/node/bin/node / PATH）。缺的时候原来直接 FAIL，
+	// 而红的原因是"机器没装 node"，与被测代码无关。
+	// ★ 有 node 时必须真跑（端到端起进程），skip 不是绕过主路径的借口。
+	requireNodeBinary(t, p)
 	cli := "fakecli"
 	dir := p.driverDir(cli)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
