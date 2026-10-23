@@ -513,7 +513,8 @@ Internal plugins (platform built-in) have full SDK access including SocialAPI wr
 | [qq](example/qq) | Go | QQ messaging integration (NapCat), 17 tools, full input/output channel wiring |
 | [a2a](example/a2a) | Go | Agent-to-Agent protocol communication |
 | [ai_image](example/ai_image) | Go | AI image generation |
-| [bili](example/bili) | Go | Bilibili video downloading |
+| [bili](example/bili) | Go | Bilibili video downloading (yt-dlp) |
+| [bilibili](example/bilibili) | Go | Bilibili content: video info/parts, subtitles, comments, popular feed + local-only BV de-dup (no downloading; see bili) |
 | [browser](example/browser) | Go | Web search, page fetching, browser rendering |
 | [calendar](example/calendar) | Go | Calendar management |
 | [editdoc](example/editdoc) | Go | Document editing |
