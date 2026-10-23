@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	sdk "github.com/JianFeeeee/hologramagentsdk/sdk"
 )
@@ -751,5 +752,289 @@ func TestCommentsHeaderSortLabel(t *testing.T) {
 		if !strings.Contains(firstLine, c.want) {
 			t.Errorf("sort=%q 的 header 缺 %q: %q", c.sortArg, c.want, firstLine)
 		}
+	}
+}
+
+// ============================================================================
+// 三处正文渲染的精确断言（结构化字段覆盖率 ≠ 用户可见输出被覆盖）
+// ============================================================================
+//
+// ## 为什么这批用例必须用「精确整行 + 计数」
+//
+// 之前 av 号被拼两次（"BV1GJ411x7h7 (av80433022)（av80433022）"）能活到实装，
+// 就是因为没有一条测试看过正文。`strings.Contains(content, "热门")` 这类断言
+// 对重复渲染、字段错位、编号空白**一律照样绿** —— 写了等于没写。
+//
+// 所以下面每条都做到：
+//   · 整行 want 字符串写死（多一个字符、少一个空格都会红）
+//   · 各字段给**互不相同**的值（播放 1111 / 评论 2222 / 时长 1:02:05 …）
+//     ⇒ 参数错位必红：把 UP 名填进编号位、把评论数填进播放位都能被抓住
+//   · 双数场景（总数 vs 显示数）断言两者不等且各自正确
+
+// ---- 1) handlePopular 成功路径 ----
+//
+// 这行有 7 个渲染位、6 个字段，是最容易参数错位的形态。
+func TestPopularContentExactRendering(t *testing.T) {
+	p, _, _ := newTestPlugin(t, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"code":0,"data":{"list":[{
+			"bvid":"BV1aa411c7mD","title":"标题甲","duration":3725,
+			"owner":{"mid":999,"name":"UP主乙"},
+			"stat":{"view":1111,"reply":2222,"danmaku":3333,"like":4444,"coin":5555,"favorite":6666,"share":7777}}]}}`))
+	}))
+
+	res, err := p.handlePopular(map[string]interface{}{})
+	if err != nil {
+		t.Fatalf("报错: %v", err)
+	}
+	content := res.(map[string]interface{})["content"].(string)
+
+	// 整段精确比对：header + 条目行两行。
+	// 3725 秒 = 1:02:05（大于 1 小时的分支）。
+	want := "B站综合热门（当前榜）：\n" +
+		" 1. 标题甲\n" +
+		"    BV1aa411c7mD | UP UP主乙 | 1:02:05 | 播放 1111 | 评论 2222\n"
+	if content != want {
+		t.Fatalf("热门正文不精确:\n  got  = %q\n  want = %q", content, want)
+	}
+
+	// 计数断言：每个值只出现一次 —— 抓「同一字段被渲染两遍」这类重复。
+	for _, v := range []string{"标题甲", "BV1aa411c7mD", "UP主乙", "1:02:05", "1111", "2222"} {
+		if n := strings.Count(content, v); n != 1 {
+			t.Errorf("%q 在正文里出现 %d 次, want 1:\n%s", v, n, content)
+		}
+	}
+}
+
+// 多页/多条：编号必须连续递增，且第二页的字段不能串到第一条上。
+func TestPopularContentMultiPageNumbering(t *testing.T) {
+	p, _, _ := newTestPlugin(t, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("pn") == "1" {
+			_, _ = w.Write([]byte(`{"code":0,"data":{"list":[
+				{"bvid":"BV1aa411c7mD","title":"页1甲","duration":61,"owner":{"name":"UP1"},"stat":{"view":11,"reply":22}},
+				{"bvid":"BV17x411w7KC","title":"页1乙","duration":62,"owner":{"name":"UP2"},"stat":{"view":33,"reply":44}}]}}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"code":0,"data":{"list":[
+			{"bvid":"BV1J14y1M713","title":"页2丙","duration":63,"owner":{"name":"UP3"},"stat":{"view":55,"reply":66}}]}}`))
+	}))
+	res, err := p.handlePopular(map[string]interface{}{"pages": 2, "per_page": 2})
+	if err != nil {
+		t.Fatalf("报错: %v", err)
+	}
+	content := res.(map[string]interface{})["content"].(string)
+	want := "B站综合热门（当前榜）：\n" +
+		" 1. 页1甲\n    BV1aa411c7mD | UP UP1 | 1:01 | 播放 11 | 评论 22\n" +
+		" 2. 页1乙\n    BV17x411w7KC | UP UP2 | 1:02 | 播放 33 | 评论 44\n" +
+		" 3. 页2丙\n    BV1J14y1M713 | UP UP3 | 1:03 | 播放 55 | 评论 66\n"
+	if content != want {
+		t.Fatalf("多页热门正文不精确:\n  got  = %q\n  want = %q", content, want)
+	}
+	if n := res.(map[string]interface{})["count"].(int); n != 3 {
+		t.Errorf("count = %d, want 3", n)
+	}
+}
+
+// ---- 2) handleSeenList ----
+//
+// header 里 `p.st.count()`（总数）与 `len(recs)`（显示数）是两个不同值。
+// limit 生效时二者不等 —— 这正是最该钉住的地方（很容易写成同一个数）。
+func TestSeenListContentExactRendering(t *testing.T) {
+	p, _, _ := newTestPlugin(t, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+
+	// 造 3 条记录，字段各不相同；SeenCount 靠多次 upsert 累出来。
+	for _, s := range []struct {
+		bv, title, up string
+		aid, dur      int64
+		times         int
+	}{
+		{"BV1aa411c7mD", "标题甲", "UP甲", 2, 61, 3},
+		{"BV17x411w7KC", "标题乙", "UP乙", 170001, 3725, 7},
+		{"BV1J14y1M713", "标题丙", "UP丙", 777927636, 8, 1},
+	} {
+		for i := 0; i < s.times; i++ {
+			if _, _, err := p.st.upsert(videoRecord{
+				BVID: s.bv, AID: s.aid, Title: s.title, UP: s.up, Duration: s.dur,
+			}); err != nil {
+				t.Fatalf("upsert: %v", err)
+			}
+		}
+	}
+	// 手动把 FirstSeen 定成可预测值（否则同一毫秒内的顺序不可靠）。
+	//
+	// ★ 必须按**去重后的指针**赋值：records 里同一个 *videoRecord 会挂在
+	// 两个键下（BVID 与 avN），直接遍历 records 会把同一条记录赋值两次，
+	// 得到哪一次的 FirstSeen 取决于 map 迭代顺序 ⇒ 测试非确定（实测会随机红）。
+	seenPtr := map[*videoRecord]bool{}
+	// 按 BVID **显式**指定日期：靠遍历计数赋值仍依赖 map 迭代顺序，
+	// 哪条拿哪天不确定 ⇒ 测试照样会随机红（这就是第一版的坑）。
+	wantDay := map[string]int{
+		"BV17x411w7KC": 6, // 最新 → 排第 1
+		"BV1aa411c7mD": 4, // 次新 → 排第 2
+		"BV1J14y1M713": 2, // 最旧 → limit=2 时被截掉
+	}
+	p.st.mu.Lock()
+	for _, v := range p.st.records {
+		if seenPtr[v] {
+			continue
+		}
+		seenPtr[v] = true
+		d, ok := wantDay[v.BVID]
+		if !ok {
+			p.st.mu.Unlock()
+			t.Fatalf("测试数据里出现了未预期的 BVID: %q", v.BVID)
+		}
+		v.FirstSeen = time.Date(2026, 1, d, 0, 0, 0, 0, time.UTC).Format(time.RFC3339)
+	}
+	p.st.mu.Unlock()
+
+	res, err := p.handleSeenList(map[string]interface{}{"limit": 2})
+	if err != nil {
+		t.Fatalf("报错: %v", err)
+	}
+	m := res.(map[string]interface{})
+	content := m["content"].(string)
+
+	lines := strings.Split(strings.TrimRight(content, "\n"), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("行数 = %d, want 3（1 header + 2 条目）:\n%s", len(lines), content)
+	}
+
+	// ★ header 精确比对：总数 3、显示数 2 —— **两个数必须不同且各自正确**。
+	// 若实现把两者写成同一个（都用 len(recs) 或都用 count()），这里必红。
+	wantHeader := "本地查重台账（共 3 条，显示 2 条）："
+	if lines[0] != wantHeader {
+		t.Fatalf("header 不精确:\n  got  = %q\n  want = %q", lines[0], wantHeader)
+	}
+	if strings.Contains(lines[0], "共 2 条") {
+		t.Errorf("总数被错写成显示数（共 2 条）: %q", lines[0])
+	}
+
+	// limit=2 时按 FirstSeen 倒序取最新两条：01-06(乙) 与 01-04(甲)。
+	// 每条整行精确比对，把 SeenCount（7 / 3）与时长（1:02:05 / 1:01）都钉住。
+	wantLine1 := " 1. BV17x411w7KC  标题乙  | UP UP乙 | 1:02:05 | 首次 2026-01-06T00:00:00Z | 取回 7 次"
+	if lines[1] != wantLine1 {
+		t.Fatalf("条目 1 不精确:\n  got  = %q\n  want = %q", lines[1], wantLine1)
+	}
+	wantLine2 := " 2. BV1aa411c7mD  标题甲  | UP UP甲 | 1:01 | 首次 2026-01-04T00:00:00Z | 取回 3 次"
+	if lines[2] != wantLine2 {
+		t.Fatalf("条目 2 不精确:\n  got  = %q\n  want = %q", lines[2], wantLine2)
+	}
+
+	if n := m["count"].(int); n != 2 {
+		t.Errorf("count = %d, want 2（= 显示数，不是总数）", n)
+	}
+
+	// limit 大于总数时，两个数应相等 —— 反向确认「不等」不是写死的。
+	res2, err := p.handleSeenList(map[string]interface{}{"limit": 100})
+	if err != nil {
+		t.Fatalf("报错: %v", err)
+	}
+	h2 := strings.SplitN(res2.(map[string]interface{})["content"].(string), "\n", 2)[0]
+	if want := "本地查重台账（共 3 条，显示 3 条）："; h2 != want {
+		t.Fatalf("limit>总数 时 header 不精确:\n  got  = %q\n  want = %q", h2, want)
+	}
+}
+
+// 空台账分支：正文与 count 都要对（这条分支以前也没有断言）。
+func TestSeenListEmptyContent(t *testing.T) {
+	p, _, _ := newTestPlugin(t, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	res, err := p.handleSeenList(map[string]interface{}{})
+	if err != nil {
+		t.Fatalf("报错: %v", err)
+	}
+	m := res.(map[string]interface{})
+	want := "本地查重台账为空。用 bilibili_video 取回任意视频后会自动登记。"
+	if got := m["content"].(string); got != want {
+		t.Fatalf("空台账正文不精确:\n  got  = %q\n  want = %q", got, want)
+	}
+	if n := m["count"].(int); n != 0 {
+		t.Errorf("count = %d, want 0", n)
+	}
+}
+
+// ---- 3) handleSeenForget 两条分支 ----
+//
+// 「删了」与「本来就没有」必须能区分：说错会误导用户以为删成功。
+func TestSeenForgetBothBranchesExact(t *testing.T) {
+	p, _, _ := newTestPlugin(t, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	// 用 BV1xx411c7mD（aid=2），正文短、断言可读。
+	if _, _, err := p.st.upsert(videoRecord{BVID: "BV1xx411c7mD", AID: 2, Title: "要删的"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// 分支 A：真的删掉了。
+	res, err := p.handleSeenForget(map[string]interface{}{"video": "BV1xx411c7mD"})
+	if err != nil {
+		t.Fatalf("报错: %v", err)
+	}
+	a := res.(map[string]interface{})
+	wantA := "已从台账删除 BV1xx411c7mD (av2)。"
+	if got := a["content"].(string); got != wantA {
+		t.Fatalf("删除成功正文不精确:\n  got  = %q\n  want = %q", got, wantA)
+	}
+	if ok, _ := a["removed"].(bool); !ok {
+		t.Errorf("removed = false, want true")
+	}
+
+	// 分支 B：本来就没有 —— 正文必须与分支 A 不同，且明确说"未做任何修改"。
+	res2, err := p.handleSeenForget(map[string]interface{}{"video": "BV1xx411c7mD"})
+	if err != nil {
+		t.Fatalf("未命中不算错误: %v", err)
+	}
+	b := res2.(map[string]interface{})
+	wantB := "台账里没有 BV1xx411c7mD (av2)，未做任何修改。"
+	if got := b["content"].(string); got != wantB {
+		t.Fatalf("未命中正文不精确:\n  got  = %q\n  want = %q", got, wantB)
+	}
+	if ok, _ := b["removed"].(bool); ok {
+		t.Errorf("removed = true, want false（未命中不能报删除成功）")
+	}
+
+	// 两句正文必须互不相同：模板如果被写成同一句，上面两条精确比对之一会红，
+	// 这里再显式钉一次「必须可区分」的意图。
+	if a["content"] == b["content"] {
+		t.Error("删除成功与未命中的正文相同 —— 用户无法区分是否真的删掉了")
+	}
+}
+
+// ---- 附带：只有 aid 的记录不能渲染成空白编号（本轮探针发现的真缺陷）----
+//
+// 平台在个别响应里只回 aid 不回 bvid，而 fetchVideo 的守卫只拦「两者都空」，
+// 于是 BVID 为空的记录会正常进台账。原先 seen_check / seen_list 直接渲染
+// rec.BVID，正文里编号位是空的（"命中： 已见过。" / " 1.   标题"）。
+func TestSeenContentFallsBackToAIDWhenBVIDEmpty(t *testing.T) {
+	p, _, _ := newTestPlugin(t, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	// 直接造一条「只有 aid」的记录（模拟平台只回 aid 的响应）。
+	if _, _, err := p.st.upsert(videoRecord{AID: 170001, Title: "只有aid", UP: "UP甲", Duration: 120, Pages: 1}); err != nil {
+		t.Fatal(err)
+	}
+
+	// seen_check：正文里的编号位必须是 av170001，不能是空白。
+	res, err := p.handleSeenCheck(map[string]interface{}{"video": "av170001"})
+	if err != nil {
+		t.Fatalf("报错: %v", err)
+	}
+	content := res.(map[string]interface{})["content"].(string)
+	firstLine := strings.SplitN(content, "\n", 2)[0]
+	if want := "命中：av170001 已见过。"; firstLine != want {
+		t.Fatalf("只有 aid 时 seen_check 首行不精确:\n  got  = %q\n  want = %q", firstLine, want)
+	}
+	if strings.Contains(firstLine, "命中： 已见过") {
+		t.Fatal("编号位渲染成空白（BVID 为空时没有兜底）")
+	}
+
+	// seen_list：条目行的编号位同理。
+	res2, err := p.handleSeenList(map[string]interface{}{})
+	if err != nil {
+		t.Fatalf("报错: %v", err)
+	}
+	line := strings.Split(strings.TrimRight(res2.(map[string]interface{})["content"].(string), "\n"), "\n")[1]
+	if !strings.HasPrefix(line, " 1. av170001  ") {
+		t.Fatalf("只有 aid 时 seen_list 条目行编号位不对:\n  got  = %q", line)
+	}
+
+	// 结构化字段 bvid 保持空（平台确实没给），不拿 avN 冒充。
+	if bv, _ := res.(map[string]interface{})["bvid"].(string); bv != "" {
+		t.Errorf("结构化字段 bvid = %q, want 空串（平台没给就不该编）", bv)
 	}
 }

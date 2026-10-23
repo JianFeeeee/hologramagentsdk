@@ -64,6 +64,25 @@ func newStore(dir string) *store {
 
 func (s *store) path() string { return filepath.Join(s.dir, "records.json") }
 
+// displayID 返回记录对外展示的编号。
+//
+// 为什么不直接用 r.BVID：平台在个别响应里只回 aid 不回 bvid，
+// 而 fetchVideo 的守卫只拦「两者都空」（api.go 的 `BVID == "" && AID == 0`），
+// 于是 BVID 为空、AID 非空的记录会正常进台账。直接渲染 r.BVID 会得到
+// 一个空白编号（"命中： 已见过。" / " 1.   标题"），使用者看不出是哪条。
+// 这里按 aid 兜底成 "avN"，与 videoRef.String() 的兜底口径一致。
+func (r videoRecord) displayID() string {
+	if r.BVID != "" {
+		return r.BVID
+	}
+	if r.AID > 0 {
+		return fmt.Sprintf("av%d", r.AID)
+	}
+	// 两者都空在 upsert 处已被拒绝，走到这里只可能是外部改坏的台账文件。
+	// 给一个显式占位，不用空串——空白会被误读成「渲染丢了字段」。
+	return "(编号缺失)"
+}
+
 // normKey 让同一个视频的不同写法落到同一条记录上。
 //
 // 优先用 BVID（用户几乎总是给 BV 号）；只有 av 号时用 "av<aid>" 兜底，
