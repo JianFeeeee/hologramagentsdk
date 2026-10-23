@@ -732,7 +732,8 @@ cd tools/vscode-hmapdev && npm install && npm run compile   # 然后在 VSCode �
 | [qq](example/qq) | Go | QQ 消息集成（NapCat），17 个工具，输入/输出通道完整对接 |
 | [a2a](example/a2a) | Go | Agent-to-Agent 协议通信 |
 | [ai_image](example/ai_image) | Go | AI 图片生成 |
-| [bili](example/bili) | Go | Bilibili 视频下载 |
+| [bili](example/bili) | Go | Bilibili 视频下载（yt-dlp） |
+| [bilibili](example/bilibili) | Go | B站内容侧：视频信息/分P、字幕、评论、热门流 + 纯本地 BV 号查重（不下载；下载见 bili） |
 | [browser](example/browser) | Go | 网络搜索、网页抓取、浏览器渲染 |
 | [calendar](example/calendar) | Go | 日历管理 |
 | [editdoc](example/editdoc) | Go | 文档编辑 |
