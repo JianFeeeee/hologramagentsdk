@@ -407,13 +407,15 @@ func (p *Plugin) handleComments(args map[string]interface{}) (interface{}, error
 		if len(replies) == 0 {
 			if collected == 0 {
 				// 第 1 页就空：可以是真的没评论，但要说清是"平台说 0 条"。
-				fmt.Fprintf(&b, "视频 %s（av%d）暂无评论（接口返回 code=0，page.count=%d）\n", ref, ref.AID, data.Page.Count)
+				// header 只用 %s：videoRef.String() 自己就带 "(av…)"，
+				// 再拼一次 （av%d） 会渲染成 "… (av80433022)（av80433022）"。
+				fmt.Fprintf(&b, "视频 %s 暂无评论（接口返回 code=0，page.count=%d）\n", ref, data.Page.Count)
 			}
 			break
 		}
 
 		if collected == 0 {
-			fmt.Fprintf(&b, "视频 %s（av%d）评论共 %d 条，按%s排序：\n", ref, ref.AID, total, sortLabel(sortBy))
+			fmt.Fprintf(&b, "视频 %s 评论共 %d 条，按%s排序：\n", ref, total, sortLabel(sortBy))
 		}
 		for _, r := range replies {
 			collected++
