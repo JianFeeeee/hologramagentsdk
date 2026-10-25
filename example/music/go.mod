@@ -1,6 +1,6 @@
 module music
 
-go 1.25.0
+go 1.27.1
 
 require github.com/JianFeeeee/hologramagentsdk v0.0.0
 
