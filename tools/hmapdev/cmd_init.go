@@ -166,6 +166,18 @@ type PlgConfig struct {
 	// 若用普通 bool，零值是 false ⇒ "没写这个字段"会被当成"不自动启动"
 	// ⇒ 存量插件全部不启动（灾难性）。
 	AutoStart *bool `json:"auto_start,omitempty"`
+
+	// Repo 是本插件**源码仓库**地址（如 https://github.com/HologramAgentPLG/qq）。
+	//
+	// 用途：内核的 plugin_update 靠它「从仓库拉最新源码 → 现场编译 .hmap → 安装」。
+	// 没有它，plugin_update 只能说"该插件未声明仓库"，无法升级。
+	//
+	// ★ 必须透传进产物 plugin.json：内核读的是**装好的 plugin.json**，
+	// 而不是仓库里的 plg.json（安装后源码已不在机器上）。漏透传的话，
+	// 插件作者写了 repo、plugin_update 却永远查不到 —— 静默失效。
+	//
+	// 留空表示"仓库未知/不提供自动更新"（如私有插件、内置插件）。
+	Repo string `json:"repo,omitempty"`
 }
 
 // TargetList parses the Targets string into a slice.

@@ -422,6 +422,11 @@ func writePluginJSON(plg *PlgConfig, platforms []string, entry string) {
 		}
 		m["requires_facilities"] = plg.RequiresFacilities
 	}
+	// repo：插件源码仓库地址，供内核 plugin_update 从仓库拉源码重编。
+	// 只在有值时写（缺省不写字段，与旧产物完全兼容）。
+	if plg.Repo != "" {
+		m["repo"] = plg.Repo
+	}
 	// auto_start：只有**显式 false** 才写（缺省 true 与旧行为一致，不写字段最兼容）
 	if plg.AutoStart != nil && !*plg.AutoStart {
 		// ★★ auto_start=false 的插件**必须**带 skill，否则等价于没装。
