@@ -505,3 +505,42 @@ func TestToolchain_IgnoresEntryForGoPlugins(t *testing.T) {
 		t.Error("IsLua 应改用 luaEntryFile 常量")
 	}
 }
+
+// 取消必须由运行时接住：模板要处理 call.cancel，并在取消后**不回应答**。
+//
+// 为什么要守住"不回应答"这一条：
+//
+//	内核取消时已把该调用的状态推进到 canceled（见内核 proc/callstate.go）。
+//	插件若照旧回一个正常应答，内核只能丢弃它——结果白算、还留一条
+//	"丢弃迟到应答"日志。取消本来就意味着"这次结果不要了"，
+//	插件静默退出才是正确收尾。
+//
+// 变异：把 `if untrackInflight(req.ID, cancel) { return }` 删掉 ⇒ 变红。
+func TestProcTemplate_HandlesCallCancel(t *testing.T) {
+	src := loadProcTemplate(t)
+
+	// ① 必须处理 call.cancel（否则插件永远收不到取消，长任务白跑）。
+	if !strings.Contains(src, `case "call.cancel":`) {
+		t.Error("模板必须处理 call.cancel —— 否则内核的取消永远到不了 handler")
+	}
+
+	// ② 必须按 RPC id 定位调用（不能按工具名：同一工具可并发多次，
+	// 按名字取消会误伤其它实例）。
+	if !strings.Contains(src, "func cancelInflight(id uint64)") {
+		t.Error("模板缺少 cancelInflight(id)：取消必须按 RPC id 精确定位")
+	}
+
+	// ③ 取消后不得回正常应答。
+	if !strings.Contains(src, "untrackInflight(req.ID, cancel)") {
+		t.Error("模板必须在结束时检查调用是否已被取消（untrackInflight 返回 bool）")
+	}
+	if !regexp.MustCompile(`untrackInflight\(req\.ID, cancel\) \{\s*\n\s*return`).MatchString(src) {
+		t.Error("取消后必须直接 return（不回应答）：内核侧状态已是 canceled，回了也只能被丢弃")
+	}
+
+	// ④ inflight 必须有取消标记字段：handler 可能完全不看 ctx（旧签名），
+	// 跑完仍会走到 respond —— 那条路只能靠这个标记拦住。
+	if !strings.Contains(src, "canceled bool") {
+		t.Error("inflightCall 必须有 canceled 标记：旧签名 handler 不会看 ctx，只能靠它拦住应答")
+	}
+}

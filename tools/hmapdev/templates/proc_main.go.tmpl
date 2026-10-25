@@ -13,6 +13,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
@@ -168,8 +169,17 @@ var region []byte
 //
 // 分配器由内核独占管理（见内核 proc/arena.go）：插件只申请与归还，
 // 不做任何分配决策，因此不存在跨进程分配器的竞争。
-func arenaAlloc(size uint32) (SharedRef, error) {
-	raw, err := callCore("arena.alloc", map[string]interface{}{"size": size})
+// callID 非 0 时把块登记到那次调用名下：内核据此在**取消超时**时强制回收。
+//
+// 为什么必须显式传而不是靠全局变量：同一插件可并发处理多个调用，
+// 全局的"当前调用"会被互相覆盖（qq 插件修过的"全局身份不可靠"就是这类问题）。
+// 这里每个 req.ID 都在自己的 goroutine 里，沿调用链显式下传最准确。
+func arenaAlloc(size uint32, callID uint64) (SharedRef, error) {
+	params := map[string]interface{}{"size": size}
+	if callID != 0 {
+		params["call_id"] = callID
+	}
+	raw, err := callCore("arena.alloc", params)
 	if err != nil {
 		return SharedRef{}, err
 	}
@@ -231,8 +241,8 @@ func frameOutput(frame SharedRef, inputLen uint32, payload []byte, jsonFlag bool
 
 // arenaPut 申请一块扩容块并写入 payload，引用上打 sharedRefFlagExpand
 // 告知内核该块需单独归还（插件只申请，回收由内核做）。
-func arenaPut(payload []byte, jsonFlag bool) (SharedRef, error) {
-	ref, err := arenaAlloc(uint32(len(payload)))
+func arenaPut(payload []byte, jsonFlag bool, callID uint64) (SharedRef, error) {
+	ref, err := arenaAlloc(uint32(len(payload)), callID)
 	if err != nil {
 		return SharedRef{}, err
 	}
@@ -263,7 +273,9 @@ func putInArena(payload string) (SharedRef, bool) {
 	if len(payload) <= inlinePayloadLimit || len(region) == 0 {
 		return SharedRef{}, false
 	}
-	ref, err := arenaAlloc(uint32(len(payload)))
+	// 注入路径（io.inject*）不绑定调用：它的块由插件自己 defer arenaFree 归还，
+	// 不走"取消后内核强制回收"那条路（那里针对的是工具结果扩容块）。
+	ref, err := arenaAlloc(uint32(len(payload)), 0)
 	if err != nil {
 		return SharedRef{}, false
 	}
@@ -344,8 +356,22 @@ var (
 	pluginSDK  *sdk.PluginSDK
 	pluginName string
 
+	// inflight 记录**正在执行**的调用：RPC id → cancel 函数。
+	//
+	// 存在理由（2026-10-25）：内核超时后只能停止"等"，插件侧的 handler
+	// 还在跑——它占着连接/子进程/文件句柄，结果却已被丢弃。内核现在会发
+	// call.cancel 通知，这里按 id 找到正在跑的那次调用并 cancel 它的 ctx。
+	//
+	// 为什么按 RPC id 而不是工具名：同一工具可以被并发调用多次，
+	// 按名字取消会误伤其它并发实例（正是 qq 插件修过的"全局身份不可靠"）。
+	inflightMu sync.Mutex
+	inflight   = map[uint64]*inflightCall{}
+
 	handlerMu      sync.RWMutex
 	toolHandlers   = map[string]sdk.ToolHandler{}
+	// toolHandlersCtx 是**自愿**带 ctx 的版本（sdk.ToolHandlerCtx）。
+	// 同一个工具可能只有其中一种；执行时优先 Ctx 版。
+	toolHandlersCtx = map[string]sdk.ToolHandlerCtx{}
 	toolCleaners   = map[string]func(string) string{}
 	inputCleaners  = map[string]func(string) string{}
 	stageHandlers  = map[string]sdk.StageHandler{}
@@ -690,6 +716,57 @@ func writeStageDirty(sc *sdk.StageContext, base *stageSnapshot) (int, error) {
 	return changed, nil
 }
 
+// ---- 调用取消（内核 → 插件）----
+//
+// 设计要点：按 **RPC id** 而不是工具名定位要停的那次调用。
+// 同一工具可被并发调用多次，按名字取消会误伤别的实例。
+
+// inflightCall 是一次正在执行的调用的状态。
+//
+// canceled 由 call.cancel 置位；handler 返回时据此决定**不回正常应答**。
+// 用单独字段而不是只 cancel ctx：handler 可能完全不看 ctx（旧签名），
+// 跑完后仍会走到"序列化结果 + respond"——那正是要拦掉的那条路。
+type inflightCall struct {
+	cancel   context.CancelFunc
+	canceled bool
+}
+
+// trackInflight 登记一次正在执行的调用。
+func trackInflight(id uint64, cancel context.CancelFunc) {
+	inflightMu.Lock()
+	inflight[id] = &inflightCall{cancel: cancel}
+	inflightMu.Unlock()
+}
+
+// untrackInflight 注销并释放该次调用的 ctx，返回它**是否已被取消**。
+//
+// 返回值决定要不要回应答：已取消就静默退出，不往内核发任何东西
+// （内核对这次调用的状态已是 canceled，收到应答也只能丢弃）。
+func untrackInflight(id uint64, cancel context.CancelFunc) bool {
+	inflightMu.Lock()
+	wasCanceled := false
+	if c := inflight[id]; c != nil {
+		wasCanceled = c.canceled
+	}
+	delete(inflight, id)
+	inflightMu.Unlock()
+	cancel()
+	return wasCanceled
+}
+
+// cancelInflight 取消指定调用；不存在则忽略（可能已跑完，属正常竞争）。
+func cancelInflight(id uint64) {
+	inflightMu.Lock()
+	c := inflight[id]
+	if c != nil {
+		c.canceled = true
+	}
+	inflightMu.Unlock()
+	if c != nil {
+		c.cancel() // ctx 版 handler 会因此尽快返回
+	}
+}
+
 // ---- SDK 装配：全部 API 经 RPC 打回内核（51 个 method 的插件侧一半）----
 
 func buildPluginSDK(name string) *sdk.PluginSDK {
@@ -736,6 +813,25 @@ func buildPluginSDK(name string) *sdk.PluginSDK {
 			})
 		},
 	)
+
+	// ★ 注入带 ctx 的注册口：插件若用 RegisterToolCtx 注册工具，
+	// 它就能收到内核的取消信号。**插件作者不需要改任何东西**——
+	// 用旧 RegisterTool 的工具照旧跑，只是拿不到取消。
+	base.SetToolRegistrarCtx(func(toolName string, def sdk.ToolDef, handler sdk.ToolHandlerCtx) error {
+		handlerMu.Lock()
+		toolHandlersCtx[toolName] = handler
+		// 同时占住旧表，让 tool.invoke 的"是否已注册"判断一致。
+		if _, exists := toolHandlers[toolName]; !exists {
+			toolHandlers[toolName] = sdk.AsToolHandler(handler)
+		}
+		if def.Cleaner != nil {
+			toolCleaners[toolName] = def.Cleaner
+		}
+		handlerMu.Unlock()
+		return callCoreVoid("tool.register", map[string]interface{}{
+			"name": toolName, "def": def, "has_cleaner": def.Cleaner != nil,
+		})
+	})
 
 	base.SetIOInjector(procIO{})
 	base.SetMemoryAPI(procMemory{})
@@ -1587,6 +1683,21 @@ func handleKernelRequest(req *rpcRequest) {
 		stdoutW.Flush()
 		os.Exit(0)
 
+	case "call.cancel":
+		// 内核放弃某次调用（超时/被抢占/用户中断）。
+		//
+		// 这是**通知**（内核用 ID=0 发），不回响应：取消路径绝不能变成
+		// 新的同步点，否则内核超时后还要再等我们确认一次。
+		var p struct {
+			CallID uint64 `json:"call_id"`
+			Reason string `json:"reason"`
+		}
+		json.Unmarshal(req.Params, &p)
+		if p.CallID != 0 {
+			cancelInflight(p.CallID)
+		}
+		return
+
 	case "tool.invoke":
 		var p struct {
 			Name    string                 `json:"name"`
@@ -1612,12 +1723,34 @@ func handleKernelRequest(req *rpcRequest) {
 
 		handlerMu.RLock()
 		h, ok := toolHandlers[p.Name]
+		hc := toolHandlersCtx[p.Name]
 		handlerMu.RUnlock()
 		if !ok {
 			respondErr(req.ID, fmt.Errorf("未注册的工具: %s", p.Name))
 			return
 		}
-		res, err := h(args)
+
+		// 登记本次调用，供 call.cancel 精确定位（按 RPC id，不按工具名）。
+		ctx, cancel := context.WithCancel(context.Background())
+		trackInflight(req.ID, cancel)
+
+		// 优先走带 ctx 的 handler（业务代码可自愿声明）；
+		// 否则退回旧签名 —— 旧 handler 拿不到取消，行为与今天完全一致。
+		//
+		// ★ 两条路都不需要**插件作者**改代码：这里只是让"愿意配合取消"的
+		// handler 有机会拿到 ctx；不愿意的照旧跑完，内核侧仍然能立即返回。
+		var res interface{}
+		var err error
+		if hc != nil {
+			res, err = hc(ctx, args)
+		} else {
+			res, err = h(args)
+		}
+		// 先注销，拿到"运行期间是否被取消"。被取消就**什么都不回**：
+		// 内核侧的状态已是 canceled，任何应答都只能被丢弃。
+		if untrackInflight(req.ID, cancel) {
+			return
+		}
 		if err != nil {
 			respondErr(req.ID, err)
 			return
@@ -1631,7 +1764,7 @@ func handleKernelRequest(req *rpcRequest) {
 		// 结果优先写进内核标定的帧；放不下才申请扩容块。
 		outRef, err := frameOutput(p.Frame, p.ArgsLen, blob, true)
 		if err != nil {
-			outRef, err = arenaPut(blob, true)
+			outRef, err = arenaPut(blob, true, req.ID)
 			if err != nil {
 				respondErr(req.ID, fmt.Errorf("结果扩容失败: %w", err))
 				return
@@ -1672,7 +1805,7 @@ func handleKernelRequest(req *rpcRequest) {
 		// 结果优先写进内核标定的帧；放不下才申请扩容块。
 		outRef, err := frameOutput(p.Frame, p.InputLen, []byte(output), false)
 		if err != nil {
-			outRef, err = arenaPut([]byte(output), false)
+			outRef, err = arenaPut([]byte(output), false, req.ID)
 			if err != nil {
 				respondErr(req.ID, fmt.Errorf("结果扩容失败: %w", err))
 				return
@@ -1711,8 +1844,16 @@ func handleKernelRequest(req *rpcRequest) {
 			respondErr(req.ID, fmt.Errorf("未注册的输出通道: %s", p.Channel))
 			return
 		}
+		// 输出通道可能很慢（发文件/长消息），纳入取消跟踪：
+		// 内核超时后我们能立即收手，而不是白跑完再被丢弃。
+		_, cancel := context.WithCancel(context.Background())
+		trackInflight(req.ID, cancel)
+
 		// 同步返回真实结果——内核据此告知模型成功/失败，不再假成功（§9.4）
 		res, err := h(args)
+		if untrackInflight(req.ID, cancel) {
+			return // 已被取消：静默退出，不发任何应答
+		}
 		if err != nil {
 			respondErr(req.ID, err)
 			return

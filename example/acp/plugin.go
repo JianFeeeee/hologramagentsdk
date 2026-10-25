@@ -29,6 +29,19 @@ type Plugin struct {
 
 	mu       sync.RWMutex
 	sessions map[string]*sessionState
+
+	// turnMu 保护「同一 session 的一轮对话」不被并发交错。
+	//
+	// 为什么必须有：handleSessionPost 是并发的（net/http 每请求一个 goroutine），
+	// 而 agent 侧只有一个对话队列。两个**同会话**请求同时进来时会各自读到
+	// 同一份历史、各自注入，回复按完成顺序写回 ⇒ 历史出现
+	// 「用户A / 用户B / 助手B / 助手A」这种与真实因果不符的交替。
+	// p.mu 保不住这一点：它只保证 map/切片的**数据结构安全**。
+	//
+	// 用 per-session 信号量而非全局锁：全局锁会让一个跑两分钟的重任务
+	// 把其他会话全堵住，而 ACP 的并发本就是跨会话的。
+	turnMu  sync.Mutex
+	turnSem map[string]chan struct{}
 }
 
 type sessionState struct {
@@ -41,15 +54,30 @@ type sessionState struct {
 // maxSessionTurns 单会话保留的最大轮次对数。
 const maxSessionTurns = 10
 
+// maxInboundBody 入站请求体上限（见 handleSessionPost 注释）。
+const maxInboundBody = 1 << 20
+
 func (p *Plugin) Name() string { return p.name }
 
 func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	s.SetAutoRestart(true)
 	p.sdk = s
 	p.sessions = make(map[string]*sessionState)
+	// 会话 GC：长期不用的会话与其 per-session 信号量一起回收。
+	// 没有它，turnSem 会随会话数无限增长。
+	go p.sessionGCLoop()
 	// 入站通道：本插件用 p.name 通道注入输入（见 InjectInputSync 调用），
 	// 输入侧必须显式登记 —— 否则"把该 inputch 划给驻留子"会报 `inputch 未注册`。
-	_ = s.RegisterInputChannel(p.name, sdk.ChannelDef{})
+	//
+	// ★ ChannelDef 里声明 NoMemory + 关召回/场面：ACP 入站是**外部 agent 的
+	// 请求指令**，不是用户说的话。不声明的后果：它会进图记忆、被向量化、
+	// 参与情景识别，把别人的机器指令当成用户偏好存下来（qq 的通道无此问题，
+	// 因为它承载的就是真实对话）。真正的业务内容由 stage 在应答上保留。
+	_ = s.RegisterInputChannel(p.name, sdk.ChannelDef{
+		NoMemory:      true,
+		RecallPolicy:  sdk.RecallPolicyNone,
+		ContextPolicy: "none",
+	})
 	tp := p.name + "_"
 
 	// 注册自身为输出通道：agent 回复 emit 到本通道时有落点。
@@ -59,6 +87,20 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 		log.Printf("[%s] channel output: %s", p.name, truncateStr(payload, 120))
 		return map[string]interface{}{"status": "ok"}, nil
 	})
+
+	// ★ stage 把「本轮是哪次 ACP 请求」绑到**帧**上（照 qq 的 qq_auth 做法）。
+	//
+	// 为什么必须绑帧而不是只用全局变量：ACP 与 QQ 面临同一个真实问题——
+	// 同一轮推理可能由多条注入合并而成（中断抢占、并发到达），而全局
+	// 身份/会话变量在内核 side 是**后写覆盖先写**的。只靠全局变量时，
+	// stage 里读到的是“最后一条注入的会话”，不是“本帧对应的会话”，
+	// 于是回复可能写错会话。
+	//
+	// 流程：注入时把 acp_sid 放进 InjectOptions.Payload（内核原样透传到
+	// 本轮 stageCtx.Extra）⇒ onInput 把它钉进 Extra[acp_sid] ⇒ afterOutput
+	// 用帧上那个值（而不是全局变量）。
+	s.RegisterStage(sdk.StageOnInput, p.stageBindSession, sdk.StageScopeGlobal)
+	s.RegisterStage(sdk.StageAfterOutput, p.stagePushReply, sdk.StageScopeGlobal)
 
 	s.Settings().RegisterDef(sdk.ConfigDef{
 		Key: "listen", Default: "127.0.0.1:12001",
@@ -145,7 +187,14 @@ func (p *Plugin) startServer(addr string) error {
 		return fmt.Errorf("listen %s: %v", addr, err)
 	}
 
-	srv := &http.Server{Handler: mux}
+	srv := &http.Server{
+		Handler: mux,
+		// 无界 header / 无超时都是「本地进程就能占用插件进程资源」的入口。
+		// WriteTimeout 特意留给 SSE：该连接长时间挂起是设计（事件流），
+		// 所以只在 handler 内部用 15s 心跳保活、不设全局写超时。
+		ReadHeaderTimeout: 10 * time.Second,
+		MaxHeaderBytes:    64 << 10,
+	}
 	addrStr := listener.Addr().String()
 
 	p.srvMu.Lock()
@@ -178,7 +227,20 @@ func (p *Plugin) handleSession(w http.ResponseWriter, r *http.Request) {
 
 // handleSessionPost 处理 JSON-RPC：session/new 与 session/update
 func (p *Plugin) handleSessionPost(w http.ResponseWriter, r *http.Request) {
-	body, _ := io.ReadAll(r.Body)
+	// ★ 体积上限：无界的 io.ReadAll 是「任何本地进程一个请求就能把插件进程
+	// 的内存吃掉」的入口。ACP 端点在回环上，但插件是所有插件共享的子进程
+	// 池成员，炸掉它就炸掉一串工具。多读 1 字节用于判断是否超限。
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxInboundBody+1))
+	if err != nil {
+		writeRPCErr(w, nil, -32700, "读取请求体失败: "+err.Error())
+		return
+	}
+	if len(body) > maxInboundBody {
+		writeRPCErr(w, nil, -32600,
+			fmt.Sprintf("请求体超过 %d 字节上限", maxInboundBody))
+		return
+	}
+
 	var req struct {
 		JSONRPC string      `json:"jsonrpc"`
 		ID      interface{} `json:"id"`
@@ -192,54 +254,78 @@ func (p *Plugin) handleSessionPost(w http.ResponseWriter, r *http.Request) {
 			Final     bool   `json:"final,omitempty"`
 		} `json:"params,omitempty"`
 	}
+	// ★ 错误必须用 JSON-RPC 错误帧回，而不是 http.Error 的纯文本：
+	// 调用方解析 JSON 失败时只能看到 “invalid character 'i'”，根本不知道
+	// 是自己协议写错了还是服务端版本不对。并把 req.ID 带上，避免
+	// “请求能发出、无法对应哪一条”的悬挂。
 	if err := json.Unmarshal(body, &req); err != nil {
-		http.Error(w, "invalid json-rpc", http.StatusBadRequest)
+		writeRPCErr(w, req.ID, -32700, "请求体不是合法 JSON: "+err.Error())
 		return
 	}
 
-	switch req.Method {
-	case "session/new":
+	switch canonicalACP(req.Method) {
+	case "sessionnew":
 		text := ""
 		if req.Params.Request != nil {
 			text = strings.TrimSpace(req.Params.Request.Text)
 		}
 		if text == "" {
-			http.Error(w, "request.text required", http.StatusBadRequest)
+			writeRPCErr(w, req.ID, -32602, "缺少 request.text")
 			return
 		}
 
 		// 会话：调用方可指定 session_id 延续多轮；不指定则新建。
-		sid := strings.TrimSpace(req.Params.SessionID)
+		// ★ 先取会话级「一轮对话」互斥，再读历史 -> 注入 -> 写历史：
+		// 中间整个区间必须是一个原子单元，否则同会话并发会把因果顺序弄乱
+		// （详见 Plugin.turnSem 注释）。
+		requested := strings.TrimSpace(req.Params.SessionID)
+		sid := requested
+		unlock := p.lockTurn(sid)
+		defer unlock()
+
 		p.mu.Lock()
-		if sid != "" {
-			if _, exists := p.sessions[sid]; !exists {
-				p.sessions[sid] = &sessionState{ID: sid, LastUsed: time.Now()}
-			}
-		} else {
+		if sid == "" {
 			sid = fmt.Sprintf("session_%d", time.Now().UnixNano())
-			p.sessions[sid] = &sessionState{ID: sid, LastUsed: time.Now()}
 		}
 		st := p.sessions[sid]
-		p.mu.Unlock()
-
-		// 延续上下文
-		injectText := text
-		p.mu.Lock()
+		if st == nil {
+			// 延迟登记：注入失败/超时不留下 History 为空的空壳会话。
+			st = &sessionState{ID: sid}
+		}
+		var history []string
 		if len(st.History) > 0 {
-			ctxText := strings.Join(st.History, "\n")
-			injectText = "[对话上下文]\n" + ctxText + "\n[本轮输入]\n" + text
+			history = append([]string{}, st.History...)
 		}
 		p.mu.Unlock()
 
+		// 延续上下文（与 A2A 同一套分隔/转义约定）
+		injectText := buildACPContextualInput(history, text)
+
 		// 同步注入等待回复：不抢占打断，完整闭环返回文本。
+		//
+		// ★ 用 Opts 变体而不是 InjectInputSync：ACP 入站是**外部 agent 的指令**，
+		// 不该进图记忆、不该据它召回别人的记忆、也不该据它裁剪上下文。
+		// 声明「本轮属于哪个 ACP 会话」走 Payload——内核把它透传到
+		// stageCtx.Extra，afterOutput 凭帧上的值决定推给哪个会话的 SSE。
+		// 不用全局变量：并发/中断合并时全局值会互相覆盖（见 Start 里的说明）。
 		reply := ""
 		if p.sdk != nil {
-			reply = p.sdk.InjectInputSync(p.name, p.name,
-				fmt.Sprintf("[来自ACP Agent的请求 session %s]\n%s\n[注意] 请直接以文本回复本请求，不要调用 output_send__%s——你的最终文本回复会被系统自动返回给请求方。", sid, injectText, p.name))
+			reply = p.sdk.InjectInputSyncOpts(p.name, p.name,
+				fmt.Sprintf("[来自ACP Agent的请求 session %s]\n%s\n[注意] 请直接以文本回复本请求，不要调用 output_send__%s——你的最终文本回复会被系统自动返回给请求方。", sid, injectText, p.name),
+				sdk.InjectOptions{
+					NoMemory:     true,
+					RecallPolicy: sdk.RecallPolicyNone,
+					ScenePolicy:  sdk.ScenePolicyNone,
+					Payload:      map[string]interface{}{acpSessionKey: sid},
+				})
 		}
 
 		// 写回历史 + 填充 Replying 供 SSE 消费
 		p.mu.Lock()
+		if cur := p.sessions[sid]; cur != nil {
+			st = cur
+		}
+		p.sessions[sid] = st
 		st.History = append(st.History, "用户: "+text, "助手: "+reply)
 		if len(st.History) > maxSessionTurns*2 {
 			st.History = st.History[len(st.History)-maxSessionTurns*2:]
@@ -252,16 +338,14 @@ func (p *Plugin) handleSessionPost(w http.ResponseWriter, r *http.Request) {
 		}
 		p.mu.Unlock()
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"jsonrpc": "2.0", "id": req.ID,
-			"result": map[string]interface{}{
-				"session": map[string]interface{}{"id": sid},
-				"reply":   reply,
-			},
+		// ★ 直接在这里回 reply，同时**保留**进 Replying 供 SSE 消费：
+		// 两条通路的消费方不同（同步调用方 / SSE 订阅方），不能只留一条。
+		writeRPCResult(w, req.ID, map[string]interface{}{
+			"session": map[string]interface{}{"id": sid},
+			"reply":   reply,
 		})
 
-	case "session/get":
+	case "sessionget":
 		// 按 session_id 返回会话内近 N 条消息（默认 10 条，时间正序）
 		sid := req.Params.SessionID
 		p.mu.RLock()
@@ -272,14 +356,10 @@ func (p *Plugin) handleSessionPost(w http.ResponseWriter, r *http.Request) {
 		}
 		p.mu.RUnlock()
 		if st == nil {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"jsonrpc": "2.0", "id": req.ID,
-				"result": map[string]interface{}{
-					"session_id": sid,
-					"status":     "not_found",
-					"messages":   []interface{}{},
-				},
+			writeRPCResult(w, req.ID, map[string]interface{}{
+				"session_id": sid,
+				"status":     "not_found",
+				"messages":   []interface{}{},
 			})
 			return
 		}
@@ -304,51 +384,38 @@ func (p *Plugin) handleSessionPost(w http.ResponseWriter, r *http.Request) {
 				"text": text,
 			})
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"jsonrpc": "2.0", "id": req.ID,
-			"result": map[string]interface{}{
-				"session_id": sid,
-				"status":     "completed",
-				"messages":   msgs,
-			},
+		writeRPCResult(w, req.ID, map[string]interface{}{
+			"session_id": sid,
+			"status":     "completed",
+			"messages":   msgs,
 		})
 
-	case "session/update":
+	case "sessionupdate":
 		sid := req.Params.SessionID
 		p.mu.Lock()
 		st := p.sessions[sid]
+		if st != nil && req.Params.Final {
+			// 客户端结束会话：标记并保留历史（后续可再 session/new 续）
+			st.LastUsed = time.Now()
+		}
 		p.mu.Unlock()
 		if st == nil {
-			http.Error(w, "session not found", http.StatusNotFound)
+			writeRPCErr(w, req.ID, -32001, "session not found: "+sid)
 			return
 		}
-		if req.Params.Final {
-			// 客户端结束会话：标记并保留历史（后续可再 session/new 续）
-			p.mu.Lock()
-			st.LastUsed = time.Now()
-			p.mu.Unlock()
-		}
+		writeRPCResult(w, req.ID, map[string]interface{}{"final": true})
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"jsonrpc": "2.0", "id": req.ID,
-			"result": map[string]interface{}{"final": true},
-		})
-
-	case "session/cancel":
+	case "sessioncancel":
 		p.mu.Lock()
 		delete(p.sessions, req.Params.SessionID)
 		p.mu.Unlock()
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"jsonrpc": "2.0", "id": req.ID,
-			"result": map[string]interface{}{"canceled": true},
-		})
+		writeRPCResult(w, req.ID, map[string]interface{}{"canceled": true})
 
 	default:
-		http.Error(w, fmt.Sprintf("unknown method %q", req.Method), http.StatusBadRequest)
+		// 回显**收到的**方法名：只说 unknown method 时调用方无法判断是
+		// 自己拼错还是服务端版本旧。
+		writeRPCErr(w, req.ID, -32601,
+			fmt.Sprintf("未知方法 %q（支持 session/new、session/get、session/update、session/cancel）", req.Method))
 	}
 }
 
@@ -376,28 +443,234 @@ func (p *Plugin) handleSessionSSE(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
+	// 让反向代理不要缓冲 SSE（否则客户端看到的是「一次性到达」而不是流）。
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
 
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
 	for {
 		p.mu.RLock()
-		replies := append([]map[string]interface{}{}, st.Replying...)
+		// 重新按 sid 取：会话可能在等待期间被 cancel（cancel 会 delete）。
+		// 持有 st 指针不重取的话，这里会往一个已被删除的会话里写——
+		// 内存不泄漏，但订阅方会永远收不到后续回复（与 HTTP 连接状态不一致）。
+		cur := p.sessions[sid]
+		var replies []map[string]interface{}
+		if cur == st {
+			replies = append(replies, st.Replying...)
+		}
 		p.mu.RUnlock()
-		for _, rep := range replies {
-			data, _ := json.Marshal(rep)
-			fmt.Fprintf(w, "event: session/reply\ndata: %s\n\n", data)
+
+		if cur != st {
+			// 会话已结束：告知订阅方并关闭，而不是静默挂着。
+			fmt.Fprintf(w, "event: session/closed\ndata: %s\n\n",
+				`{"reason":"session closed or expired"}`)
+			fl.Flush()
+			return
+		}
+
+		if len(replies) > 0 {
+			p.mu.Lock()
+			if p.sessions[sid] == st {
+				st.Replying = nil
+			}
+			p.mu.Unlock()
+			for _, rep := range replies {
+				data, _ := json.Marshal(rep)
+				fmt.Fprintf(w, "event: session/reply\ndata: %s\n\n", data)
+			}
 			fl.Flush()
 		}
-		p.mu.Lock()
-		st.Replying = nil
-		p.mu.Unlock()
 
 		select {
 		case <-r.Context().Done():
 			return
 		case <-ticker.C:
+			// 心跳注释帧：无它时中间代理/内核会在空闲 60~90s 后静默断连，
+			// 而 SSE 消费者只能看到一个「没有新事件」的假象。
+			fmt.Fprint(w, ": keep-alive\n\n")
+			fl.Flush()
 		}
 	}
+}
+
+// ---- stage：把 ACP 会话绑到帧上（照 qq 的 qq_auth 做法）----
+//
+// 为什么不只用全局变量：同一轮推理可能由多条注入合并而成（中断抢占、
+// 并发到达），全局变量在内核侧是后写覆盖先写。stage 拿到的若是全局值，
+// 回复就可能推错会话。绑到 Extra 上后，「本帧对应哪个 ACP 会话」是确定的。
+
+// acpSessionKey 是 Payload / Extra 里的会话键。
+//
+// 加插件名前缀（不用裸 "session_id"）：后者太通用，将来内核若加同名字段会撞车。
+const acpSessionKey = "acp_sid"
+
+// stageBindSession 在 on_input 把 Payload 里的会话钉到本帧 Extra 上。
+func (p *Plugin) stageBindSession(ctx *sdk.StageContext) error {
+	ctx.RLock()
+	sid, _ := ctx.Extra[acpSessionKey].(string)
+	ctx.RUnlock()
+	if sid == "" {
+		// 非 ACP 发起的输入（用户直接对话、定时器等）：不绑定，afterOutput 跳过。
+		return nil
+	}
+	ctx.Lock()
+	if ctx.Extra == nil {
+		ctx.Extra = make(map[string]interface{})
+	}
+	ctx.Extra[acpSessionKey] = sid
+	ctx.Unlock()
+	return nil
+}
+
+// stagePushReply 在 after_output 把本轮最终文本推给**本帧**对应的 ACP 会话。
+//
+// 为什么需要它：同步注入（InjectInputSync）只覆盖「HTTP 请求在等回复」这一条
+// 路径。如果这一轮是 agent 自循环/定时器/工具链续轮产生的，注入早已返回，
+// 回复就永远到不了 SSE 订阅方。这里把 after_output 的 FinalText 补进会话，
+// 让 SSE 成为一个**完整的**事件流（而不只是同步回应的镜像）。
+func (p *Plugin) stagePushReply(ctx *sdk.StageContext) error {
+	ctx.RLock()
+	sid, _ := ctx.Extra[acpSessionKey].(string)
+	final := ctx.FinalText
+	ctx.RUnlock()
+	if sid == "" || final == "" {
+		return nil
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	st := p.sessions[sid]
+	if st == nil {
+		return nil // 会话已 cancel 或过期：丢弃而不是创建一个幽灵会话
+	}
+	// 去重：同步路径已把同一段文本写进 Replying，这里不重复推。
+	for _, rep := range st.Replying {
+		if t, _ := rep["text"].(string); t == final {
+			return nil
+		}
+	}
+	st.Replying = append(st.Replying, map[string]interface{}{
+		"type": "reply", "text": final,
+	})
+	st.LastUsed = time.Now()
+	return nil
+}
+
+// canonicalACP 归一化方法名（session/new、session.new、session_new 等价）。
+//
+// 与 A2A 同一个理由：协议名在真实客户端里写法不一，只认一种就会
+// 把整条链路做成 400 + "unknown method"，且难以从客户端侧看出原因。
+// '.' 必须一起剔除（同 canonicalMethod 里的教训）。
+func canonicalACP(method string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(strings.TrimSpace(method)) {
+		switch r {
+		case '/', '_', '-', '.', ' ', '\t':
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+// lockTurn 取同一会话的「一轮对话」互斥，返回解锁函数。
+//
+// ★ 为什么不在解锁时删表：
+//
+//	A 持锁中；B 到达，拿到同一 sem 并阻塞在发送上；
+//	A 释放 → 拆表 → B 拿到锁继续；
+//	C 到达，发现表里没 sem ⇒ 新建一个 ⇒ **B 与 C 同时持锁**。
+//
+// 拆表这个看似无害的清理动作会直接消掉互斥性。sem 生命周期与 session 一致，
+// 由 cancel / 过期清理（见 sweepSessions）。
+func (p *Plugin) lockTurn(sid string) func() {
+	p.turnMu.Lock()
+	if p.turnSem == nil {
+		p.turnSem = make(map[string]chan struct{})
+	}
+	sem := p.turnSem[sid]
+	if sem == nil {
+		sem = make(chan struct{}, 1)
+		p.turnSem[sid] = sem
+	}
+	p.turnMu.Unlock()
+
+	sem <- struct{}{}
+	return func() { <-sem }
+}
+
+// sweepSessions 回收长期未用的会话与其信号量。
+func (p *Plugin) sweepSessions() {
+	const idle = 2 * time.Hour
+	p.mu.Lock()
+	expired := make([]string, 0, 8)
+	for id, st := range p.sessions {
+		if time.Since(st.LastUsed) > idle {
+			delete(p.sessions, id)
+			expired = append(expired, id)
+		}
+	}
+	p.mu.Unlock()
+	if len(expired) == 0 {
+		return
+	}
+	p.turnMu.Lock()
+	for _, id := range expired {
+		// 只回收已空闲的（通道里无令牌 = 无人在持锁）。删掉正在用的 sem
+		// 会让下一个请求新建一个 ⇒ 新旧两把锁并存 ⇒ 互斥消失（见 lockTurn）。
+		if sem := p.turnSem[id]; sem != nil && len(sem) == 0 {
+			delete(p.turnSem, id)
+		}
+	}
+	p.turnMu.Unlock()
+}
+
+func (p *Plugin) sessionGCLoop() {
+	ticker := time.NewTicker(30 * time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		p.sweepSessions()
+	}
+}
+
+// buildACPContextualInput 把历史与本次输入拼成注入文本。
+//
+// 分隔 + 转义的理由：历史条目里直接含对端原始输入，不标记的话，
+// 一个构造过的 prompt（正文写 "[本轮输入]"）就能伪造出“本轮”的开端，
+// 把自己的后半段伪装成历史。这不是密码学边界，但把段落归属变成确定的。
+func buildACPContextualInput(history []string, text string) string {
+	if len(history) == 0 {
+		return text
+	}
+	var b strings.Builder
+	b.WriteString("[对话上下文]\n")
+	for _, line := range history {
+		if strings.HasPrefix(line, "[") {
+			line = "［" + line[1:]
+		}
+		b.WriteString(line)
+		b.WriteString("\n")
+	}
+	b.WriteString("[本轮输入]\n")
+	b.WriteString(text)
+	return b.String()
+}
+
+// writeRPCResult / writeRPCErr 保证响应形状一致（JSON-RPC 2.0）。
+func writeRPCResult(w http.ResponseWriter, id interface{}, result map[string]interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"jsonrpc": "2.0", "id": id, "result": result,
+	})
+}
+
+func writeRPCErr(w http.ResponseWriter, id interface{}, code int, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"jsonrpc": "2.0", "id": id,
+		"error": map[string]interface{}{"code": code, "message": msg},
+	})
 }
 
 // ---- Outbound：ACP 客户端 ----
@@ -480,7 +753,11 @@ func (p *Plugin) handleAcpQuery(args map[string]interface{}) (interface{}, error
 	}
 	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 && resp.StatusCode != 202 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		// 原写法 `code < 200 || code >= 300 && code != 202` 依靠 Go 的
+		// && 优先于 || 才勉强正确，且把 202 当成成功——但 202 意味着
+		// “已接受、异步处理”，而本函数必需同步拿到 reply，拿不到只会在
+		// 下游变成一句含糊的「未收到回复」。
 		return map[string]interface{}{"error": fmt.Sprintf("状态码 %d", resp.StatusCode), "raw_body": truncateStr(string(body), 300)}, nil
 	}
 
