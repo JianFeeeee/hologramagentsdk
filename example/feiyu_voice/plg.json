@@ -1,0 +1,16 @@
+{
+  "name": "feiyu_voice",
+  "name_zh": "肥鱼声库",
+  "name_en": "Feiyu Voice",
+  "version": "0.1.0",
+  "description": "肥鱼声库客户端：TTS / 换声 / 按谱唱（HTTP 客户端）",
+  "author": "HologramAgent",
+  "entry": "plugin.bin",
+  "tags": ["voice", "tts", "singing"],
+  "targets": "linux/amd64",
+  "outdir": "dist",
+  "bundle": true,
+  "replaces": {},
+  "source_dirs": [],
+  "auto_start": false
+}
