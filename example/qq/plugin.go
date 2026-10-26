@@ -2627,10 +2627,33 @@ func (p *Plugin) handleChannelOutput(args map[string]interface{}) (interface{}, 
 		}
 
 	case "voice", "audio":
-		text := p.sensitiveFilter(payload)
-		audioFile, err := p.ttsToFile(text)
-		if err != nil {
-			return nil, fmt.Errorf("语音生成失败: %w", err)
+		// ★ payload 可以是**文本**（走插件 TTS），也可以是**已存在的音频文件**
+		// （本地路径或 file:// URL）。
+		//
+		// 为什么要支持后者（2026-10-26 用户需求）：外部 TTS/换声/唱歌服务
+		// （如肥鱼声库那种 HTTP 服务）产出的音频文件，本该直接发出去；
+		// 而此前 payload 一律被当成"待合成文本"，等于逼着每个音频都再过
+		// 一遍本插件内置的 TTS。
+		//
+		// 判定顺序：file:// 前缀 → 本地绝对路径存在 → 其余按文本合成。
+		// 不做"看起来像路径"的猜测：只有**确实存在**的文件才当文件。
+		audioFile := ""
+		if strings.HasPrefix(payload, "file://") {
+			audioFile = strings.TrimPrefix(payload, "file://")
+		} else if strings.HasPrefix(payload, "/") {
+			if _, statErr := os.Stat(payload); statErr == nil {
+				audioFile = payload
+			}
+		}
+		var err error
+		ttsTemp := false
+		if audioFile == "" {
+			text := p.sensitiveFilter(payload)
+			audioFile, err = p.ttsToFile(text)
+			if err != nil {
+				return nil, fmt.Errorf("语音生成失败: %w", err)
+			}
+			ttsTemp = true
 		}
 		os.MkdirAll(p.remoteDir, 0755)
 		dest := filepath.Join(p.remoteDir, filepath.Base(audioFile))
@@ -2641,7 +2664,11 @@ func (p *Plugin) handleChannelOutput(args map[string]interface{}) (interface{}, 
 		if err := os.WriteFile(dest, data, 0644); err != nil {
 			return nil, fmt.Errorf("写入共享目录失败: %w", err)
 		}
-		os.Remove(audioFile)
+		// 只删**我们合成的临时文件**：调用方给的音频文件属于它自己的资产，
+		// 删掉等于把用户的素材销毁。
+		if ttsTemp {
+			os.Remove(audioFile)
+		}
 		uri := fmt.Sprintf("file:///app/files/%s", filepath.Base(dest))
 		cqMsg := fmt.Sprintf("[CQ:record,file=%s]", uri)
 		message := interface{}(cqMsg)
