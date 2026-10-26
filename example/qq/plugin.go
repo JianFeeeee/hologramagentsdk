@@ -435,6 +435,18 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	// 默认关的理由：它对外可见（好友会看到状态在跳），属于
 	// "内核替用户做决定"——与 offload 同一类，必须显式打开。
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "status_auto", Default: "false", Type: "bool", DisplayName: "随阶段切在线状态", Description: "开启后：调工具时切「搬砖中」、生成回复时切「学习中」、一轮结束切回「在线」。失败不影响工具调用", Category: "qq"})
+	// turn_hints：**本轮注入的行为提示**（可选，空 = 不加）。
+	//
+	// 为什么放在插件而不是内核/人格：只有插件同时知道"这是 QQ、私聊还是群、
+	// 对方是不是 owner、群里要不要 @、有没有收藏表情"。这些是**本轮事实**，
+	// 人格只描述"我是谁"，说不清"这一轮能做什么"。
+	//
+	// 现场（2026-10-26）：注入文本只教"怎么取消息、往哪回"，于是模型
+	// 不知道可以发表情、不知道群里要 @，风格全押在 skill 上 —— 而 skill
+	// 需要模型主动去读，它经常不读。
+	s.Settings().RegisterDef(sdk.ConfigDef{Key: "turn_hints", Default: "", Type: "text",
+		DisplayName: "本轮行为提示（注入给模型，可留空）",
+		Description: "每条消息注入时附带的行为提示。留空则不加。", Category: "qq"})
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "sticker_descs", Default: "", Type: "text", DisplayName: "表情包描述缓存",
 		Description: "收藏表情的内容/情绪描述（JSON，url → {desc,mood}）。由 qq_describe_sticker 自动写入，一般不用手改；清空后 loss 描述，表情仍可发。", Category: "qq"})
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "owner", Default: "", Type: "string", DisplayName: "Bot 所有者 QQ", Description: "Bot 所有者 QQ 号列表，逗号分隔。所有者无论私聊或群聊均拥有完整工具权限", Category: "qq"})
@@ -2161,6 +2173,12 @@ func (p *Plugin) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	if p.isOwner(evt.UserID) {
 		interrupt = "【重要！Bot 所有者消息】" + interrupt
 	}
+	// ★ 本轮行为提示（配置驱动，可留空）。
+	//
+	// 只加**这一轮确实成立**的事实，不写通用说教：
+	//   · 群聊且有 group_require_at ⇒ 必须 @，否则对方收不到提醒
+	//   · 有收藏表情 ⇒ 允许用 sticker（并说明一条一张、不混文字）
+	interrupt += p.turnHints(evt.MessageType, evt.GroupID, evt.UserID)
 
 	if text != "" {
 		text = stripCQRe.ReplaceAllString(text, "")
@@ -4561,4 +4579,76 @@ func outputSendGroupTarget(ctx *sdk.StageContext, selfName string) string {
 		return ""
 	}
 	return strconv.FormatInt(m.GroupID, 10)
+}
+
+// turnHints 生成**本轮事实**提示（不写风格、不写人设）。
+//
+// ## 分工（用户 2026-10-26 明确）
+//
+//	人设（personal.md）  我是谁、怎么说话、黑名单、语气       —— 静态，永远成立
+//	插件注入             这一轮**才成立的事实**             —— 动态，随消息变化
+//
+// 所以这里**只**放插件独有、且本轮确定的信息：
+//
+//	· 渠道形态：QQ 私聊 / 群，回复时要用的 meta 字段
+//	· 群聊是否必须 @（group_require_at）以及对方 id
+//	· 收藏表情能不能用、怎么用（type=sticker + sticker_index，一条一张）
+//	· 本轮是合批的 N 条消息（模型据此决定是否先拉历史）
+//
+// 不放在这里的东西（都在人设里）：短句、不用 markdown、不用 emoji、
+// 不客服腔、不列清单、群聊别抢话、被冒犯怎么回。那些是"怎么说话"，
+// 不是"这一轮能做什么"；塞进插件等于把同一件事写两处。
+func (p *Plugin) turnHints(messageType string, groupID, userID int64) string {
+	var b strings.Builder
+
+	// ① 渠道与回复目标（模型要照抄的 meta 字段）
+	if messageType == "group" {
+		b.WriteString(fmt.Sprintf("\n【本轮渠道】QQ 群 %d → 用 output_send__qq，meta={\"group_id\":%d}", groupID, groupID))
+		if p.requireGroupAt() {
+			b.WriteString(fmt.Sprintf("；群内回复需 @ 发话人（at 目标 user_id=%d），否则对方收不到提醒", userID))
+		}
+	} else {
+		b.WriteString(fmt.Sprintf("\n【本轮渠道】QQ 私聊 → 用 output_send__qq，meta={\"user_id\":%d}", userID))
+	}
+
+	// ② 收藏表情：本轮可用的能力 + 正确用法（一条一张，不能和文字同一气泡）
+	if n := p.stickerCount(); n > 0 {
+		b.WriteString(fmt.Sprintf("；可发表情包（共 %d 个）：output_send__qq 且 type=sticker，meta 里给 sticker_index；一条消息一张，文字请另发一条", n))
+	}
+
+	// ④ 插件配置的额外事实（运维可写，仍然只放事实，不要写风格）
+	if extra := strings.TrimSpace(getSetting[string](p.sdk.Settings(), "turn_hints", "")); extra != "" {
+		b.WriteString("\n" + extra)
+	}
+	return b.String()
+}
+
+// requireGroupAt 读"群内必须 @"的开关。
+// requireGroupAt 读"群内必须 @"的开关。
+// getSetting 的泛型只支持 string/int64/float64，故用字符串比较（配置里存的是 "true"/"false"）。
+func (p *Plugin) requireGroupAt() bool {
+	v, err := p.sdk.Settings().Get("group_require_at")
+	if err != nil || v == nil {
+		return true
+	}
+	switch val := v.(type) {
+	case bool:
+		return val
+	case string:
+		return strings.EqualFold(strings.TrimSpace(val), "true")
+	}
+	return true
+}
+
+// stickerCount 返回缓存里的收藏表情数量（0 表示这轮没法发表情）。
+func (p *Plugin) stickerCount() int {
+	raw := getSetting[string](p.sdk.Settings(), "sticker_descs", "")
+	if strings.TrimSpace(raw) == "" {
+		return 0
+	}
+	var m map[string]interface{}
+	if json.Unmarshal([]byte(raw), &m) != nil {
+		return 0
+	}
+	return len(m)
 }
