@@ -2662,6 +2662,15 @@ func (p *Plugin) handleChannelOutput(args map[string]interface{}) (interface{}, 
 
 	case "image", "file", "sticker":
 		// sticker + meta.sticker_index ⇒ 从收藏表情里按序号取 URL
+		//
+		// ★ 给了 sticker_index 就**忽略 payload**（2026-10-26 现场）：
+		// 模型常把 payload 填成占位符（"[sticker]" / "sticker"），于是走到
+		// 下面的"按文件路径处理"分支 ⇒ 报 `sticker 文件不存在: [sticker]`，
+		// 用户看到的是"她发不出表情包"。
+		// 既然序号已经指明了要发哪张收藏表情，payload 里的文字就是噪声。
+		if rawType == "sticker" && stickerIndex > 0 {
+			payload = ""
+		}
 		if rawType == "sticker" && stickerIndex > 0 && payload == "" {
 			faces, ferr := p.fetchCustomFaces(int(stickerIndex))
 			if ferr != nil {
@@ -4613,7 +4622,7 @@ func (p *Plugin) turnHints(messageType string, groupID, userID int64) string {
 
 	// ② 收藏表情：本轮可用的能力 + 正确用法（一条一张，不能和文字同一气泡）
 	if n := p.stickerCount(); n > 0 {
-		b.WriteString(fmt.Sprintf("；可发表情包（共 %d 个）：output_send__qq 且 type=sticker，meta 里给 sticker_index；一条消息一张，文字请另发一条", n))
+		b.WriteString(fmt.Sprintf("；可发表情包（共 %d 个）：output_send__qq 且 type=sticker，meta 里给 sticker_index，payload 留空（不要填文字或 \"[sticker]\"）；一条消息一张，想说话请另发一条", n))
 	}
 
 	// ④ 插件配置的额外事实（运维可写，仍然只放事实，不要写风格）
