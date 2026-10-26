@@ -78,7 +78,8 @@ func cmdDebug(args []string) {
 		switch args[i] {
 		case "--replace", "-R":
 			if i+1 < len(args) {
-				cfg.Replaces = append(cfg.Replaces, args[i+1]); i++
+				cfg.Replaces = append(cfg.Replaces, args[i+1])
+				i++
 			}
 		default:
 			if !strings.HasPrefix(args[i], "-") {
@@ -189,5 +190,3 @@ func debugGo(dir string, replaces []string) {
 		os.Exit(1)
 	}
 }
-
-

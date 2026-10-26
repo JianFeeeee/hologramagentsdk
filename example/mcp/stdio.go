@@ -11,7 +11,6 @@ import (
 	"time"
 )
 
-
 // safeCloseChan 是主仓 internal/safeclose.Safe 的内联版（外部插件不能引
 // internal 包）。close of closed channel 是真机 SIGTERM 实测过的 panic：
 // 多个退出路径（错误/超时/重连）都可能走到同一根 channel 的 close，

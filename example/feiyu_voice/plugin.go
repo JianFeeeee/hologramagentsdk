@@ -203,7 +203,7 @@ func (p *Plugin) handleConvert(args map[string]interface{}) (interface{}, error)
 	if err != nil {
 		return nil, err
 	}
-	job, err := p.submit("voice-conversion", map[string]interface{}{"source_id": id})
+	job, err := p.submit("voice-conversion", map[string]interface{}{"audio_id": id})
 	if err != nil {
 		return nil, err
 	}

@@ -134,9 +134,9 @@ func (p *Plugin) handleOcrImage(args map[string]interface{}) (interface{}, error
 	}
 
 	return map[string]interface{}{
-		"text":      recognized,
-		"length":    len(recognized),
-		"language":  language,
+		"text":     recognized,
+		"length":   len(recognized),
+		"language": language,
 	}, nil
 }
 

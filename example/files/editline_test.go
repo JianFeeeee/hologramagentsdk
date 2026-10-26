@@ -10,7 +10,9 @@ import (
 func newTestPlugin(t *testing.T) *Plugin {
 	t.Helper()
 	inst, err := NewPluginFactory("files", nil)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	return inst.(*Plugin)
 }
 
@@ -29,7 +31,9 @@ func TestEditLineReplacesNonUniqueLine(t *testing.T) {
 			"line": float64(3), "op": "replace", "text": "return err",
 		}},
 	})
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	_ = res
 	got, _ := os.ReadFile(file)
 	want := "return nil\nx := 1\nreturn err\n"
@@ -62,7 +66,9 @@ func TestEditLineExpectGuard(t *testing.T) {
 		t.Fatalf("错误内容应指出 expect 不匹配: %s", content)
 	}
 	got, _ := os.ReadFile(file)
-	if string(got) != "alpha\nbeta\ngamma\n" { t.Fatal("失败时文件不得被改") }
+	if string(got) != "alpha\nbeta\ngamma\n" {
+		t.Fatal("失败时文件不得被改")
+	}
 }
 
 func TestEditLineInsertAndDelete(t *testing.T) {
@@ -78,11 +84,15 @@ func TestEditLineInsertAndDelete(t *testing.T) {
 			map[string]interface{}{"line": float64(2), "op": "insert", "text": "one-five\none-b"}, // 插在 two 前
 			map[string]interface{}{"line": float64(1), "op": "delete"},
 		},
-	}); err != nil { t.Fatal(err) }
+	}); err != nil {
+		t.Fatal(err)
+	}
 	got, _ := os.ReadFile(file)
 	// 从后往前应用：先删 line1(one)，再在 line2（原 two）前插两行
 	want := "one-five\none-b\ntwo\n"
-	if string(got) != want { t.Fatalf("want %q got %q", want, string(got)) }
+	if string(got) != want {
+		t.Fatalf("want %q got %q", want, string(got))
+	}
 }
 
 func TestEditLineAppendAtEnd(t *testing.T) {
@@ -92,9 +102,13 @@ func TestEditLineAppendAtEnd(t *testing.T) {
 	file := filepath.Join(dir, "a.txt")
 	os.WriteFile(file, []byte("a\nb\n"), 0644)
 	if _, err := p.handleEditLine(map[string]interface{}{
-		"path": file,
+		"path":  file,
 		"edits": []interface{}{map[string]interface{}{"line": float64(3), "op": "insert", "text": "c"}},
-	}); err != nil { t.Fatal(err) }
+	}); err != nil {
+		t.Fatal(err)
+	}
 	got, _ := os.ReadFile(file)
-	if string(got) != "a\nb\nc\n" { t.Fatalf("want a\\nb\\nc\\n got %q", string(got)) }
+	if string(got) != "a\nb\nc\n" {
+		t.Fatalf("want a\\nb\\nc\\n got %q", string(got))
+	}
 }

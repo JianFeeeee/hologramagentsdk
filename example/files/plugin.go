@@ -108,7 +108,7 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 			"properties": map[string]interface{}{
 				"path": map[string]interface{}{"type": "string", "description": "File path relative to sandbox or absolute"},
 				"edits": map[string]interface{}{
-					"type": "array",
+					"type":        "array",
 					"description": "One or more targeted replacements. Each old must match exactly once in the original file. Do not include overlapping edits.",
 					"items": map[string]interface{}{
 						"type": "object",
@@ -137,7 +137,7 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 			"properties": map[string]interface{}{
 				"path": map[string]interface{}{"type": "string", "description": "File path relative to sandbox or absolute"},
 				"edits": map[string]interface{}{
-					"type": "array",
+					"type":        "array",
 					"description": "Line-targeted operations. Do not overlap ranges. Applied from the last line to the first.",
 					"items": map[string]interface{}{
 						"type": "object",

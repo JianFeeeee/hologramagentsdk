@@ -27,13 +27,13 @@ type searchResp struct {
 }
 
 type songItem struct {
-	ID       int64       `json:"id"`
-	Name     string      `json:"name"`
-	Artists  []artist    `json:"artists"`
-	Album    albumInfo   `json:"album"`
-	Duration int         `json:"duration"`
-	Mvid     int         `json:"mvid"`
-	Fee      int         `json:"fee"`
+	ID       int64     `json:"id"`
+	Name     string    `json:"name"`
+	Artists  []artist  `json:"artists"`
+	Album    albumInfo `json:"album"`
+	Duration int       `json:"duration"`
+	Mvid     int       `json:"mvid"`
+	Fee      int       `json:"fee"`
 }
 
 type artist struct {
@@ -248,10 +248,10 @@ func (p *Plugin) handleLyrics(args map[string]interface{}) (interface{}, error) 
 
 	id := int64(songID)
 	body, err := p.neRequest("/song/lyric", map[string]string{
-		"id":  fmt.Sprint(id),
-		"lv":  "-1",
-		"kv":  "-1",
-		"tv":  "-1",
+		"id": fmt.Sprint(id),
+		"lv": "-1",
+		"kv": "-1",
+		"tv": "-1",
 	})
 	if err != nil {
 		return map[string]interface{}{

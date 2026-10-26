@@ -186,7 +186,7 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	}, p.handleSearchArticles)
 
 	s.RegisterTool(tp+"manage_drafts", sdk.ToolDef{
-		Name: tp + "manage_drafts",
+		Name:        tp + "manage_drafts",
 		Description: "管理草稿。命令: list|get|create|update|delete|publish",
 		Parameters: map[string]interface{}{
 			"type": "object", "properties": map[string]interface{}{
@@ -203,7 +203,7 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	}, p.handleManageDrafts)
 
 	s.RegisterTool(tp+"manage_categories", sdk.ToolDef{
-		Name: tp + "manage_categories",
+		Name:        tp + "manage_categories",
 		Description: "管理分类。命令: list|get|create|update|delete",
 		Parameters: map[string]interface{}{
 			"type": "object", "properties": map[string]interface{}{
@@ -215,7 +215,7 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	}, p.handleManageCategories)
 
 	s.RegisterTool(tp+"manage_tags", sdk.ToolDef{
-		Name: tp + "manage_tags",
+		Name:        tp + "manage_tags",
 		Description: "管理标签。命令: list|get|rename|delete",
 		Parameters: map[string]interface{}{
 			"type": "object", "properties": map[string]interface{}{
@@ -227,12 +227,12 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	}, p.handleManageTags)
 
 	s.RegisterTool(tp+"manage_images", sdk.ToolDef{
-		Name: tp + "manage_images",
+		Name:        tp + "manage_images",
 		Description: "管理图床图片。命令: list|all|upload|scan|export|delete|delete_all",
 		Parameters: map[string]interface{}{
 			"type": "object", "properties": map[string]interface{}{
-				"command": map[string]interface{}{"type": "string", "description": "list|all|upload|scan|export|delete|delete_all"},
-				"page":    map[string]interface{}{"type": "integer", "description": "页码（list）"},
+				"command":  map[string]interface{}{"type": "string", "description": "list|all|upload|scan|export|delete|delete_all"},
+				"page":     map[string]interface{}{"type": "integer", "description": "页码（list）"},
 				"pageSize": map[string]interface{}{"type": "integer", "description": "每页条数（list）"},
 				"file":     map[string]interface{}{"type": "string", "description": "本地文件路径（upload）"},
 				"sign":     map[string]interface{}{"type": "string", "description": "图片签名（delete）"},
@@ -242,7 +242,7 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	}, p.handleManageImages)
 
 	s.RegisterTool(tp+"manage_links", sdk.ToolDef{
-		Name: tp + "manage_links",
+		Name:        tp + "manage_links",
 		Description: "管理友情链接。命令: list|create|update|delete",
 		Parameters: map[string]interface{}{
 			"type": "object", "properties": map[string]interface{}{
@@ -254,7 +254,7 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	}, p.handleManageLinks)
 
 	s.RegisterTool(tp+"manage_social", sdk.ToolDef{
-		Name: tp + "manage_social",
+		Name:        tp + "manage_social",
 		Description: "管理社交链接。命令: list|types|create|update|delete",
 		Parameters: map[string]interface{}{
 			"type": "object", "properties": map[string]interface{}{
@@ -266,7 +266,7 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	}, p.handleManageSocial)
 
 	s.RegisterTool(tp+"manage_rewards", sdk.ToolDef{
-		Name: tp + "manage_rewards",
+		Name:        tp + "manage_rewards",
 		Description: "管理打赏设置。命令: list|create|update|delete",
 		Parameters: map[string]interface{}{
 			"type": "object", "properties": map[string]interface{}{
@@ -278,7 +278,7 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	}, p.handleManageRewards)
 
 	s.RegisterTool(tp+"manage_pages", sdk.ToolDef{
-		Name: tp + "manage_pages",
+		Name:        tp + "manage_pages",
 		Description: "管理自定义页面。命令: list|get|create|update|delete|folder|file|upload|create_file|create_folder|update_file",
 		Parameters: map[string]interface{}{
 			"type": "object", "properties": map[string]interface{}{
@@ -293,7 +293,7 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	}, p.handleManagePages)
 
 	s.RegisterTool(tp+"manage_settings", sdk.ToolDef{
-		Name: tp + "manage_settings",
+		Name:        tp + "manage_settings",
 		Description: "管理站点设置。命令: get_static|set_static|get_waline|set_waline|get_layout|set_layout|get_login|set_login",
 		Parameters: map[string]interface{}{
 			"type": "object", "properties": map[string]interface{}{
@@ -304,7 +304,7 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	}, p.handleManageSettings)
 
 	s.RegisterTool(tp+"manage_about", sdk.ToolDef{
-		Name: tp + "manage_about",
+		Name:        tp + "manage_about",
 		Description: "管理关于页。命令: get|update",
 		Parameters: map[string]interface{}{
 			"type": "object", "properties": map[string]interface{}{
@@ -315,7 +315,7 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	}, p.handleManageAbout)
 
 	s.RegisterTool(tp+"manage_site", sdk.ToolDef{
-		Name: tp + "manage_site",
+		Name:        tp + "manage_site",
 		Description: "管理站点信息。命令: get|update",
 		Parameters: map[string]interface{}{
 			"type": "object", "properties": map[string]interface{}{
@@ -326,7 +326,7 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	}, p.handleManageSite)
 
 	s.RegisterTool(tp+"manage_menu", sdk.ToolDef{
-		Name: tp + "manage_menu",
+		Name:        tp + "manage_menu",
 		Description: "管理导航菜单。命令: get|update",
 		Parameters: map[string]interface{}{
 			"type": "object", "properties": map[string]interface{}{
@@ -357,7 +357,7 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	}, p.handleGetLogs)
 
 	s.RegisterTool(tp+"manage_backup", sdk.ToolDef{
-		Name: tp + "manage_backup",
+		Name:        tp + "manage_backup",
 		Description: "备份管理。命令: export|import",
 		Parameters: map[string]interface{}{
 			"type": "object", "properties": map[string]interface{}{
@@ -368,7 +368,7 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	}, p.handleManageBackup)
 
 	s.RegisterTool(tp+"manage_caddy", sdk.ToolDef{
-		Name: tp + "manage_caddy",
+		Name:        tp + "manage_caddy",
 		Description: "管理Caddy配置。命令: get_https|set_https|get_log|clear_log|get_config",
 		Parameters: map[string]interface{}{
 			"type": "object", "properties": map[string]interface{}{
@@ -379,7 +379,7 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	}, p.handleManageCaddy)
 
 	s.RegisterTool(tp+"manage_isr", sdk.ToolDef{
-		Name: tp + "manage_isr",
+		Name:        tp + "manage_isr",
 		Description: "ISR增量渲染。命令: get|trigger|update",
 		Parameters: map[string]interface{}{
 			"type": "object", "properties": map[string]interface{}{
@@ -390,7 +390,7 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	}, p.handleManageISR)
 
 	s.RegisterTool(tp+"manage_pipelines", sdk.ToolDef{
-		Name: tp + "manage_pipelines",
+		Name:        tp + "manage_pipelines",
 		Description: "管理流水线。命令: list|get|config|create|trigger|update|delete",
 		Parameters: map[string]interface{}{
 			"type": "object", "properties": map[string]interface{}{
@@ -402,7 +402,7 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	}, p.handleManagePipelines)
 
 	s.RegisterTool(tp+"manage_collaborators", sdk.ToolDef{
-		Name: tp + "manage_collaborators",
+		Name:        tp + "manage_collaborators",
 		Description: "管理协作者。命令: list|list_all|create|update|delete",
 		Parameters: map[string]interface{}{
 			"type": "object", "properties": map[string]interface{}{
@@ -414,26 +414,26 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	}, p.handleManageCollaborators)
 
 	s.RegisterTool(tp+"manage_tokens", sdk.ToolDef{
-		Name: tp + "manage_tokens",
+		Name:        tp + "manage_tokens",
 		Description: "管理API Token。命令: list|create|delete",
 		Parameters: map[string]interface{}{
 			"type": "object", "properties": map[string]interface{}{
-				"command":     map[string]interface{}{"type": "string", "description": "list|create|delete"},
-				"id":          map[string]interface{}{"type": "string", "description": "Token ID（delete）"},
-				"expiresIn":   map[string]interface{}{"type": "integer", "description": "有效期毫秒（create，默认1年）"},
+				"command":   map[string]interface{}{"type": "string", "description": "list|create|delete"},
+				"id":        map[string]interface{}{"type": "string", "description": "Token ID（delete）"},
+				"expiresIn": map[string]interface{}{"type": "integer", "description": "有效期毫秒（create，默认1年）"},
 			}, "required": []string{"command"},
 		},
 	}, p.handleManageTokens)
 
 	s.RegisterTool(tp+"auth", sdk.ToolDef{
-		Name: tp + "auth",
+		Name:        tp + "auth",
 		Description: "VanBlog认证。命令: login|logout|restore|update",
 		Parameters: map[string]interface{}{
 			"type": "object", "properties": map[string]interface{}{
-				"command":   map[string]interface{}{"type": "string", "description": "login|logout|restore|update"},
-				"username":  map[string]interface{}{"type": "string", "description": "用户名（login）"},
-				"password":  map[string]interface{}{"type": "string", "description": "密码（login/restore/update）"},
-				"newName":   map[string]interface{}{"type": "string", "description": "新用户名（update）"},
+				"command":     map[string]interface{}{"type": "string", "description": "login|logout|restore|update"},
+				"username":    map[string]interface{}{"type": "string", "description": "用户名（login）"},
+				"password":    map[string]interface{}{"type": "string", "description": "密码（login/restore/update）"},
+				"newName":     map[string]interface{}{"type": "string", "description": "新用户名（update）"},
 				"newPassword": map[string]interface{}{"type": "string", "description": "新密码（update）"},
 			}, "required": []string{"command"},
 		},

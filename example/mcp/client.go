@@ -31,6 +31,7 @@ type mcpRPCError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 }
+
 // MCP Tool 定义
 type MCPTool struct {
 	Name        string                 `json:"name"`
