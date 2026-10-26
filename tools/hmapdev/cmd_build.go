@@ -422,10 +422,12 @@ func writePluginJSON(plg *PlgConfig, platforms []string, entry string) {
 		}
 		m["requires_facilities"] = plg.RequiresFacilities
 	}
-	// repo：插件源码仓库地址，供内核 plugin_update 从仓库拉源码重编。
-	// 只在有值时写（缺省不写字段，与旧产物完全兼容）。
+	// repository：插件源码仓库地址，供内核 plugin_update 从仓库拉源码重编。
+	//
+	// ★ 产物里的键名用 repository 而不是 repo：PluginManifest.Repository 与
+	// plugin_install 的输出早已用这个名字，另立一套必然漂移。
 	if plg.Repo != "" {
-		m["repo"] = plg.Repo
+		m["repository"] = plg.Repo
 	}
 	// auto_start：只有**显式 false** 才写（缺省 true 与旧行为一致，不写字段最兼容）
 	if plg.AutoStart != nil && !*plg.AutoStart {
@@ -496,6 +498,7 @@ func ensureGoMod(plg *PlgConfig, sdkPath string) string {
 
 	lines := strings.Split(string(data), "\n")
 	var sdkModule string
+	needRequire := false
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "//") {
@@ -523,7 +526,20 @@ func ensureGoMod(plg *PlgConfig, sdkPath string) string {
 		}
 	}
 	if sdkModule == "" {
-		return ""
+		// ★ go.mod 里**没有** SDK 的 require —— 这不代表不需要 SDK：
+		// 构建时会生成 z_proc_gen.go，它 import 的就是 SDK 的 sdk 包。
+		// Go 1.27 默认 -mod=readonly，生成文件引入新 import 而 go.mod 没有对应
+		// require ⇒ "updates to go.mod needed; to update it: go mod tidy"，构建直接失败。
+		//
+		// 现场（2026-10-25 起 SDK 仓 CI 五个平台全红）：Go 1.25 → 1.27 之后
+		// 这类"能混过去"的写法变成硬失败。所以这里由 hmapdev **主动补 require**，
+		// 而不是要求每个插件作者的 go.mod 都写对。
+		sdkModule = sdkModuleFromPath(sdkPath)
+		if sdkModule == "" {
+			return ""
+		}
+		// 只记下"需要补 require"，真正落盘在下面的统一写文件处（keep 在那里才存在）。
+		needRequire = true
 	}
 
 	if sdkPath == "" {
@@ -571,7 +587,19 @@ func ensureGoMod(plg *PlgConfig, sdkPath string) string {
 			}
 		}
 	}
-	if alreadyExists && !requireChanged {
+	if needRequire {
+		// 补在最前面（module 行之后），保持文件可读。
+		out := make([]string, 0, len(keep)+2)
+		for _, ln := range keep {
+			out = append(out, ln)
+			if strings.HasPrefix(strings.TrimSpace(ln), "module ") {
+				out = append(out, "", "require "+sdkModule+" v0.0.0", "")
+			}
+		}
+		keep = out
+		requireChanged = true
+	}
+	if alreadyExists && !requireChanged && !needRequire {
 		return sdkModule
 	}
 	keep = append(keep, replaceLine, "")
@@ -815,6 +843,11 @@ func buildTarget(plg *PlgConfig, target, outDir, sdkPath string) {
 		return
 	}
 	defer runtimeCleanup()
+	// ★ 生成 z_proc_gen.go 会引入新的 import（SDK 的 sdk 包、x/sys/unix 等）。
+	// Go 1.27 默认 -mod=readonly：go.mod 缺对应 require 就直接失败
+	// （"updates to go.mod needed"）。这里统一 tidy 一次，把"插件作者的
+	// go.mod 写得全不全"从构建成功条件里去掉。
+	goModTidy()
 
 	// 已知未实现的目标在编译前拦下，给可执行的报错（见 checkTargetSupported）。
 	if err := checkTargetSupported(target); err != nil {
@@ -1178,4 +1211,42 @@ func unknownFacilities(declared []string) []string {
 	}
 	sort.Strings(bad)
 	return bad
+}
+
+// sdkModuleFromPath 从 SDK 源码目录的 go.mod 读出 module 名。
+//
+// 为什么需要：go.mod 里可能压根没写 SDK 的 require（见 ensureGoMod 的说明），
+// 这时得从 SDK 源码本身取真实 module 名 —— 不能猜，猜的名字一旦与 SDK 实际
+// module 不符，写进去的 require 反而会制造新的解析失败。
+func sdkModuleFromPath(sdkPath string) string {
+	if sdkPath == "" {
+		return ""
+	}
+	data, err := os.ReadFile(filepath.Join(sdkPath, "go.mod"))
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		t := strings.TrimSpace(line)
+		if strings.HasPrefix(t, "module ") {
+			return strings.TrimSpace(strings.TrimPrefix(t, "module "))
+		}
+	}
+	return ""
+}
+
+// goModTidy 在当前插件目录跑一次 `go mod tidy`。
+//
+// 为什么由 hmapdev 做而不是要求作者自己跑：z_proc_gen.go 是**我们**生成的，
+// 它引入的依赖也只有我们知道。让每个插件作者为内核生成的代码去维护 go.mod，
+// 是把内部实现细节变成对外契约。
+//
+// 失败不中断构建：tidy 失败的原因（网络/私有模块）与"能否编译"不一定相同，
+// 让真正的编译错误来报，比在这里提前 return 更有信息量。
+func goModTidy() {
+	cmd := exec.Command("go", "mod", "tidy")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Printf("  warn: go mod tidy: %v\n%s\n", err, strings.TrimSpace(string(out)))
+	}
 }
