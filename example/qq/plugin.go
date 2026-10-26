@@ -2153,6 +2153,9 @@ func (p *Plugin) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		p.snapshotMsg(evt.MessageID, peerID, isGroup, evt.Time, nickname, sum)
 	}
 
+	// isAt 记录"这条消息是否 @ 了 bot"：后面判断"空正文能不能丢"要用
+	//（纯 @ 是叫你一声，必须回；没 @ 且没正文才是真的可以不处理）。
+	isAt := false
 	if evt.MessageType == "group" {
 		// 群消息必须 @ 机器人才响应
 		if p.botID == 0 {
@@ -2160,7 +2163,8 @@ func (p *Plugin) handleWebhook(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		if !p.isAtBot(evt.Message) {
+		isAt = p.isAtBot(evt.Message)
+		if !isAt {
 			// 默认必须 @bot；group_require_at=false 时改为"群里所有消息都响应"
 			// （由部署者按群规模/使用习惯决定，而不是写死在代码里）。
 			if !p.groupRequireAtOff {
@@ -2195,9 +2199,17 @@ func (p *Plugin) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		text = stripCQRe.ReplaceAllString(text, "")
 		text = strings.TrimSpace(text)
 	}
+	// ★ 纯 @ 消息（`[CQ:at,qq=<bot>]` 后面没有正文）**不能丢**（2026-10-26 现场）。
+	//
+	// 原实现在这里 `return`：群里 @ 她一下就触发这条早退，用户看到的是
+	// "怎么 @ 她没反应"，而日志里连一条 not @bot 都没有 —— 因为 @ 已经通过了，
+	// 是正文为空被静默丢弃。@ 一下本身就是"叫你一声"，必须回。
 	if text == "" {
-		w.WriteHeader(http.StatusOK)
-		return
+		if !isAt {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		text = "（对方只 @ 了你一下，没有正文 —— 这是叫你，回一句）"
 	}
 	highRisk := false
 	if highRiskRe.MatchString(text) {

@@ -108,7 +108,7 @@ func TestNonAtGroupMessageReturnsBeforeInject(t *testing.T) {
 	joined := strings.Join(lines, "\n")
 
 	// 找到 @bot 判断与 enqueueInterrupt 调用的相对位置
-	iAt := strings.Index(joined, "if !p.isAtBot(evt.Message) {")
+	iAt := strings.Index(joined, "if !isAt {")
 	if iAt < 0 {
 		t.Fatal("找不到 @bot 判断 —— 判据需同步")
 	}

@@ -55,7 +55,7 @@ func TestSessionScopeSwitch(t *testing.T) {
 // 群 @ 门：代码里必须有 groupRequireAt 分支，且 require_at 关闭时不 return。
 func TestGroupRequireAtIsConfigurable(t *testing.T) {
 	joined := strings.Join(codeLines(t, "plugin.go"), "\n")
-	i := strings.Index(joined, "if !p.isAtBot(evt.Message) {")
+	i := strings.Index(joined, "if !isAt {")
 	if i < 0 {
 		t.Fatal("找不到 @bot 判断")
 	}
