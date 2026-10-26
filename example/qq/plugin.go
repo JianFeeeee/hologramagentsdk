@@ -1626,11 +1626,22 @@ func isInternalToolCall(ctx *sdk.StageContext) bool {
 // 注：如果将来确实要支持“@全体就响应”，应做成显式配置项
 // （默认关闭），而不是藏在 @ 判定里默认生效。
 func (p *Plugin) isAtBot(msg interface{}) bool {
+	botIDStr := strconv.FormatInt(p.botID, 10)
+
+	// ★ NapCat 的 `message` 字段有**两种形态**（2026-10-26 现场）：
+	//   · 分段数组：[{type:"at",data:{qq:"1456128421"}}, …]   （message_post_format=array）
+	//   · CQ 码文本："[CQ:at,qq=1456128421] 你说啥"           （message_post_format=string）
+	//
+	// 原实现只认数组 ⇒ 本机部署（string 形态）下**永远返回 false**，
+	// 表现为"在群里 @ 她完全没反应"，而日志只打 not @bot，看不出是形态问题。
+	if str, ok := msg.(string); ok {
+		return strings.Contains(str, "[CQ:at,qq="+botIDStr+"]")
+	}
+
 	segments, ok := msg.([]interface{})
 	if !ok {
 		return false
 	}
-	botIDStr := strconv.FormatInt(p.botID, 10)
 	for _, seg := range segments {
 		s, ok := seg.(map[string]interface{})
 		if !ok {
