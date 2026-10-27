@@ -1937,20 +1937,22 @@ func (p *Plugin) enqueueInterrupt(msgType string, userID, groupID, messageID int
 	p.batchMu.Unlock()
 }
 
-// interruptLevel 决定一条 QQ 消息的中断级别。
+// interruptLevel 决定一条 QQ 消息的中断级别（2026-10-27 用户裁定改级）。
 //
-//   - Bot 所有者/管理员的消息 → **L2**（一般提醒）；
-//   - 其他人的消息 → L1（后台，完全可等）。
+//   - Bot 所有者/管理员 → **L3**（需及时处理）
+//   - 普通用户         → **L2**（一般提醒）
 //
-// 为什么不能一律 L1：L1 之间可以随时互相抢占、也可以被任何更高一级打断，
-// 于是「老板发的话」会被路人的闲聊挤到后面，甚至对方持续刷屏时一直排在队尾。
-// 为什么也不该给 L3：L3 是时钟/终端那类"需要及时处理"的实时工作，QQ 是异步
-// 消息，抬到 L3 会反过来打断真正实时的事情。
+// 为什么不再用 L1：L1 是"完全可等"，且 L1 之间**同级不抢占**——
+// 主人发的话会被路人闲聊按到达顺序排在后面，持续刷屏时甚至一直排队尾。
+// QQ 是异步消息，但"主人叫它"必须比路人闲聊更早被接住。
+//
+// 为什么管理员只到 L3 而不是 L4：L4 是内核独占（panic/overflow/childfull），
+// 插件声明 L4 会被 clampPluginLevel 夹回 L3 —— 声明 L4 是无效的，不如直接声明 L3。
 func (p *Plugin) interruptLevel(owner bool) string {
 	if owner {
-		return sdk.PriorityL2
+		return sdk.PriorityL3
 	}
-	return sdk.PriorityL1
+	return sdk.PriorityL2
 }
 
 // qqInjectPayload 构造注入的 payload 扩展：告诉内核“这一轮是哪个用户引起的”。
