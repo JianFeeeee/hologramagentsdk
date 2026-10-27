@@ -94,6 +94,8 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 			},
 			"required": []string{"text"},
 		},
+		// 显式声明超时：内核默认 60s，CPU 上说话约 40s、唱歌 135s+（实测 sing 在 60s 被杀）。
+		Timeout: "10m",
 	}, p.handleSay)
 
 	s.RegisterTool(p.name+"_sing", sdk.ToolDef{
@@ -111,6 +113,8 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 			},
 			"required": []string{"score"},
 		},
+		// 显式声明超时：内核默认 60s，CPU 上说话约 40s、唱歌 135s+（实测 sing 在 60s 被杀）。
+		Timeout: "10m",
 	}, p.handleSing)
 
 	s.RegisterTool(p.name+"_convert", sdk.ToolDef{
@@ -124,6 +128,8 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 			},
 			"required": []string{"audio"},
 		},
+		// 显式声明超时：内核默认 60s，CPU 上说话约 40s、唱歌 135s+（实测 sing 在 60s 被杀）。
+		Timeout: "10m",
 	}, p.handleConvert)
 
 	s.RegisterTool(p.name+"_job", sdk.ToolDef{

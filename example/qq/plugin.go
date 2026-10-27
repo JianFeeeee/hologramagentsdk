@@ -467,10 +467,10 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "group_policy", Default: "open", Type: "string", DisplayName: "群聊策略", Description: "open / allowlist / disabled", Category: "qq", Options: []string{"open", "allowlist", "disabled"}})
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "group_allow_from", Default: "", Type: "string", DisplayName: "群聊白名单", Description: "允许接入的群号列表，逗号分隔", Category: "qq"})
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "forward_rules", Default: "[]", Type: "string", DisplayName: "转发规则", Description: "JSON 数组，每项 {group_id,host,port,password,template}。匹配的群消息通过 RCON 转发到 Minecraft。template 支持 {nickname} {message} 占位", Category: "qq"})
-	s.Settings().RegisterDef(sdk.ConfigDef{Key: "files_dir", Default: "/home/newqqagent/agentfs/merged/qq_files", Type: "string", DisplayName: "文件存储目录", Description: "从QQ接收的文件保存目录（CQ file/image 自动下载到此目录）", Category: "qq"})
+	s.Settings().RegisterDef(sdk.ConfigDef{Key: "files_dir", Default: "/home/hologramagent/qq-workspace/files", Type: "string", DisplayName: "文件存储目录", Description: "从QQ接收的文件保存目录（CQ file/image 自动下载到此目录）", Category: "qq"})
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "remote_dir", Default: "/home/program/qq-workspace/remote", Type: "string", DisplayName: "NapCat容器共享目录", Description: "与NapCat容器共享的文件目录，主机路径。发文件时文件会复制到此目录，NapCat内部映射为/app/files/", Category: "qq"})
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "webhook_token", Default: "", Type: "string", DisplayName: "Webhook 令牌", Description: "NapCat 上报请求头 X-Webhook-Token 校验值，留空则不校验", Category: "qq"})
-	s.Settings().RegisterDef(sdk.ConfigDef{Key: "agentfs_dir", Default: "/home/newqqagent/agentfs/merged", Type: "string", DisplayName: "AgentFS目录", Description: "文件读写的工作目录，read_document/video_download 等工具的默认工作目录", Category: "qq"})
+	s.Settings().RegisterDef(sdk.ConfigDef{Key: "agentfs_dir", Default: "/home/hologramagent/qq-workspace", Type: "string", DisplayName: "AgentFS目录", Description: "文件读写的工作目录，read_document/video_download 等工具的默认工作目录", Category: "qq"})
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "batch_window_ms", Default: "1500", Type: "int", DisplayName: "消息合并窗口(毫秒)", Description: "同一会话同一发送者的连续消息在该窗口内合并成一次中断并告知共几条；0=关闭合并（逐条投递）", Category: "qq"})
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "batch_max_ms", Default: "30000", Type: "int", DisplayName: "消息合并上限(毫秒)", Description: "一批消息最长等这么久就投递，避免对方持续刷屏时一直不唤醒 Agent", Category: "qq"})
 
@@ -506,8 +506,8 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	p.groupPolicy = normalizePolicy(getSetting[string](settings, "group_policy", "open"))
 	p.allowFrom = parseIDSet(getSetting[string](settings, "allow_from", ""))
 	p.groupAllowFrom = parseIDSet(getSetting[string](settings, "group_allow_from", ""))
-	p.filesDir = strings.TrimRight(getSetting[string](settings, "files_dir", "/home/newqqagent/agentfs/merged/qq_files"), "/")
-	p.agentfsDir = strings.TrimRight(getSetting[string](settings, "agentfs_dir", "/home/newqqagent/agentfs/merged"), "/")
+	p.filesDir = strings.TrimRight(getSetting[string](settings, "files_dir", "/home/hologramagent/qq-workspace/files"), "/")
+	p.agentfsDir = strings.TrimRight(getSetting[string](settings, "agentfs_dir", "/home/hologramagent/qq-workspace"), "/")
 	p.remoteDir = strings.TrimRight(getSetting[string](settings, "remote_dir", "/home/program/qq-workspace/remote"), "/")
 	p.batchWindow = time.Duration(getSetting[int64](settings, "batch_window_ms", 1500)) * time.Millisecond
 	p.batchMax = time.Duration(getSetting[int64](settings, "batch_max_ms", 30000)) * time.Millisecond
@@ -4049,7 +4049,6 @@ func (p *Plugin) downloadFromNapCat(fileID, filename string) string {
 	if p.filesDir == "" || fileID == "" {
 		return ""
 	}
-	os.MkdirAll(p.filesDir, 0755)
 	raw, err := p.napcat("get_file", map[string]interface{}{"file_id": fileID})
 	if err != nil {
 		return ""
@@ -4078,7 +4077,14 @@ func (p *Plugin) downloadFromNapCat(fileID, filename string) string {
 		data, err := base64.StdEncoding.DecodeString(info.Base64)
 		if err == nil {
 			savePath := filepath.Join(p.filesDir, sanitizeFilename(filename))
-			os.WriteFile(savePath, data, 0644)
+			// ★ 写盘失败必须返回失败（2026-10-27 现场）：此前 os.WriteFile 的
+			//   错误被丢弃，savePath 照样返回 ⇒ 上层报「文件下载完成」并注入
+			//   中断，agent 一读就是「文件不存在」（实测 qq_files 目录
+			//   因属主/权限写不进去，用户只看到"下载成功但读不到"）。
+			if werr := writeFileEnsured(savePath, data); werr != nil {
+				log.Printf("[qq] 文件写入失败 %s: %v", savePath, werr)
+				return ""
+			}
 			return savePath
 		}
 	}
@@ -4087,8 +4093,10 @@ func (p *Plugin) downloadFromNapCat(fileID, filename string) string {
 	}
 	if info.File != "" {
 		savePath := filepath.Join(p.filesDir, sanitizeFilename(filename))
-		if err := os.WriteFile(savePath, []byte(info.File), 0644); err == nil {
+		if err := writeFileEnsured(savePath, []byte(info.File)); err == nil {
 			return savePath
+		} else {
+			log.Printf("[qq] 文件写入失败 %s: %v", savePath, err)
 		}
 	}
 	return ""
@@ -4098,7 +4106,6 @@ func (p *Plugin) downloadURL(fileURL, filename string) string {
 	if p.filesDir == "" {
 		return ""
 	}
-	os.MkdirAll(p.filesDir, 0755)
 	if filename == "" {
 		filename = "file_" + filepath.Base(fileURL)
 	}
@@ -4112,8 +4119,30 @@ func (p *Plugin) downloadURL(fileURL, filename string) string {
 	if err != nil || len(data) == 0 {
 		return ""
 	}
-	os.WriteFile(savePath, data, 0644)
+	// 同上：写不进去就是下载失败，不能返回一个不存在的路径。
+	if werr := writeFileEnsured(savePath, data); werr != nil {
+		log.Printf("[qq] 文件写入失败 %s: %v", savePath, werr)
+		return ""
+	}
 	return savePath
+}
+
+// writeFileEnsured 建父目录并写文件，**返回真实错误**。
+//
+// 为什么单列一个函数：下载路径原先散落着 `os.MkdirAll(...)` 与
+// `os.WriteFile(...)` 且都不看返回值 —— 目录不可写时依然返回路径，
+// 上层就报"下载完成"。这类"假成功"比失败更难查：文件明明不存在，
+// 日志却说已完成。
+func writeFileEnsured(path string, data []byte) error {
+	if dir := filepath.Dir(path); dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return fmt.Errorf("create dir %s: %w", dir, err)
+		}
+	}
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	return nil
 }
 
 func sanitizeFilename(name string) string {

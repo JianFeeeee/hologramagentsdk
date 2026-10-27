@@ -69,9 +69,16 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	// ★ 声明 NoMemory + 关召回：A2A 入站是**外部 agent 发来的请求指令**，
 	// 不是本机用户说的话。不声明的后果：它会被向量化进图记忆、被当成
 	// 用户偏好参与情景识别——一条别人的机器指令就这样被永久存下来。
+	// ★ 2026-10-27 用户裁定：A2A 也要能召回记忆（此前 none ⇒ 外部 Agent 提问
+	// 时系统提示词里没有任何记忆内容，问"你还记得 X 吗"必然答不知道）。
+	//
+	// 两件事必须分开：
+	//   NoMemory: true    —— 别的 Agent 的指令**不写进**本机记忆（防止污染）
+	//   RecallPolicy:auto —— 但**要读**：按这段输入做相似度预填充
+	// ContextPolicy 保持 none：不需要因为 A2A 输入去裁剪 L0。
 	_ = s.RegisterInputChannel(p.name, sdk.ChannelDef{
 		NoMemory:      true,
-		RecallPolicy:  sdk.RecallPolicyNone,
+		RecallPolicy:  sdk.RecallPolicyAuto,
 		ContextPolicy: "none",
 	})
 	tp := p.name + "_"
