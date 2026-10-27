@@ -46,36 +46,21 @@ type EventsAPI interface {
 	AllowedSubscribe() []string
 }
 
-// 插件可发布的事件类型白名单。
+// 常用事件名（**只是名字，不是授权表**）。
 //
-// ★ 加一项前先问：这个事件会不会让插件**间接驱动内核行为**？
-// 会的话就不能加——事件是通知，不是未授权的执行入口。
-var pluginPublishableEvents = []string{
-	// skill_detected：兼容层（openclaw/clawhub 目录扫描）把发现的纯 SKILL 条目
-	// 交给 skillmgr 接管。这是**职责链交接**，不是执行指令。
-	"skill_detected",
-}
-
-// 插件可订阅的事件类型白名单（只读面）。
-var pluginSubscribableEvents = []string{
-	// tools_ready：全部插件加载完、工具注册齐。插件据此开始"需要工具才能做"的工作。
-	"tools_ready",
-	// security_ready：安全闸门装配完成（含"是否真的在生效"）。
-	"security_ready",
-	// device_ready：工具/设备数据面就绪。
-	"device_ready",
-}
-
-// PluginPublishableEvents 返回可发布事件白名单的副本（供工具链校验与文档）。
-func PluginPublishableEvents() []string {
-	out := make([]string, len(pluginPublishableEvents))
-	copy(out, pluginPublishableEvents)
-	return out
-}
-
-// PluginSubscribableEvents 返回可订阅事件白名单的副本。
-func PluginSubscribableEvents() []string {
-	out := make([]string, len(pluginSubscribableEvents))
-	copy(out, pluginSubscribableEvents)
-	return out
-}
+// 授权表由内核 security 模块持有（`security.EventPolicy`）并可随配置调整；
+// SDK 侧只声明"这些名字存在"，避免插件作者拼错字符串。
+//
+// 是否允许你用某个名字，以运行时 `Events().Publish/Subscribe` 的返回为准：
+// 越界会**报错**，不会静默丢弃。
+const (
+	// EventNameSkillDetected：兼容层把发现的纯 SKILL 条目交给 skillmgr 接管。
+	// （职责链交接，不是执行指令）
+	EventNameSkillDetected = "skill_detected"
+	// EventNameToolsReady：全部插件加载完、工具注册齐（只读订阅）。
+	EventNameToolsReady = "tools_ready"
+	// EventNameSecurityReady：安全闸门装配完成（只读订阅）。
+	EventNameSecurityReady = "security_ready"
+	// EventNameDeviceReady：工具/设备数据面就绪（只读订阅）。
+	EventNameDeviceReady = "device_ready"
+)
