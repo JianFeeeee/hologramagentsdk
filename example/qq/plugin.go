@@ -12,6 +12,7 @@ import (
 	"io"
 	"log"
 	"math"
+	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -241,10 +242,16 @@ type Plugin struct {
 
 	// 权限门策略（均可配置）。字段用**反向**命名，让零值 = 旧行为（严格）：
 	// 单测/未初始化时不至于把门悄悄放开 —— 这是安全默认。
-	groupRequireAtOff     bool     // true = 群里不 @ 也响应
+	groupRequireAtOff bool // true = 群里不 @ 也响应
+	// replyChance 是**未 @ 机器人**的群消息被注入的概率（0~100）。
+	//
+	// 语义（2026-10-27 用户口径）：
+	//   · 消息 @ 了机器人 → **100%** 注入（确定性，不看概率）
+	//   · 未 @ 的群消息   → 按本概率随机注入（0=从不，100=全量）
+	// 与 group_require_at 的关系：该开关仍是总闸（false 时不做概率，全部注入）。
+	replyChance           int
 	hardPrivateTools      []string // 非所有者即使白名单也拦的工具（精确名 / 前缀*）
 	hardPrivateToolsSet   bool     // 是否显式配置过（未配置 ⇒ 用内置默认清单）
-	sessionScopeUnlimited bool     // true = 非所有者可跨会话读
 
 	// msg_id → peer 映射 + 会话最新状态（<7 天兜底 get_history + list_chats）
 	msgMu  sync.Mutex
@@ -458,12 +465,14 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "max_duplicate_qq_send", Default: defaultMaxDuplicateSend, Type: "int", DisplayName: "单轮相同 QQ 发送上限", Description: "单轮内参数完全相同的 output_send__qq 允许重复的次数（0=不限制）；这才是循环保险的真正触发条件", Category: "qq"})
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "dm_policy", Default: "open", Type: "string", DisplayName: "私聊策略", Description: "open / allowlist / disabled", Category: "qq", Options: []string{"open", "allowlist", "disabled"}})
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "allow_from", Default: "", Type: "string", DisplayName: "私聊白名单", Description: "允许私聊机器人的 QQ 号列表，逗号分隔", Category: "qq"})
+	s.Settings().RegisterDef(sdk.ConfigDef{Key: "group_reply_chance", Default: "0", Type: "int",
+		DisplayName: "未 @ 时的回复概率（%）",
+		Description: "0~100。群里**没有 @ 机器人**的消息按此概率随机响应；@ 了机器人则 100% 响应（不受此项影响）。0=只在被 @ 时回复，100=群里每条都回。",
+		Category:    "qq"})
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "group_require_at", Default: "true", Type: "bool", DisplayName: "群聊必须 @ 才响应",
 		Description: "true=群里只有 @ 机器人才回应（默认，避免乱插话）；false=群里所有消息都回应。群多、想让机器人自然搭话时关闭", Category: "qq"})
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "hard_private_tools", Default: defaultHardPrivateTools, Type: "string", DisplayName: "硬性私人工具限制",
 		Description: "JSON 数组：非所有者即使白名单放行也会被拦的工具，支持精确名与尾部 * 前缀（如 files_*）。清空 [] = 不做硬性拦截，完全交给白名单", Category: "qq"})
-	s.Settings().RegisterDef(sdk.ConfigDef{Key: "session_scope_enforce", Default: "true", Type: "bool", DisplayName: "非所有者只能读当前会话",
-		Description: "true=非所有者只能读本会话消息（默认，防跨会话翻别人聊天记录）；false=允许按会话 ID 读其它会话", Category: "qq"})
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "group_policy", Default: "open", Type: "string", DisplayName: "群聊策略", Description: "open / allowlist / disabled", Category: "qq", Options: []string{"open", "allowlist", "disabled"}})
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "group_allow_from", Default: "", Type: "string", DisplayName: "群聊白名单", Description: "允许接入的群号列表，逗号分隔", Category: "qq"})
 	s.Settings().RegisterDef(sdk.ConfigDef{Key: "forward_rules", Default: "[]", Type: "string", DisplayName: "转发规则", Description: "JSON 数组，每项 {group_id,host,port,password,template}。匹配的群消息通过 RCON 转发到 Minecraft。template 支持 {nickname} {message} 占位", Category: "qq"})
@@ -496,9 +505,27 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	p.groupToolAllowlists = parseGroupToolAllowlists(getSetting[string](settings, "group_tool_allowlists", defaultGroupToolAllowlists))
 	p.privateToolAllowlist = parseToolAllowlist(getSetting[string](settings, "private_tool_allowlist", defaultPublicToolAllowlist))
 	p.groupRequireAtOff = !strings.EqualFold(getSetting[string](settings, "group_require_at", "true"), "true")
+	// 未 @ 时的回复概率：越界值夹到 0..100，非法值回落 0 并留日志
+	//（静默当成 100 会让机器人突然开始刷群，那是灾难性误配置）。
+	{
+		raw := strings.TrimSpace(getSetting[string](settings, "group_reply_chance", "0"))
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			if raw != "" {
+				log.Printf("[qq] group_reply_chance %q 非法，按 0 处理", raw)
+			}
+			n = 0
+		}
+		if n < 0 {
+			n = 0
+		}
+		if n > 100 {
+			n = 100
+		}
+		p.replyChance = n
+	}
 	p.hardPrivateTools = parseToolAllowlist(getSetting[string](settings, "hard_private_tools", defaultHardPrivateTools))
 	p.hardPrivateToolsSet = true
-	p.sessionScopeUnlimited = !strings.EqualFold(getSetting[string](settings, "session_scope_enforce", "true"), "true")
 	p.maxQQToolCalls = nonNegativeOrDefault(int(getSetting[int64](settings, "max_qq_tool_calls", int64(defaultMaxQQToolCalls))), defaultMaxQQToolCalls)
 	p.maxQQOutputCalls = nonNegativeOrDefault(int(getSetting[int64](settings, "max_qq_output_calls", int64(defaultMaxQQOutputCalls))), defaultMaxQQOutputCalls)
 	p.maxDuplicateSend = nonNegativeOrDefault(int(getSetting[int64](settings, "max_duplicate_qq_send", int64(defaultMaxDuplicateSend))), defaultMaxDuplicateSend)
@@ -516,6 +543,12 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 	}
 	os.MkdirAll(p.remoteDir, 0755)
 	p.loadStickerDescs()
+
+	// ★ 声明安全档位（必须在 hard_private_tools 读入之后）。
+	//
+	// 声明是**同步**的：DeclareProfiles 返回即表示内核已登记，
+	// 之后注入带 qq.guest 才不会报"未声明档位"。
+	p.declareSecurityProfiles(s)
 
 	p.httpClient = &http.Client{Timeout: 30 * time.Second}
 
@@ -1321,68 +1354,6 @@ func argPeerID(args map[string]interface{}, key string) (int64, bool) {
 	return argInt64(args, key)
 }
 
-func (p *Plugin) sessionToolArgsAllowed(name string, args map[string]interface{}, auth qqAuthContext) (bool, string) {
-	if !auth.Active || auth.Owner {
-		return true, ""
-	}
-	// 可配置：session_scope_enforce=false 时不限制读取的会话范围
-	if p.sessionScopeUnlimited {
-		return true, ""
-	}
-	// 输出工具**不受"当前会话"身份限制**（先于身份判据返回）。
-	//
-	// 为什么：输出是 agent 的**主动调用**，发到哪个会话由它自己给的 meta
-	// （group_id / user_id）决定 —— handleChannelOutput 会强制要求该字段存在，
-	// 缺了会得到明确的报错。这里再要求"本轮能精确匹配可信 OneBot 事件"是多余的门，
-	// 而且会把合法发送一起拒掉：现场（被子的中断唤醒的一轮）父带齐 meta 也发不出去，
-	// 报「可信 QQ 会话身份不完整」。
-	// 「只能访问当前会话」这类限制只对**读取类**工具（get_history / mark_read /
-	// get_message）成立 —— 那才是真的不能跨会话读。
-	if name == "output_send__"+p.name {
-		return true, ""
-	}
-
-	currentPeer := auth.UserID
-	if auth.IsGroup {
-		currentPeer = auth.GroupID
-	}
-	if currentPeer == 0 {
-		return false, "可信 QQ 会话身份不完整"
-	}
-	matchCurrentPeer := func() bool {
-		groupID, hasGroup := argInt64(args, "group_id")
-		userID, hasUser := argInt64(args, "user_id")
-		if auth.IsGroup {
-			return hasGroup && groupID == auth.GroupID && !hasUser
-		}
-		return hasUser && userID == auth.UserID && !hasGroup
-	}
-
-	switch name {
-	case p.name + "_get_history", p.name + "_mark_read":
-		if !matchCurrentPeer() {
-			return false, "只能访问当前 QQ 会话"
-		}
-	case p.name + "_get_message":
-		messageID, ok := argInt64(args, "message_id")
-		if !ok {
-			return false, "缺少有效 message_id"
-		}
-		if messageID == auth.MessageID {
-			return true, ""
-		}
-		peerID, isGroup, _, found := p.lookupMsgRef(messageID)
-		if !found || isGroup != auth.IsGroup || peerID != currentPeer {
-			return false, "message_id 不属于当前 QQ 会话"
-		}
-	case p.name + "_get_group_member_info", p.name + "_get_group_files":
-		groupID, ok := argInt64(args, "group_id")
-		if !auth.IsGroup || !ok || groupID != auth.GroupID {
-			return false, "只能访问当前 QQ 群的数据"
-		}
-	}
-	return true, ""
-}
 
 // qqAuthExtraKey 是本轮（帧）QQ 身份挂在 StageContext.Extra 上的键。
 //
@@ -1847,11 +1818,30 @@ func (p *Plugin) beforeToolcall(ctx *sdk.StageContext) error {
 		p.setDenial(ctx, msg)
 		return nil
 	}
-	if argsAllowed, reason := p.sessionToolArgsAllowed(tc.Name, tc.Arguments, auth); !argsAllowed {
-		msg := fmt.Sprintf("QQ 权限策略拒绝工具 %s：%s；请不要改用其他会话 ID 重试", tc.Name, reason)
-		p.setDenial(ctx, msg)
-		return nil
-	}
+	// ★ 已移除「只能读当前会话」的参数级限制（2026-10-29，用户裁定）。
+	//
+	// ## 改的是什么
+	//
+	// 原先 `sessionToolArgsAllowed` 会检查 qq_get_history / mark_read /
+	// get_message / get_group_member_info / get_group_files 的参数里
+	// 的 group_id / user_id 是否等于**本轮消息所在的那个会话**。
+	//
+	// ## 为何移除
+	//
+	// 用户明确：**允许访问所有会话**。
+	//
+	// 从架构上看它也放错了地方：这是「参数自证」——判据依赖
+	// **本轮消息来自哪个会话** + 本次调用的 args，而档位（Profile）的
+	// 判定接口是 `CheckTool(name)`，**看不到 args**。
+	// 把它塞进档位等于把「一次请求的上下文」塞进「长期策略表」，
+	// 语义不相容。所以它选择删掉而不是迁移。
+	//
+	// ## 保留的安全边界
+	//
+	// 以下仍然生效（不依赖本轮的会话身份）：
+	//   · 档位：qq.guest 的 DenyTools 清单（私人资源工具）—— 内核执行
+	//   · beforeToolcall：群/私聊工具白名单 currentToolAllowed
+	//   · 循环保险：单轮工具调用次数 / 重复发送上限
 	if tc.Name == p.name+"_group_manage" {
 		cmd, _ := tc.Arguments["command"].(string)
 		if requiresConfirmGroupCommand(cmd) {
@@ -1901,7 +1891,7 @@ func (p *Plugin) enqueueInterrupt(msgType string, userID, groupID, messageID int
 		return
 	}
 	if p.batchWindow <= 0 {
-		p.injectInterrupt(single, p.interruptLevel(owner), qqInjectPayload(userID, groupID, msgType == "group"))
+		p.injectInterrupt(single, p.interruptLevel(owner), qqInjectPayload(userID, groupID, msgType == "group"), owner)
 		return
 	}
 	key := qqBatchKey(msgType, groupID, userID)
@@ -1955,6 +1945,91 @@ func (p *Plugin) interruptLevel(owner bool) string {
 	return sdk.PriorityL2
 }
 
+// ───────────────────── 安全策略：声明式（2026-10-29） ─────────────────────
+//
+// ## 改动前的形态（plan.md §六 记录的「反例」）
+//
+// 身份判定、用户白名单、硬私有工具、内部委派放行、群发限制
+// **全在 beforeToolcall 一个 stage handler 里**。后果：
+//
+//	· 每个插件各写一套判定，拒绝文案与语义分散
+//	· 插件崩了策略就没了（判定不在内核）
+//	· 同一份"硬私有清单"在 QQ 配置里、内核里各有一份口径
+//
+// ## 改动后的分工
+//
+//	QQ（本文件）  ：声明档位 + 注入时按身份选档     ← 只声明
+//	内核 security ：CheckTool / ActivateProfile      ← 只执行
+//
+// 档位**只能收窄**：内核判定顺序是「全局 deny → 档位 deny → 主体 deny
+// → 全局 allow → 档位 allow」，全局黑名单永远先判，档位绕不过去。
+//
+// ## 为什么 owner 也有档位
+//
+// 声明 `qq.owner` 而非"不传档位"，是为了**让行为显式**：所有者档位不额外
+// 限制（零 DenyTools），但它存在这件事本身可审计（日志里能看到本轮按哪档判定）。
+const (
+	// securityProfileOwner 是所有者档位：不额外收窄。
+	securityProfileOwner = "qq.owner"
+	// securityProfileGuest 是访客档位：叠加硬私有清单的收窄。
+	securityProfileGuest = "qq.guest"
+)
+
+// securityProfileFor 按发送者身份返回本轮档位名。
+//
+// ★ 这是**唯一**需要 QQ 关心的策略决定：「这条消息是谁发的」。
+// 其余的"哪些工具不许用"由内核按档位里声明的清单执行，
+// 不再散落在本插件的 stage handler 里。
+func (p *Plugin) securityProfileFor(owner bool) string {
+	if owner {
+		return securityProfileOwner
+	}
+	return securityProfileGuest
+}
+
+// declareSecurityProfiles 把两个档位登记到内核（Start 时调用一次）。
+//
+// ## 为什么访客档位用 DenyTools 而不是 AllowTools
+//
+// AllowTools 是"只有这些"的语义，而 QQ 的工具面会随插件安装变化
+// （用户装了 bili/music/weather… 访客也该能用）。用 DenyTools 表达
+// "禁止私人资源"更稳：新增的公开工具自动对访客开放，不会因为
+// 忘了加白名单而静默不可用 —— 后者是更难发现的故障。
+//
+// 拒绝清单取自 `hard_private_tools` 配置（保持运维可改），
+// 条目支持尾部 `*` 前缀。
+func (p *Plugin) declareSecurityProfiles(s *sdk.PluginSDK) {
+	sec := s.Security()
+	if sec == nil {
+		// 宿主未接声明面（旧内核/独立测试）：不失败。
+		// 此时 beforeToolcall 的自判逻辑仍在（见下方"双轨过渡"说明），
+		// 行为与改动前一致 —— 不会因为内核老就放开权限。
+		log.Printf("[qq] security declaration API unavailable; keeping legacy in-plugin checks")
+		return
+	}
+
+	deny := p.hardPrivateTools
+	if !p.hardPrivateToolsSet {
+		deny = defaultHardPrivateParsed
+	}
+
+	if err := sec.DeclareProfiles([]sdk.SecurityProfile{
+		// 所有者：不额外限制（空 DenyTools = 本档位不收窄）。
+		{Name: securityProfileOwner},
+		// 访客：硬私有清单在这里由**内核**执行。
+		{Name: securityProfileGuest, DenyTools: deny},
+	}); err != nil {
+		// 响亮但不断流：声明失败不该让插件起不来，但必须留痕 ——
+		// 否则权限门会静默退回"仅靠 beforeToolcall 自判"。
+		log.Printf("[qq] declare security profiles failed: %v", err)
+		return
+	}
+	// 成功也留痕：否则运维无法区分「声明生效」与「代码根本没跑到这里」。
+	// 这条日志是灰度期验证策略真的上线的唯一信号。
+	log.Printf("[qq] security profiles declared: %s (unrestricted), %s (deny %d patterns)",
+		securityProfileOwner, securityProfileGuest, len(deny))
+}
+
 // qqInjectPayload 构造注入的 payload 扩展：告诉内核“这一轮是哪个用户引起的”。
 //
 // ## 为什么需要它（2026-10-18）
@@ -1981,7 +2056,12 @@ func qqInjectPayload(userID, groupID int64, isGroup bool) map[string]interface{}
 }
 
 // injectInterrupt 投递一条中断提示（NoMemory：HTTP 侧来的不是对话内容）。
-func (p *Plugin) injectInterrupt(text, level string, payload map[string]interface{}) {
+// injectInterrupt 投递一条中断输入。
+//
+// ★ owner 参数决定**本轮的安全档位**（声明式策略，2026-10-29）。
+// 非所有者带来的消息带 `qq.guest` 档位，内核据此收窄工具面；
+// 所有者带 `qq.owner`（= 不额外限制）。
+func (p *Plugin) injectInterrupt(text, level string, payload map[string]interface{}, owner bool) {
 	if text == "" {
 		return
 	}
@@ -2000,6 +2080,16 @@ func (p *Plugin) injectInterrupt(text, level string, payload map[string]interfac
 		Priority: level,
 		// 中断文本是路由/取正文的指令，不是对话内容，不据它召回。
 		RecallPolicy: sdk.RecallPolicyNone,
+		// ★ 策略**声明式**：按发送者身份选档位，由内核执行判定。
+		//
+		// 在此之前权限判定全在 beforeToolcall 里自己做（读配置、判身份、
+		// 查白名单、查硬私有）—— 那是 plan.md §六 记录的反例：每个插件
+		// 各写一套、拒绝语义散落、插件崩了策略就没了。
+		//
+		// 现在：QQ 只声明档位（Start 里的 DeclareProfiles），注入时带上
+		// 档位名，判定交给内核 security.CheckTool。档位只能**收窄**，
+		// 绕不过全局黑名单。
+		SecurityProfile: p.securityProfileFor(owner),
 		// 业务字段（身份）随 payload 走，内核原样透传到本轮 stageCtx.Extra。
 		Payload: payload,
 	})
@@ -2019,7 +2109,7 @@ func (p *Plugin) flushBatch(key string) {
 		text = p.buildBatchInterrupt(b)
 	}
 	// 一批里只要有一条来自 Bot 所有者，整批按 L2 投递（不因混入路人消息而降低）。
-	p.injectInterrupt(text, p.interruptLevel(b.owner), qqInjectPayload(b.userID, b.groupID, b.isGroup))
+	p.injectInterrupt(text, p.interruptLevel(b.owner), qqInjectPayload(b.userID, b.groupID, b.isGroup), b.owner)
 }
 
 // flushAllBatches 停机前把未到点的批次立刻投出去（best effort）。
@@ -2167,12 +2257,18 @@ func (p *Plugin) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 		isAt = p.isAtBot(evt.Message)
 		if !isAt {
-			// 默认必须 @bot；group_require_at=false 时改为"群里所有消息都响应"
-			// （由部署者按群规模/使用习惯决定，而不是写死在代码里）。
-			if !p.groupRequireAtOff {
+			// @ 了机器人 → 100% 注入（确定性）；没 @ 时按概率。
+			//   · group_require_at=false  → 总闸关掉，全部注入（概率不起作用）
+			//   · group_reply_chance=N    → 未 @ 的消息以 N% 概率注入
+			if p.groupRequireAtOff {
+				// 总闸关掉：意图就是"全量"，不打日志免得刷屏
+			} else if p.replyChance > 0 && rand.Intn(100) < p.replyChance {
+				log.Printf("[qq] group msg from %d/%d injected by chance (chance=%d%%, raw=%.80s)",
+					evt.GroupID, evt.UserID, p.replyChance, rawCQ)
+			} else {
 				// 诊断：@ 解析失败时打印 at 段原文与 botID，定位漏报问题
-				log.Printf("[qq] group msg from %d/%d not @bot (botID=%d, raw=%.120s)",
-					evt.GroupID, evt.UserID, p.botID, rawCQ)
+				log.Printf("[qq] group msg from %d/%d not @bot (chance=%d%%, botID=%d, raw=%.120s)",
+					evt.GroupID, evt.UserID, p.replyChance, p.botID, rawCQ)
 				w.WriteHeader(http.StatusOK)
 				return
 			}
@@ -2195,7 +2291,10 @@ func (p *Plugin) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	// 只加**这一轮确实成立**的事实，不写通用说教：
 	//   · 群聊且有 group_require_at ⇒ 必须 @，否则对方收不到提醒
 	//   · 有收藏表情 ⇒ 允许用 sticker（并说明一条一张、不混文字）
-	interrupt += p.turnHints(evt.MessageType, evt.GroupID, evt.UserID)
+	// 未被 @ 却被概率抽中 = 这是**随机插话**，模型必须知道，
+	// 否则会把别人的闲聊当成对它说的话而答非所问（2026-10-27）。
+	byChance := evt.MessageType == "group" && !isAt && !p.groupRequireAtOff
+	interrupt += p.turnHints(evt.MessageType, evt.GroupID, evt.UserID, byChance)
 
 	if text != "" {
 		text = stripCQRe.ReplaceAllString(text, "")
@@ -2207,11 +2306,13 @@ func (p *Plugin) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	// "怎么 @ 她没反应"，而日志里连一条 not @bot 都没有 —— 因为 @ 已经通过了，
 	// 是正文为空被静默丢弃。@ 一下本身就是"叫你一声"，必须回。
 	if text == "" {
-		if !isAt {
+		// 走到这里的群消息要么 @ 了机器人（100% 处理），要么已被概率抽中
+		//（上面的门已经放行）。仍在门外的（没 @ 且没抽中）更早就已经 return。
+		if !isAt && !p.groupRequireAtOff && p.replyChance == 0 {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		text = "（对方只 @ 了你一下，没有正文 —— 这是叫你，回一句）"
+		text = "（这是一条没有正文的消息（纯图片/表情/纯 @）—— 自己判断是否回应）"
 	}
 	highRisk := false
 	if highRiskRe.MatchString(text) {
@@ -4688,7 +4789,7 @@ func outputSendGroupTarget(ctx *sdk.StageContext, selfName string) string {
 // 不放在这里的东西（都在人设里）：短句、不用 markdown、不用 emoji、
 // 不客服腔、不列清单、群聊别抢话、被冒犯怎么回。那些是"怎么说话"，
 // 不是"这一轮能做什么"；塞进插件等于把同一件事写两处。
-func (p *Plugin) turnHints(messageType string, groupID, userID int64) string {
+func (p *Plugin) turnHints(messageType string, groupID, userID int64, byChance bool) string {
 	var b strings.Builder
 
 	// ① 渠道与回复目标（模型要照抄的 meta 字段）
@@ -4699,6 +4800,15 @@ func (p *Plugin) turnHints(messageType string, groupID, userID int64) string {
 		}
 	} else {
 		b.WriteString(fmt.Sprintf("\n【本轮渠道】QQ 私聊 → 用 output_send__qq，meta={\"user_id\":%d}", userID))
+	}
+
+	// ①.5 随机插话：这条消息**没有 @ 机器人**，是概率抽中的。
+	//
+	// 只陈述本轮成立的事实，不给风格说教：模型据此自己决定"接话还是只看"。
+	if byChance {
+		b.WriteString(fmt.Sprintf("\n【这条消息没有 @ 你】你是随机抽中(%.0f%%)参与的：可能是闲聊。"+
+			"想回应就自然地接一句，接不上就只回一个「？」或表情；不要假装对方在跟你说话，"+
+			"也不要复述你没看到的上下文", float64(p.replyChance)))
 	}
 
 	// ② 收藏表情：本轮可用的能力 + 正确用法（一条一张，不能和文字同一气泡）

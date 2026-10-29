@@ -4,6 +4,7 @@ import (
 	"embed"
 	"fmt"
 	"os"
+	"strings"
 )
 
 // 子进程插件运行时（外部插件多进程化）。
@@ -53,6 +54,49 @@ const luaEntryFile = "main.lua"
 // 前缀 z_ 使其在目录列表中排在业务代码之后。
 const procGenFile = "z_proc_gen.go"
 
+// sdkImportFallback 是运行时模板里写着的默认 SDK import 路径。
+//
+// ★ 为什么需要替换（2026-10-29 实测缺陷）：
+//
+// 运行时模板是**原样拷贝**进插件工程的（不经 text/template 渲染），
+// 所以里面的 import 是硬编码的。而 SDK 的 module path 在历史上改过名：
+//
+//	github.com/JianFeeeee/homeagentsdk       （旧名，本机 store 里的 v1.4.0 仍是它）
+//	github.com/JianFeeeee/hologramagentsdk   （新名，当前仓库）
+//
+// 于是「本机装的 SDK 是旧名 + 模板硬编码新名」时，生成的 z_proc_gen.go
+// 引用一个工程 go.mod 里不存在的 module ⇒ 编译报
+// "no required module provides package .../sdk"。
+//
+// 用户按提示 `go get` 只会拉到另一个 module，仍然是错的（两份 SDK 并存）。
+//
+// 修法：生成运行时文件时，把 import 路径改写为**该工程实际依赖的**
+// SDK module 名（从 go.mod 读），模板只作兜底。
+const sdkImportFallback = "github.com/JianFeeeee/hologramagentsdk"
+
+// sdkModuleForProject 读工程 go.mod，取它 require/replace 里认得的 SDK module 名。
+//
+// 读不到就返回兜底常量（保持旧行为，不因识别失败而中断构建）。
+func sdkModuleForProject() string {
+	data, err := os.ReadFile("go.mod")
+	if err != nil {
+		return sdkImportFallback
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.Contains(line, "hologramagentsdk") && !strings.Contains(line, "homeagentsdk") {
+			continue
+		}
+		// require <mod> <ver> / replace <mod> => <path> / 裸行
+		for _, f := range strings.Fields(line) {
+			if name, ok := sdkModulePath(f); ok {
+				return name
+			}
+		}
+	}
+	return sdkImportFallback
+}
+
 // generateProcRuntime 把子进程运行时（平台无关主体 + 两个平台挂载实现）
 // 写入插件目录，返回清理函数。
 func generateProcRuntime() (func(), error) {
@@ -74,6 +118,10 @@ func generateProcRuntime() (func(), error) {
 		if err != nil {
 			cleanup()
 			return nil, fmt.Errorf("读取内嵌模板 %s: %w", rf.tmpl, err)
+		}
+		// 按本工程实际依赖的 SDK module 改写 import（模板里的路径只作兜底）。
+		if mod := sdkModuleForProject(); mod != "" && mod != sdkImportFallback {
+			data = []byte(strings.ReplaceAll(string(data), sdkImportFallback+"/sdk", mod+"/sdk"))
 		}
 		if err := os.WriteFile(rf.out, data, 0644); err != nil {
 			cleanup()

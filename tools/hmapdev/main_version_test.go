@@ -34,9 +34,14 @@ func TestPrintVersionReportsInjectedVersion(t *testing.T) {
 	if !strings.Contains(out, "deadbee") {
 		t.Fatalf("提交号未出现在输出里:\n%s", out)
 	}
-	if !strings.Contains(out, "HologramAgent") && !strings.Contains(out, "homeagent-sdk") &&
-		!strings.Contains(out, "homeagentsdk") {
-		t.Fatalf("输出里没有 SDK 模块标识:\n%s", out)
+	// ★ 断言必须**跟随 meta.SDKModule**，不能白名单几个历史名字面量。
+	//
+	// 反例（2026-10-29 实测）：这里曾写死 homeagent-sdk / homeagentsdk，
+	// 而模块名推进到 hologramagentsdk 后，"hologramagentsdk" 并不包含
+	// "homeagentsdk" 子串（多了 hologram 前缀）⇒ 测试红。
+	// 而真正该钉的是"输出里有当前 SDK 模块名"，不是"某几个历史名之一"。
+	if !strings.Contains(out, meta.SDKModule) {
+		t.Fatalf("输出里没有当前 SDK 模块标识 %q:\n%s", meta.SDKModule, out)
 	}
 }
 

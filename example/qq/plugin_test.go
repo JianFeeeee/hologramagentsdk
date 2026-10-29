@@ -53,24 +53,54 @@ func TestPrivateResourceCannotBeAllowlisted(t *testing.T) {
 	}
 }
 
-func TestNonOwnerQQHistoryIsScopedToCurrentGroup(t *testing.T) {
+// 读取类工具不再按"当前会话"限制（2026-10-29 用户裁定：允许访问所有会话）。
+//
+// 本判据由「跨群必须被拒」反转为「跨群必须放行」，同时保留另一半：
+// 本群读取当然也要放行 —— 避免改动把正常路径一起弄坏。
+//
+// ★ 这是一次**有意的安全边界放宽**，不是修 bug。放宽的前提是：
+//   · 私人资源工具仍由 qq.guest 档位（内核执行）挡住
+//   · 群/私聊工具白名单 currentToolAllowed 仍生效
+//   · 单轮工具调用次数/重复发送保险仍生效
+// 也就是说：**能读到别的会话，但仍读不到私人资源**。
+func TestQQHistoryIsNotScopedToCurrentGroup(t *testing.T) {
 	p := newPermissionTestPlugin(t)
 	p.auth = qqAuthContext{Active: true, MessageID: 88, UserID: 10001, GroupID: 20002, IsGroup: true}
 
+	// 其它群的读取：放行
 	ctx := toolCallContext("qq_get_history", map[string]interface{}{"group_id": int64(20003)})
 	if err := p.beforeToolcall(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if ctx.Response == nil || !strings.Contains(*ctx.Response, "当前 QQ 会话") {
-		t.Fatalf("cross-group history not rejected: %#v", ctx.Response)
+	if ctx.Response != nil {
+		t.Fatalf("★ 跨群读取仍被拒（%q）—— 会话范围限制应已移除", *ctx.Response)
 	}
 
+	// 本群的读取：当然也放行
 	ctx = toolCallContext("qq_get_history", map[string]interface{}{"group_id": int64(20002)})
 	if err := p.beforeToolcall(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if ctx.Response != nil {
-		t.Fatalf("current-group history rejected: %s", *ctx.Response)
+		t.Fatalf("本群读取被拒: %s", *ctx.Response)
+	}
+
+	// 反向保护：放宽的**只是会话范围**，私人资源仍然被拦。
+	p2 := newPermissionTestPlugin(t)
+	p2.auth = qqAuthContext{Active: true, UserID: 10001, GroupID: 20002, IsGroup: true}
+	ctx2 := toolCallContext("qq_get_history", map[string]interface{}{"group_id": int64(99999)})
+	if err := p2.beforeToolcall(ctx2); err != nil {
+		t.Fatal(err)
+	}
+	if ctx2.Response != nil {
+		t.Fatalf("非所有者读他人会话应放行: %s", *ctx2.Response)
+	}
+	ctx3 := toolCallContext("calendar_list", nil)
+	if err := p2.beforeToolcall(ctx3); err != nil {
+		t.Fatal(err)
+	}
+	if ctx3.Response == nil {
+		t.Fatal("★ 私人资源仍必须被拦 —— 放宽会话范围不等于放开私人数据")
 	}
 }
 
@@ -212,7 +242,7 @@ func TestZeroLimitsMeanUnlimited(t *testing.T) {
 // 不该被「当前会话身份」挡住。现场：被子的中断唤醒的一轮里，父带齐 meta 也发不出去
 // （报「可信 QQ 会话身份不完整」）。
 //
-// 反之，**读取类**工具在降权时仍受当前会话限制 —— 那才是真的不能跨会话读。
+// 读取类工具在降权时也不再受会话范围限制（2026-10-29 裁定：允许访问所有会话）。
 func TestDowngradedAuthStillAllowsQQOutput(t *testing.T) {
 	p := newPermissionTestPlugin(t)
 	p.auth = qqAuthContext{Active: true}
@@ -231,12 +261,17 @@ func TestDowngradedAuthStillAllowsQQOutput(t *testing.T) {
 		t.Fatalf("降权时输出被拒: %s", *ctx.Response)
 	}
 
+	// ★ 读取类工具**不再**受"当前会话"限制（2026-10-29 用户裁定：
+	// 允许访问所有会话）。本断言已从"必须被挡"反转为"必须放行"。
+	//
+	// 保留这条不是为了凑数：它是"会话范围限制真的移除了"的行为侧证据 ——
+	// 源码扫描判据只能证明代码里没有那个函数名，证明不了它没被换个名字加回来。
 	ctx2 := toolCallContext("qq_get_history", map[string]interface{}{"group_id": 1027993713})
 	if err := p.beforeToolcall(ctx2); err != nil {
 		t.Fatal(err)
 	}
-	if ctx2.Response == nil || !strings.Contains(*ctx2.Response, "可信 QQ 会话身份不完整") {
-		t.Fatalf("读取类工具在降权时应被当前会话限制挡住: %#v", ctx2.Response)
+	if ctx2.Response != nil {
+		t.Fatalf("★ 读取其它会话仍被拒（%q）—— 会话范围限制应已移除", *ctx2.Response)
 	}
 }
 
@@ -316,8 +351,11 @@ func TestSingleMessageKeepsOriginalText(t *testing.T) {
 	}
 }
 
-// Bot 所有者/管理员的消息给 L2，普通人的给 L1 —— 否则所有者的话会被路人
-// 的 L1 闲聊抢占/挤到队尾。
+// Bot 所有者/管理员 → L3，普通人 → L2（2026-10-27 用户裁定改级）。
+//
+// 为什么不再用 L1/L2：L1 是"完全可等"且**同级不抢占**，主人发的话会被路人的
+// 闲聊按到达顺序排在后面；L3 是"需及时处理"，L2 是"一般提醒"，层间可抢占。
+// 为什么不给所有者 L4：L4 内核独占，插件声明会被 clampPluginLevel 夹回 L3。
 func TestOwnerMessagesGetHigherInterruptLevel(t *testing.T) {
 	p := newPermissionTestPlugin(t)
 	got := []string{}
@@ -330,11 +368,11 @@ func TestOwnerMessagesGetHigherInterruptLevel(t *testing.T) {
 	time.Sleep(120 * time.Millisecond)
 
 	joined := strings.Join(got, ",")
-	if !strings.Contains(joined, "owner-msg|L2") {
-		t.Fatalf("所有者消息应为 L2，实际 %q", joined)
+	if !strings.Contains(joined, "owner-msg|L3") {
+		t.Fatalf("所有者消息应为 L3，实际 %q", joined)
 	}
-	if !strings.Contains(joined, "other-msg|L1") {
-		t.Fatalf("普通人消息应为 L1，实际 %q", joined)
+	if !strings.Contains(joined, "other-msg|L2") {
+		t.Fatalf("普通人消息应为 L2，实际 %q", joined)
 	}
 }
 

@@ -37,18 +37,38 @@ func TestHardPrivateToolsConfigurable(t *testing.T) {
 	}
 }
 
-// session_scope_enforce=false：非所有者也能按 ID 读其它会话。
-func TestSessionScopeSwitch(t *testing.T) {
-	auth := qqAuthContext{Active: true, UserID: 100, MessageID: 1}
-	args := map[string]interface{}{"user_id": float64(200)}
+// 「只能读当前会话」的参数级限制已**移除**（2026-10-29，用户裁定：
+// 允许访问所有会话）。本判据改为钉住"它真的没了"：
+//
+//  1. 代码里不得再有 sessionToolArgsAllowed 或 session_scope_enforce
+//     —— 否则等于限制以另一种形式回来了，而运维会以为配置还能开
+//  2. 仍保留的安全边界必须还在（档位声明 + 工具白名单），
+//     避免"删限制时顺手把人删了"
+//
+// 为何用"源码扫描"而不是行为判据：被删的函数已不存在，
+// 没有可调用的入口；而"它是否复活"恰恰是源码级事实。
+func TestSessionScopeRestrictionRemoved(t *testing.T) {
+	src := strings.Join(codeLines(t, "plugin.go"), "\n")
 
-	p := &Plugin{name: "qq"}
-	if ok, _ := p.sessionToolArgsAllowed("qq_get_history", args, auth); ok {
-		t.Error("开启时非所有者读别的会话应被拒")
+	for _, gone := range []string{
+		"sessionToolArgsAllowed", // 参数级会话范围检查
+		"session_scope_enforce",  // 它的配置项
+		"sessionScopeUnlimited",  // 它的开关字段
+	} {
+		if strings.Contains(src, gone) {
+			t.Errorf("★ %q 仍存在于 plugin.go —— 会话范围限制应已移除", gone)
+		}
 	}
-	p.sessionScopeUnlimited = true
-	if ok, _ := p.sessionToolArgsAllowed("qq_get_history", args, auth); !ok {
-		t.Error("关闭后应放行")
+
+	// 仍然必须保留的安全边界（删限制≠删防护）
+	for _, kept := range []string{
+		"declareSecurityProfiles", // 档位声明（私人工具限制交给内核）
+		"currentToolAllowed",      // 群/私聊工具白名单
+		"maxDuplicateSend",        // 重复发送保险
+	} {
+		if !strings.Contains(src, kept) {
+			t.Errorf("★ %q 不应被删 —— 它是与会话范围无关的独立防护", kept)
+		}
 	}
 }
 

@@ -41,7 +41,7 @@ const tmplPluginGo = `package main
 import (
 	"log"
 
-	"github.com/JianFeeeee/hologramagentsdk/sdk"
+	"{{.SDKModule}}/sdk"
 )
 
 // ★★ 插件里**绝不能往 stdout 打印任何东西**（本注释是踩坑记录，2026-10-16）。

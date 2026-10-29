@@ -840,6 +840,7 @@ func buildPluginSDK(name string) *sdk.PluginSDK {
 	base.SetLLMAPI(procLLM{})
 	base.SetSocialAPI(procSocial{})
 	base.SetSecretsAPI(procSecrets{})
+	base.SetSecurityAPI(procSecurity{})
 	base.SetRawFilesAPI(procRawFiles{})
 	base.SetTextMemoryAPI(procTextMemory{})
 	base.SetPluginMgrAPI(procPluginMgr{})
@@ -1487,6 +1488,37 @@ func (procSecrets) Decrypt(stored string) ([]byte, error) {
 		return nil, err
 	}
 	return base64.StdEncoding.DecodeString(r.PlainB64)
+}
+
+// procSecurity 是**安全策略声明面**的插件侧一半：全部经 RPC 打回内核。
+//
+// ## 为什么声明必须走 RPC（同步）而不是发事件
+//
+// 声明要在**返回前**生效：若异步发事件，插件可能在声明事件还在队列里时
+// 就用 `InjectOptions.SecurityProfile = "qq.guest"` 注入 —— 内核那时还没
+// 登记该档位，会响亮报"未声明档位"（语义正确，但会让插件启动后的头几个
+// 请求必然失败）。RPC 响应返回即登记完成。
+//
+// ## Owner 不用插件填
+//
+// `SecurityProfile.Owner` 字段在这里**留空**：真正的 Owner 由宿主用
+// **内核侧真实插件名**填。插件自报可以伪造（否则任何插件都能声明
+// `qq.owner` 并给 AllowTools=["*"]，等于把 QQ 的 owner 档位全放行）。
+//
+// ## 判定不在插件侧
+//
+// 本结构体只有声明方法，没有 CheckTool 之类 —— 判定是内核的事。
+// 插件自判会让策略分散到每个插件、且插件崩溃即策略失效。
+type procSecurity struct{}
+
+func (procSecurity) DeclareProfile(p sdk.SecurityProfile) error {
+	_, err := callCore("security.declareProfile", map[string]interface{}{"profile": p})
+	return err
+}
+
+func (procSecurity) DeclareProfiles(ps []sdk.SecurityProfile) error {
+	_, err := callCore("security.declareProfiles", map[string]interface{}{"profiles": ps})
+	return err
 }
 
 type procSettings struct{}
