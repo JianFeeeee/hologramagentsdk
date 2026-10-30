@@ -1,4 +1,4 @@
-package rtvoice
+package main
 
 // 插件侧策略判据（plan.md 十一.四 空白 1 的"策略归插件"那一侧）。
 //

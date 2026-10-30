@@ -3,7 +3,7 @@
   "name_zh": "实时语音通道",
   "name_en": "Realtime Voice",
   "version": "0.1.0",
-  "description": "实时语音/视频通话通道参考实现：注册一对 rt 通道（输入+输出），做语音分段、当前状态表、打断注入。输出纯文本，TTS 由本插件负责，内核不做音频合成。",
+  "description": "实时语音/视频通话通道参考实现：注册一对 rt 通道（输入+输出），做语音分段、当前状态表、打断注入。输出纯文本，TTS 由本插件负责，内核不做音频合成。★ auto_start=true：本插件**不注册任何工具**，纯通道；不随内核启动则通道永远不登记，agent 侧完全看不到它（也不会有任何报错）。",
   "author": "HologramAgent",
   "entry": "plugin.so",
   "tags": [
@@ -17,5 +17,5 @@
   "bundle": true,
   "replaces": {},
   "source_dirs": [],
-  "auto_start": false
+  "auto_start": true
 }

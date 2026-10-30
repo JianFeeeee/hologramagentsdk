@@ -1,4 +1,9 @@
-// Package rtvoice 是 **rtchild 接入的参考实现**（插件侧策略层）。
+// 本文件是 **rtchild 接入的参考实现**（插件侧策略层）。
+//
+// ★ 包名必须是 main：外部插件由模板 proc_main.go.tmpl 生成 main 包并入
+// 同目录编译。写成 `package rtvoice` 会与生成的 z_proc_gen.go（package main）
+// 冲突 —— 实测报错：“found packages rtvoice and main“。
+// （内置插件才用自有包名，因为它们是 import 进内核的。）
 //
 // ## 它做什么，不做什么
 //
@@ -28,7 +33,7 @@
 //
 // 采集（麦克风/摄像头）不在本包：那是设备相关代码，本包只吃"已经削减过的
 // 事件"（音频已过 VAD、画面已摘要），与计划 §3.3 的口径一致。
-package rtvoice
+package main
 
 import (
 	"fmt"
@@ -205,7 +210,49 @@ func (p *Plugin) Start(s *sdk.PluginSDK) error {
 		return fmt.Errorf("注册 outputch(rt): %w", err)
 	}
 
-	// ③ 参数：窗口长度可调（部署方按设备调优）。
+	// ③ 调试入口：没有采集层时用它把"一句话"喂进来。
+	//
+	// ★ 为什么必须有这条工具：
+	//
+	// 真实链路的输入是**麦克风 → VAD 分段 → p.Push(...)**。在没有采集
+	// 层的环境（CI、无 /dev/snd 的容器、本机 e2e）里，p.Push 没有任何
+	// 外部触发点 —— 于是"rt 通道能不能用"只能靠单元测试推断，
+	// 无法端到端验证：通道注册、rtchild 接线、打断、文本回流全都测不到。
+	//
+	// 这条工具把那个缺口补成可验证的：它走**完全相同**的 Push 路径
+	// （含覆盖语义、拐点关窗、批量窗口），只是入口从麦克风换成一次工具调用。
+	// 接上真实采集层后可以删掉它，或留着做联调。
+	s.RegisterTool(p.name+"_say", sdk.ToolDef{
+		Name: p.name + "_say",
+		Description: "【调试/联调】把一句话当作实时语音输入喂给 rtvoice 通道，" +
+			"走与麦克风完全相同的 Push 路径（同一套覆盖语义与关窗规则）。" +
+			"没有采集层时用它端到端验证 rt 通道。参数 text=要喂的话；" +
+			"key 可选（默认 speech，传 speech_done 可强制关窗）。",
+		Parameters: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"text": map[string]interface{}{"type": "string", "description": "要喂给 rt 通道的文本"},
+				"key": map[string]interface{}{
+					"type":        "string",
+					"description": "当前态表的键（默认 speech；speech_done 是拐点，会立即关窗送出）",
+				},
+			},
+			"required": []string{"text"},
+		},
+	}, func(args map[string]interface{}) (interface{}, error) {
+		text, _ := args["text"].(string)
+		if strings.TrimSpace(text) == "" {
+			return map[string]interface{}{"error": "text 不能为空"}, nil
+		}
+		key := KeySpeech
+		if k, _ := args["key"].(string); strings.TrimSpace(k) != "" {
+			key = Key(strings.TrimSpace(k))
+		}
+		p.Push(Event{Key: key, Payload: text, At: time.Now()})
+		return map[string]interface{}{"ok": true, "pushed": text, "key": string(key)}, nil
+	})
+
+	// ④ 参数：窗口长度可调（部署方按设备调优）。
 	s.Settings().RegisterDef(sdk.ConfigDef{
 		Key: "window_ms", Default: "250", Type: "int",
 		DisplayName: "攒批窗口（毫秒）",
