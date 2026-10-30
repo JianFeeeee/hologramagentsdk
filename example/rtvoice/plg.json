@@ -1,0 +1,21 @@
+{
+  "name": "rtvoice",
+  "name_zh": "实时语音通道",
+  "name_en": "Realtime Voice",
+  "version": "0.1.0",
+  "description": "实时语音/视频通话通道参考实现：注册一对 rt 通道（输入+输出），做语音分段、当前状态表、打断注入。输出纯文本，TTS 由本插件负责，内核不做音频合成。",
+  "author": "HologramAgent",
+  "entry": "plugin.so",
+  "tags": [
+    "realtime",
+    "voice",
+    "rtchild",
+    "channel"
+  ],
+  "targets": "linux/amd64",
+  "outdir": "dist",
+  "bundle": true,
+  "replaces": {},
+  "source_dirs": [],
+  "auto_start": false
+}

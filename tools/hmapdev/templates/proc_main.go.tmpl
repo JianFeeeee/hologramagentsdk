@@ -326,6 +326,16 @@ func callWithTextOpts(method, source, channel, text string, opts sdk.InjectOptio
 }
 
 // applyInjectOpts 把 InjectOptions 摊进注入参数字典（仅非零值）。
+//
+// ★ 这里**必须与 InjectOptions 的字段一一对应**。
+//
+// 曾经的形态是逐字段手写，于是漏了 RecallPolicy / ScenePolicy / SecurityProfile
+// 三个字段 —— 插件设了它们，内核那边永远是零值，且不报错。
+// 最典型的是 SecurityProfile：QQ 插件的 owner/guest 档位就是靠它选的，
+// 漏了等于「插件声明了档位、注入时带了、内核从没收到」，策略静默不生效。
+//
+// 判据：SDK 的 example 里有一条声明式安全的 e2e，本文件漏字段时它会红。
+// 新增 InjectOptions 字段时，**这里与内核 pubSdkInjectOpts 都要加**。
 func applyInjectOpts(args map[string]interface{}, opts sdk.InjectOptions) {
 	if opts.NoMemory {
 		args["no_memory"] = true
@@ -333,12 +343,21 @@ func applyInjectOpts(args map[string]interface{}, opts sdk.InjectOptions) {
 	if opts.ContextPolicy != "" {
 		args["context_policy"] = opts.ContextPolicy
 	}
+	if opts.RecallPolicy != "" {
+		args["recall_policy"] = opts.RecallPolicy
+	}
+	if opts.ScenePolicy != "" {
+		args["scene_policy"] = opts.ScenePolicy
+	}
 	if opts.CleanerName != "" {
 		args["cleaner_name"] = opts.CleanerName
 	}
 	// priority 只对中断注入有意义（排队注入没有级别）。
 	if opts.Priority != "" {
 		args["priority"] = opts.Priority
+	}
+	if opts.SecurityProfile != "" {
+		args["security_profile"] = opts.SecurityProfile
 	}
 }
 
@@ -808,7 +827,20 @@ func buildPluginSDK(name string) *sdk.PluginSDK {
 			handlerMu.Unlock()
 			return callCoreVoid("output.register", map[string]interface{}{
 				"name": chName, "caps": caps, "desc": desc,
-				"def":         map[string]interface{}{"NoMemory": def.NoMemory},
+				// ★ 整个结构体：**手写字段白名单会把新增字段静默丢掉**。
+				//
+				// 这里曾写成 `map[string]interface{}{"NoMemory": def.NoMemory}`，
+				// 于是 ChannelDef 的其余字段（Realtime / ContextPolicy /
+				// RecallPolicy / ScenePolicy）在**插件侧**就被丢掉了，根本没发出去。
+				//
+				// 后果（2026-10-30 外部插件 e2e 实测）：插件声明
+				// `ChannelDef{Realtime:true}` 的 outputch，内核收到的一直是零值
+				// ⇒ OutputCapabilities 只有 [text] ⇒ AssignRealtime 被拒，
+				// 而错误指向"创建 rtchild 失败"，与真因隔着两层。
+				//
+				// 输入侧（下面的 SetInputChannelRegistrar）本来就是这个正确写法，
+				// 同一个文件里两种写法并存，所以只修内核侧完全看不出来。
+				"def":         def,
 				"has_cleaner": def.Cleaner != nil,
 			})
 		},
