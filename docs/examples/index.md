@@ -4,8 +4,8 @@
 
 SDK 仓 `example/` 里保留的是**未迁移到组织仓**的示例插件，都能用 `hmapdev build` 打成 `.hmap` 装进内核直接跑。
 
-★ **其余 26 个插件已迁到 GitHub 组织** [`HologramAgent`](https://github.com/HologramAgent) —— 一插件一仓，覆盖工具注册、通道、记忆读写、LLM 调用、生命周期等全部常见形态。
-想看完整实现时去那里 clone，不要以为本仓就是全部。
+其余 26 个插件在 GitHub 组织 [`HologramAgent`](https://github.com/HologramAgent) 下，一插件一仓。
+要找某个具体插件的完整实现，去那里 clone。
 
 ## `feiyu_voice`
 

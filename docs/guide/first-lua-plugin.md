@@ -106,6 +106,7 @@ Lua 插件直接打包源码，不经过编译。
 
 ## 下一步
 
-- [能力边界](capability-boundary.md) —— Lua 与 Go 外部插件的能力面一致
+- [能力边界](capability-boundary.md)：Lua 与 Go 外部插件的能力面一致
 - [打包与发布](packaging.md)
-- [示例](../examples/index.md) —— `example/luademo` 是 Lua 版参考实现
+- [示例](../examples/index.md) — 本仓只留未迁移的示例
+- [luademo](https://github.com/HologramAgent/luademo) — Lua 版完整参考实现（已迁到组织仓）
