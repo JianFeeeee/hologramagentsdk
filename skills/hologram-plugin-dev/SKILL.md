@@ -130,6 +130,10 @@ s.RegisterTool(tp+"mytool", sdk.ToolDef{
 （`ToolDef` 的全部字段：`Name` / `Plugin` / `Description` / `Parameters` / `NoMemory` /
 `Cleaner` / `ContextPolicy` / `RecallPolicy` / `ParallelSafe` / `Serial`。）
 
+> 核对这些字段时**别凭记忆**：`sdk.ToolDef` 以源码为准
+> （`grep -A30 "type ToolDef struct" sdk/plugin.go`）。新增字段只增不减，
+> 但旧 skill/旧文档常漏写 —— 本文件自己在 2026-10-31 就补过一次。
+
 **并发声明**（同轮多个 tool_call 时）：
 
 - `ParallelSafe: true` —— 可并发（**三个条件都满足才可声明**：handler 线程安全 /
@@ -142,7 +146,8 @@ s.RegisterTool(tp+"mytool", sdk.ToolDef{
 `hmapdev build` 找的就是它。缺失时报
 `error: read plg.json: open plg.json: no such file or directory`。
 
-以 `example/qq/plg.json` 为准：
+以 `hmapdev init <name>` 生成的为准（`qq` 的真实配置现在在
+`https://github.com/HologramAgent/qq`）：
 
 ```json
 {
@@ -151,7 +156,9 @@ s.RegisterTool(tp+"mytool", sdk.ToolDef{
   "version": "1.4.1",
   "description": "……",
   "author": "HologramAgent",
-  "entry": "plugin.so",      // 入口（build 会替换为实际产物）
+  "entry": "plugin.bin",     // 入口（build 会替换为实际产物）
+                             // ★ 1.0.0 起产物是 plugin.bin（子进程模型）；
+                             //   写成 plugin.so 是 C ABI 时代的旧形态
   "tags": ["qq", "messaging"],
   "targets": "linux/amd64",  // 目标平台
   "outdir": "dist"           // 产物目录
@@ -223,15 +230,44 @@ curl -s -H "X-API-Key: $K" http://127.0.0.1:8080/api/v1/status | grep -oE '"comm
 | 内容 | 路径 |
 | --- | --- |
 | SDK 源码 | `third_party/homeagent-sdk/sdk/` |
-| **可运行的示例插件** | `third_party/homeagent-sdk/example/`（a2a / acp / qq / bili …） |
+| **插件仓库（26 个，一插件一仓）** | `https://github.com/HologramAgent/<name>` |
+| SDK 仓内置示例 | `third_party/homeagent-sdk/example/`（`rtvoice` / `luademo` / `commondev` 等） |
 | 文档站 | `https://sdk.hologramagent.jianfgit.xyz`（本地源 `docs/`，构建 `tools/apidoc/build.sh`） |
 | 能力边界（哪些 API 外部可用） | `docs/guide/capability-boundary.md` |
 | 并发声明 | `docs/guide/parallel-tool-declaration.md` |
+| 实时通道 | `docs/guide/realtime-channel.md` |
+| 受限 SDK 与安全 | `docs/guide/security.md` |
 | Lua 适配器写法 | `docs/guide/first-lua-plugin.md` |
 | 部署手册 | 核心仓 `docs/zh/deploy-runbook.md` |
 
-★ **写插件前先翻 `example/`**：那里的代码是**编译通过**的，
+### ★ 插件示例已迁出本仓（2026-10-26）
+
+原先 `example/` 下有 26 个插件，现在**一插件一仓**放在 GitHub 组织
+[`HologramAgent`](https://github.com/HologramAgent)：
+
+```
+a2a  acp  ai_image  bili  bilibili  browser  calendar  cmd  commondev
+deepsearch  editdoc  files  localuse  luademo  mcp  memo  music  ocr
+plugindev  qq  recoverydiag  rss  sanitizer  vanblog  vikunja  weather
+```
+
+取某个插件的真实写法：
+
+```bash
+git clone --depth 1 https://github.com/HologramAgent/qq /tmp/qq-ref
+# 然后读 /tmp/qq-ref/plugin.go
+```
+
+**留在本仓 `example/` 的**是少数未迁移的（`rtvoice` / `feiyu_voice` 等）。
+注意：部分已迁目录的源文件已删但目录残留（只有 `build/`、`main.go`），
+**那些目录编译不过**，不要当参考。
+
+★ **写插件前先翻真实示例**：org 各仓与 `example/` 里的代码是**编译通过**的，
 比文档更可靠。文档与示例冲突时以示例为准。
+
+⚠️ org 各仓的快照是 **2026-10-26** 的迁移版本，之后 SDK 仓 `example/` 里的
+修复**未必已回灌**（实测 `qq` 落后 504 处、`a2a` 落后 9 处）。
+需要最新版时以 SDK 仓 `example/` 的 HEAD 为准，或先在 org 仓确认。
 
 ## 7. 边界（别越界）
 
@@ -274,3 +310,128 @@ token, _ := s.Settings().GetSecret("blob")
 所以插件**消费**侧不受影响；但如果你自己实现了 `SettingsAPI`（如自测替身），
 需要补上这两个方法。
 - **不要为了让插件生效去改 `homed` 的源码** —— 先确认它是不是内置插件。
+
+---
+
+## 8. SDK 1.4.0 新增能力（2026-10 陆续加入）
+
+> **为什么要单列**：这些能力在插件里**看不到就想不到用**。
+> 本 skill 直到 2026-10-31 才补上这一节 —— 在此之前它一个字都没提，
+> 而它们已经能用了一个月。
+
+### 8.1 声明式安全档位（`s.Security()`）
+
+插件**声明**档位，内核**执行**判定。不要在插件里自己判身份/白名单 ——
+那会变成"每个插件各写一套、拒绝语义散落、插件崩了策略就没了"。
+
+```go
+// Start 阶段：声明命名档位（只声明，不判定）
+if sec := s.Security(); sec != nil {          // 旧内核可能返回 nil
+    err := sec.DeclareProfiles([]sdk.SecurityProfile{
+        {Name: "qq.owner", Owner: "qq"},      // 不额外限制
+        {Name: "qq.guest", Owner: "qq",
+         DenyTools:      []string{"cmd_*", "files_write"},
+         SensitiveWords: []string{"内部代号"}},
+    })
+    if err != nil {
+        log.Printf("[qq] declare security profiles failed: %v", err)
+    }
+}
+```
+
+```go
+// 注入阶段：按发送者身份选档位，内核在该轮激活并执行
+s.InjectInterruptTextOpts(source, channel, text, sdk.InjectOptions{
+    SecurityProfile: "qq.guest",
+})
+```
+
+**四条语义**（每条都有坑）：
+
+| 语义 | 说明 |
+|---|---|
+| 名字必须 `<插件名>.<档位>` | 跨插件覆盖被拒绝，否则任何插件都能改写别人的 owner 档 = 提权口子 |
+| **只能收窄** | 判定链是「全局 deny → 档位 deny → 主体 deny → 全局 allow」，全局黑名单先判 |
+| 不声明 = 现有行为 | `SecurityProfile` 是**可选**参数，不传就沿用内核默认策略 |
+| 拼错会报错，不静默回落 | 带未声明的档位名 ⇒ 内核记日志并降级到默认，**不会**默默放行 |
+
+两层档位：`sessionProfile`（这一轮，End 即清）优先于 `longtimeProfile`
+（agent 生命期，跨轮保留）。反过来就是提权。
+
+### 8.2 实时通道（`ChannelDef.Realtime`）
+
+用于**通话**场景：输入不断覆盖（新值作废旧值），输出连续流式。
+
+```go
+s.RegisterInputChannel("rtvoice-in", sdk.ChannelDef{
+    Realtime: true,
+    NoMemory: true,   // 通话每句都进记忆会把图谱灌满噪声
+})
+s.RegisterOutputChannel("rtvoice", 1, "实时通话输出（文本流）",
+    sdk.ChannelDef{Realtime: true}, handler)
+```
+
+**三条最容易误解的**：
+
+- `outputch(rt)` **只产文本**，不是音频。TTS/播放是插件的事。
+  所以能力位取 `1`（CapText）即可，不需要声明音频。
+- `Realtime` 标记**不是准入门槛**：普通通道同样可以划给 rtchild，只是不能承载 rt 流。
+- input 与 output **必须成对**。只给一半 = 坏掉一半（只给 output ⇒
+  永远听不到用户 ⇒ 自言自语后静默待机，且不报错）。
+
+参考实现：`example/rtvoice/`（SDK 仓内置，未迁移）。
+
+### 8.3 场合策略（`InjectOptions.ScenePolicy`）
+
+声明这次注入**是否参与场面识别**：
+
+```go
+sdk.ScenePolicyAuto   // 默认：参与
+sdk.ScenePolicyNone   // 不参与（如纯心跳、连接状态类注入）
+```
+
+不写 = `auto`，与旧行为一致。
+
+### 8.4 本轮提示（`InjectOptions.TurnHint`）
+
+插件陈述「**这一轮才成立的事实**」给模型，与 `content`（用户说的话）分开：
+
+```go
+s.InjectInterruptTextOpts(src, ch, msg, sdk.InjectOptions{
+    TurnHint: "这是群里 @ 你的消息，回复时也要 @ 对方",
+})
+```
+
+为什么分开：`content` 是人说的话，`TurnHint` 是系统侧说明。
+混在一起，模型分不清哪句是人说的，审计也看不出哪些文字来自插件。
+
+### 8.5 运行态启停（`PluginMgrAPI`）
+
+```go
+s.PluginMgr().StopPlugin(name)             // 停：保留配置，不卸载
+s.PluginMgr().StartPlugin(name)            // 起
+s.PluginMgr().IsPluginRuntimeStopped(name) // 查
+```
+
+与 `plugin_disable` 的区别：那是**持久态**（重启后仍禁用），
+这三个是**运行态**（重启后恢复自动启动）。见内核仓
+`docs/zh/kernel-modularization-design.md` §2.6.7。
+
+### 8.6 自己核对新增面（别信 skill）
+
+skill 会滞后 —— 本节就迟到了一个月。**核对命令**：
+
+```bash
+# SDK 对外接口全集（含全部字段）
+grep -n "type .*API interface" -A30 sdk/plugin.go
+
+# InjectOptions / ChannelDef / ToolDef 的完整字段
+awk '/^type InjectOptions struct/,/^}/' sdk/plugin.go
+awk '/^type ChannelDef struct/,/^}/'    sdk/plugin.go
+awk '/^type ToolDef struct/,/^}/'       sdk/plugin.go
+
+# 官方指南（手写，比 skill 更完整）
+ls docs/guide/
+```
+
+**判断 SDK 是否有新能力**：对比 `meta.Version` 与 `docs/versions.md` 的版本历史表。
