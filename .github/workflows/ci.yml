@@ -41,12 +41,14 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      # ★ 钉 1.25 而不是 go-version-file: go.mod —— 根 go.mod 写的是
-      #   go 1.21.0，但 20 个 example/*/go.mod 都要求 go 1.25.0。
-      #   读根 go.mod 会装 1.21，examples 构建必然失败
-      #   （"go.mod requires go >= 1.25.0 (running go 1.21.0; GOTOOLCHAIN=local)"）。
+      # ★ 钉具体版本而不是 go-version-file: go.mod —— 根 go.mod 写的是更低的
+      #   go 版本，而 example/*/go.mod 要求 go 1.27.1。
+      #   读根 go.mod 会装低版本，examples 构建必然失败
+      #   （"go.mod requires go >= 1.27.1 (running go 1.21.0; GOTOOLCHAIN=local)"）。
       #   GitHub runner 上 GOTOOLCHAIN=local，Go 不会自动下载更高工具链，
       #   所以本地「能过」不代表 CI 能过。
+      #   2026-10-31 核对：example/ 下只剩 rtvoice + feiyu_voice（其余 26 个
+      #   已迁到 GitHub 组织 HologramAgent），两者的 go.mod 都是 go 1.27.1。
       - uses: actions/setup-go@v7
         with:
           go-version: '1.27.1'
@@ -84,12 +86,14 @@ jobs:
             ext: '.exe'
     steps:
       - uses: actions/checkout@v7
-      # ★ 钉 1.25 而不是 go-version-file: go.mod —— 根 go.mod 写的是
-      #   go 1.21.0，但 20 个 example/*/go.mod 都要求 go 1.25.0。
-      #   读根 go.mod 会装 1.21，examples 构建必然失败
-      #   （"go.mod requires go >= 1.25.0 (running go 1.21.0; GOTOOLCHAIN=local)"）。
+      # ★ 钉具体版本而不是 go-version-file: go.mod —— 根 go.mod 写的是更低的
+      #   go 版本，而 example/*/go.mod 要求 go 1.27.1。
+      #   读根 go.mod 会装低版本，examples 构建必然失败
+      #   （"go.mod requires go >= 1.27.1 (running go 1.21.0; GOTOOLCHAIN=local)"）。
       #   GitHub runner 上 GOTOOLCHAIN=local，Go 不会自动下载更高工具链，
       #   所以本地「能过」不代表 CI 能过。
+      #   2026-10-31 核对：example/ 下只剩 rtvoice + feiyu_voice（其余 26 个
+      #   已迁到 GitHub 组织 HologramAgent），两者的 go.mod 都是 go 1.27.1。
       - uses: actions/setup-go@v7
         with:
           go-version: '1.27.1'
@@ -141,12 +145,14 @@ jobs:
         target: ['linux/amd64', 'darwin/arm64']
     steps:
       - uses: actions/checkout@v7
-      # ★ 钉 1.25 而不是 go-version-file: go.mod —— 根 go.mod 写的是
-      #   go 1.21.0，但 20 个 example/*/go.mod 都要求 go 1.25.0。
-      #   读根 go.mod 会装 1.21，examples 构建必然失败
-      #   （"go.mod requires go >= 1.25.0 (running go 1.21.0; GOTOOLCHAIN=local)"）。
+      # ★ 钉具体版本而不是 go-version-file: go.mod —— 根 go.mod 写的是更低的
+      #   go 版本，而 example/*/go.mod 要求 go 1.27.1。
+      #   读根 go.mod 会装低版本，examples 构建必然失败
+      #   （"go.mod requires go >= 1.27.1 (running go 1.21.0; GOTOOLCHAIN=local)"）。
       #   GitHub runner 上 GOTOOLCHAIN=local，Go 不会自动下载更高工具链，
       #   所以本地「能过」不代表 CI 能过。
+      #   2026-10-31 核对：example/ 下只剩 rtvoice + feiyu_voice（其余 26 个
+      #   已迁到 GitHub 组织 HologramAgent），两者的 go.mod 都是 go 1.27.1。
       - uses: actions/setup-go@v7
         with:
           go-version: '1.27.1'
@@ -186,8 +192,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # sdk.lua 有**四份**副本（本仓三份 + 内核仓一份），历史上漂移过，
-      # 出现「mock 有、内核没有」的静默失配。此处钉住本仓内的三份。
+      # sdk.lua 有多份副本（本仓两份 + 内核仓一份），历史上漂移过，
+      # 出现「mock 有、内核没有」的静默失配。此处钉住本仓内的副本。
+      #
+      # ★ 2026-10-31：原本还钉 example/luademo/sdk.lua，但 26 个插件已迁到
+      #   GitHub 组织 HologramAgent（一插件一仓），本仓 example/ 下已无 luademo。
+      #   改成**只钉实际存在的副本** —— 显式列出，不 glob。
+      #   为什么不 glob：glob 在目录被删光时会得到空列表，循环一次都不跑，
+      #   判据假绿。这里硬列 + 存在性检查，删掉副本时判据会红。
       - name: Lua SDK 副本一致性
         run: |
           set -euo pipefail
@@ -195,7 +207,10 @@ jobs:
           [ -f "$canon" ] || { echo "ERROR: 缺 $canon"; exit 1; }
           want=$(sha256sum "$canon" | cut -d' ' -f1)
           fail=0
-          for f in tools/hmapdev/assets/sdk.lua example/luademo/sdk.lua; do
+          checked=0
+          for f in tools/hmapdev/assets/sdk.lua; do
+            [ -f "$f" ] || { echo "ERROR: 缺副本 $f（它应当始终存在）" >&2; fail=1; continue; }
+            checked=$((checked + 1))
             have=$(sha256sum "$f" | cut -d' ' -f1)
             if [ "$have" = "$want" ]; then
               echo "  ✓ $f"
@@ -207,14 +222,25 @@ jobs:
               fail=1
             fi
           done
+          # 已迁出本仓的示例副本：存在才比对（不再要求它必须存在）
+          for f in example/luademo/sdk.lua; do
+            [ -f "$f" ] || { echo "  - $f 不存在（该示例已迁出本仓，跳过）"; continue; }
+            checked=$((checked + 1))
+            have=$(sha256sum "$f" | cut -d' ' -f1)
+            [ "$have" = "$want" ] || { echo "  ✗ $f 与 $canon 不一致" >&2; fail=1; }
+          done
+          echo "  共校验 $checked 份副本"
+          [ "$checked" -ge 1 ] || { echo "ERROR: 一份副本都没校验到 —— 判据假绿" >&2; fail=1; }
           [ "$fail" = "0" ] || exit 1
 
-      # ★ 钉 1.25 而不是 go-version-file: go.mod —— 根 go.mod 写的是
-      #   go 1.21.0，但 20 个 example/*/go.mod 都要求 go 1.25.0。
-      #   读根 go.mod 会装 1.21，examples 构建必然失败
-      #   （"go.mod requires go >= 1.25.0 (running go 1.21.0; GOTOOLCHAIN=local)"）。
+      # ★ 钉具体版本而不是 go-version-file: go.mod —— 根 go.mod 写的是更低的
+      #   go 版本，而 example/*/go.mod 要求 go 1.27.1。
+      #   读根 go.mod 会装低版本，examples 构建必然失败
+      #   （"go.mod requires go >= 1.27.1 (running go 1.21.0; GOTOOLCHAIN=local)"）。
       #   GitHub runner 上 GOTOOLCHAIN=local，Go 不会自动下载更高工具链，
       #   所以本地「能过」不代表 CI 能过。
+      #   2026-10-31 核对：example/ 下只剩 rtvoice + feiyu_voice（其余 26 个
+      #   已迁到 GitHub 组织 HologramAgent），两者的 go.mod 都是 go 1.27.1。
       - uses: actions/setup-go@v7
         with:
           go-version: '1.27.1'

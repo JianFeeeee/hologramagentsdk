@@ -5,6 +5,9 @@
 # 副本：
 #   - tools/hmapdev/assets/sdk.lua   工具链内嵌回退（hmapdev init --lua 无 SDK 时用）
 #   - example/luademo/sdk.lua        示例插件的离线测试副本
+#                                    ★ 2026-10-31：luademo 已迁到 GitHub 组织
+#                                    HologramAgent（一插件一仓），本仓 example/
+#                                    下已无该目录 ⇒ 此副本自动跳过。
 #   - <core>/internal/lua/sdk/sdk.lua 内核内嵌副本（本仓被 vendored 到
 #     <core>/third_party/homeagent-sdk 时自动识别；独立 clone 时跳过）
 #
@@ -25,7 +28,17 @@ copy() {
 }
 
 copy "$ROOT/tools/hmapdev/assets/sdk.lua"
-copy "$ROOT/example/luademo/sdk.lua"
+
+# ★ 只在目录还在时同步，不"顺手创建"。
+# 为什么：曾无条件 copy，而 copy() 里带 mkdir -p —— 插件迁走后跑本脚本会
+# 凭空造出 example/luademo/sdk.lua（没有 plugin.go、没有 plg.json），
+# 于是 CI 的一致性判据"通过"了，但它验的是一份不存在的示例。
+LUADEMO_COPY="$ROOT/example/luademo/sdk.lua"
+if [ -d "$ROOT/example/luademo" ]; then
+  copy "$LUADEMO_COPY"
+else
+  echo "  skip -> $LUADEMO_COPY（luademo 已迁出本仓，见 GitHub 组织 HologramAgent）"
+fi
 
 # 被内核仓 vendored 时（本仓位于 <core>/third_party/homeagent-sdk）同步内核副本。
 CORE_COPY="$ROOT/../../internal/lua/sdk/sdk.lua"
