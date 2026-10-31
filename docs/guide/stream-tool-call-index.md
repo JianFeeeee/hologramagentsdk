@@ -105,4 +105,4 @@ journalctl -u homeagent.service --since "-2 min" | grep -E "参数|合法 JSON"
 ## 相关
 
 - `docs/guide/parallel-tool-declaration.md` —— 并发声明 `ParallelSafe`/`Serial`
-- 核心仓 `docs/zh/toolcall-parallel-execution-plan.md` —— 压测数据与协议族清单
+- 核心仓 `docs/zh/toolcall-contract-and-sequence-design.md` —— 契约、协议族清单、**附录 A 压测数据**

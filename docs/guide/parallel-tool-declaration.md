@@ -108,5 +108,5 @@ sdk.RegisterTool(sdk.ToolDef{
 设计背景与踩坑见**核心仓**文档（不在本仓）：
 
 - `docs/zh/toolcall-contract-and-sequence-design.md` —— 契约与序列设计
-- `docs/zh/toolcall-parallel-execution-plan.md` —— 阶段、实测压测数据
+- `docs/zh/toolcall-contract-and-sequence-design.md` —— 契约 + **附录 A 实测压测数据**
 - `docs/zh/deploy-runbook.md` —— 生产部署（含适配器 `stream_index` 相关）
