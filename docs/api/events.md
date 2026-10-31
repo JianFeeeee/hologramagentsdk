@@ -22,7 +22,66 @@ controls which events are delivered.
 Subscribe(eventType EventType, handler EventHandler) func()
 ```
 
-<small>`plugin.go:427`</small>
+<small>`plugin.go:526`</small>
+
+## `EventsAPI`
+
+EventsAPI 是插件可见的事件总线。
+
+它**不是** *events.Bus 的投影：这是一个有边界、有审查的接口。
+
+| 方法 | 说明 |
+|---|---|
+| [`AllowedPublish`](#eventsapiallowedpublish) | AllowedPublish 返回当前可发布的事件类型（白名单 + 自己的命名空间前缀）。 |
+| [`AllowedSubscribe`](#eventsapiallowedsubscribe) | AllowedSubscribe 返回当前可订阅的事件类型。 |
+| [`Publish`](#eventsapipublish) | Publish 发布一个事件。 |
+| [`Subscribe`](#eventsapisubscribe) | Subscribe 订阅一个白名单内的事件（只读面）。 |
+
+### `EventsAPI.AllowedPublish`
+
+```go
+AllowedPublish() []string
+```
+
+AllowedPublish 返回当前可发布的事件类型（白名单 + 自己的命名空间前缀）。
+
+<small>`events.go:43`</small>
+
+### `EventsAPI.AllowedSubscribe`
+
+```go
+AllowedSubscribe() []string
+```
+
+AllowedSubscribe 返回当前可订阅的事件类型。
+
+<small>`events.go:46`</small>
+
+### `EventsAPI.Publish`
+
+```go
+Publish(eventType string, payload map[string]interface{}) error
+```
+
+Publish 发布一个事件。
+
+eventType 必须在白名单内（见 AllowedPublish），或形如
+"plugin.<本插件名>.<后缀>"。载荷大小与键数有上限。
+
+<small>`events.go:34`</small>
+
+### `EventsAPI.Subscribe`
+
+```go
+Subscribe(eventType string, handler func(payload map[string]interface{})) (cancel func(), err error)
+```
+
+Subscribe 订阅一个白名单内的事件（只读面）。
+
+返回的 cancel 在插件 Stop 时调用可解除订阅；宿主卸载插件时也会自动解除。
+handler 的 panic 会被总线隔离，不影响其他订阅者。
+
+<small>`events.go:40`</small>
 
 ### `Event`
 
@@ -32,7 +91,7 @@ type Event struct { Type EventType `json:"type"` Source string `json:"source"` P
 
 Event represents a system event published by the kernel.
 
-<small>`plugin.go:413`</small>
+<small>`plugin.go:512`</small>
 
 ### `EventHandler`
 
@@ -42,7 +101,48 @@ type EventHandler func(evt *Event)
 
 EventHandler processes a system event.
 
-<small>`plugin.go:421`</small>
+<small>`plugin.go:520`</small>
+
+### `EventNameDeviceReady`
+
+```go
+const EventNameDeviceReady
+```
+
+EventNameDeviceReady：工具/设备数据面就绪（只读订阅）。
+
+<small>`events.go:65`</small>
+
+### `EventNameSecurityReady`
+
+```go
+const EventNameSecurityReady
+```
+
+EventNameSecurityReady：安全闸门装配完成（只读订阅）。
+
+<small>`events.go:63`</small>
+
+### `EventNameSkillDetected`
+
+```go
+const EventNameSkillDetected
+```
+
+EventNameSkillDetected：兼容层把发现的纯 SKILL 条目交给 skillmgr 接管。
+（职责链交接，不是执行指令）
+
+<small>`events.go:59`</small>
+
+### `EventNameToolsReady`
+
+```go
+const EventNameToolsReady
+```
+
+EventNameToolsReady：全部插件加载完、工具注册齐（只读订阅）。
+
+<small>`events.go:61`</small>
 
 ### `EventType`
 
@@ -52,7 +152,7 @@ type EventType string
 
 EventType identifies the kind of system event.
 
-<small>`plugin.go:395`</small>
+<small>`plugin.go:494`</small>
 
 ### `PluginSDK.Events`
 
@@ -65,5 +165,5 @@ func (s *PluginSDK) Events() EventSubscriber
 
 Events returns the event subscriber for listening to kernel events (may be nil if not available).
 
-<small>`plugin.go:639`</small>
+<small>`plugin.go:750`</small>
 

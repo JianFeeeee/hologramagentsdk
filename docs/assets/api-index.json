@@ -8,7 +8,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 486
+    "l": 585
   },
   {
     "n": "Add",
@@ -23,6 +23,28 @@
     "g": [
       "添加知识"
     ]
+  },
+  {
+    "n": "AllowedPublish",
+    "s": "AllowedPublish() []string",
+    "d": "AllowedPublish 返回当前可发布的事件类型（白名单 + 自己的命名空间前缀）。",
+    "k": "method",
+    "r": "EventsAPI",
+    "p": "events",
+    "b": false,
+    "f": "events.go",
+    "l": 43
+  },
+  {
+    "n": "AllowedSubscribe",
+    "s": "AllowedSubscribe() []string",
+    "d": "AllowedSubscribe 返回当前可订阅的事件类型。",
+    "k": "method",
+    "r": "EventsAPI",
+    "p": "events",
+    "b": false,
+    "f": "events.go",
+    "l": 46
   },
   {
     "n": "Append",
@@ -47,7 +69,7 @@
     "p": "misc",
     "b": false,
     "f": "plugin.go",
-    "l": 1098
+    "l": 1247
   },
   {
     "n": "AutoRestart",
@@ -58,7 +80,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 1027,
+    "l": 1176,
     "g": [
       "自动重启",
       "崩溃自愈",
@@ -108,7 +130,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 506,
+    "l": 605,
     "g": [
       "音频能力"
     ]
@@ -122,7 +144,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 504,
+    "l": 603,
     "g": [
       "文件能力"
     ]
@@ -136,7 +158,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 505,
+    "l": 604,
     "g": [
       "图片能力"
     ]
@@ -150,7 +172,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 507,
+    "l": 606,
     "g": [
       "结构化能力"
     ]
@@ -164,7 +186,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 503,
+    "l": 602,
     "g": [
       "文本能力"
     ]
@@ -178,7 +200,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 208,
+    "l": 293,
     "g": [
       "通道",
       "频道",
@@ -223,7 +245,7 @@
     "p": "tools",
     "b": false,
     "f": "plugin.go",
-    "l": 1086,
+    "l": 1235,
     "g": [
       "多模态内容块",
       "图片块",
@@ -239,7 +261,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 44,
+    "l": 78,
     "g": [
       "策略",
       "不裁剪上下文",
@@ -255,7 +277,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 45,
+    "l": 79,
     "g": [
       "策略",
       "裁剪上下文",
@@ -289,6 +311,28 @@
     "g": [
       "数据目录"
     ]
+  },
+  {
+    "n": "DeclareProfile",
+    "s": "DeclareProfile(p SecurityProfile) error",
+    "d": "DeclareProfile 声明一个命名档位。同名重复声明会覆盖（同一 owner",
+    "k": "method",
+    "r": "SecurityAPI",
+    "p": "misc",
+    "b": false,
+    "f": "security.go",
+    "l": 66
+  },
+  {
+    "n": "DeclareProfiles",
+    "s": "DeclareProfiles(ps []SecurityProfile) error",
+    "d": "DeclareProfiles 批量声明（任一失败即整体失败，便于早失败）。",
+    "k": "method",
+    "r": "SecurityAPI",
+    "p": "misc",
+    "b": false,
+    "f": "security.go",
+    "l": 72
   },
   {
     "n": "Decrypt",
@@ -350,7 +394,7 @@
     "p": "memory",
     "b": false,
     "f": "plugin.go",
-    "l": 601,
+    "l": 702,
     "g": [
       "记忆",
       "内存",
@@ -385,13 +429,13 @@
   {
     "n": "EffectiveProxyAuth",
     "s": "func EffectiveProxyAuth(auth string) string",
-    "d": "EffectiveProxyAuth 返回生效的鉴权模式（空串归一化为 ProxyAuthHomeAgent）。",
+    "d": "EffectiveProxyAuth 返回生效的鉴权模式（空串与旧值都归一化为 ProxyAuthAgent）。",
     "k": "func",
     "r": "",
     "p": "misc",
     "b": false,
     "f": "proxy.go",
-    "l": 169
+    "l": 192
   },
   {
     "n": "Encrypt",
@@ -428,7 +472,7 @@
     "p": "misc",
     "b": false,
     "f": "plugin.go",
-    "l": 294
+    "l": 393
   },
   {
     "n": "Event",
@@ -439,7 +483,7 @@
     "p": "events",
     "b": false,
     "f": "plugin.go",
-    "l": 413,
+    "l": 512,
     "g": [
       "事件",
       "订阅"
@@ -454,7 +498,7 @@
     "p": "constants",
     "b": false,
     "f": "plugin.go",
-    "l": 400,
+    "l": 499,
     "g": [
       "事件",
       "订阅"
@@ -469,7 +513,7 @@
     "p": "constants",
     "b": false,
     "f": "plugin.go",
-    "l": 399,
+    "l": 498,
     "g": [
       "事件",
       "订阅"
@@ -484,7 +528,7 @@
     "p": "constants",
     "b": false,
     "f": "plugin.go",
-    "l": 409,
+    "l": 508,
     "g": [
       "事件",
       "订阅"
@@ -499,10 +543,71 @@
     "p": "events",
     "b": false,
     "f": "plugin.go",
-    "l": 421,
+    "l": 520,
     "g": [
       "事件",
       "订阅"
+    ]
+  },
+  {
+    "n": "EventNameDeviceReady",
+    "s": "const EventNameDeviceReady",
+    "d": "EventNameDeviceReady：工具/设备数据面就绪（只读订阅）。",
+    "k": "const",
+    "r": "",
+    "p": "events",
+    "b": false,
+    "f": "events.go",
+    "l": 65,
+    "g": [
+      "事件",
+      "订阅"
+    ]
+  },
+  {
+    "n": "EventNameSecurityReady",
+    "s": "const EventNameSecurityReady",
+    "d": "EventNameSecurityReady：安全闸门装配完成（只读订阅）。",
+    "k": "const",
+    "r": "",
+    "p": "events",
+    "b": false,
+    "f": "events.go",
+    "l": 63,
+    "g": [
+      "事件",
+      "订阅"
+    ]
+  },
+  {
+    "n": "EventNameSkillDetected",
+    "s": "const EventNameSkillDetected",
+    "d": "EventNameSkillDetected：兼容层把发现的纯 SKILL 条目交给 skillmgr 接管。",
+    "k": "const",
+    "r": "",
+    "p": "events",
+    "b": false,
+    "f": "events.go",
+    "l": 59,
+    "g": [
+      "事件",
+      "订阅"
+    ]
+  },
+  {
+    "n": "EventNameToolsReady",
+    "s": "const EventNameToolsReady",
+    "d": "EventNameToolsReady：全部插件加载完、工具注册齐（只读订阅）。",
+    "k": "const",
+    "r": "",
+    "p": "events",
+    "b": false,
+    "f": "events.go",
+    "l": 61,
+    "g": [
+      "事件",
+      "订阅",
+      "工具"
     ]
   },
   {
@@ -514,7 +619,7 @@
     "p": "constants",
     "b": false,
     "f": "plugin.go",
-    "l": 398,
+    "l": 497,
     "g": [
       "事件",
       "订阅"
@@ -529,7 +634,7 @@
     "p": "constants",
     "b": false,
     "f": "plugin.go",
-    "l": 402,
+    "l": 501,
     "g": [
       "事件",
       "订阅"
@@ -544,7 +649,7 @@
     "p": "constants",
     "b": false,
     "f": "plugin.go",
-    "l": 408,
+    "l": 507,
     "g": [
       "事件",
       "订阅"
@@ -559,7 +664,7 @@
     "p": "constants",
     "b": false,
     "f": "plugin.go",
-    "l": 403,
+    "l": 502,
     "g": [
       "事件",
       "订阅",
@@ -587,7 +692,7 @@
     "p": "constants",
     "b": false,
     "f": "plugin.go",
-    "l": 404,
+    "l": 503,
     "g": [
       "事件",
       "订阅"
@@ -602,7 +707,7 @@
     "p": "constants",
     "b": false,
     "f": "plugin.go",
-    "l": 401,
+    "l": 500,
     "g": [
       "事件",
       "订阅",
@@ -618,7 +723,7 @@
     "p": "events",
     "b": false,
     "f": "plugin.go",
-    "l": 395,
+    "l": 494,
     "g": [
       "事件",
       "订阅"
@@ -633,13 +738,24 @@
     "p": "events",
     "b": true,
     "f": "plugin.go",
-    "l": 639,
+    "l": 750,
     "g": [
       "事件",
       "订阅",
       "事件订阅",
       "监听事件"
     ]
+  },
+  {
+    "n": "EventsAPI",
+    "s": "type EventsAPI interface",
+    "d": "EventsAPI 是插件可见的事件总线。",
+    "k": "interface",
+    "r": "",
+    "p": "events",
+    "b": false,
+    "f": "",
+    "l": 0
   },
   {
     "n": "Exists",
@@ -673,6 +789,17 @@
     "b": false,
     "f": "facilities.go",
     "l": 37
+  },
+  {
+    "n": "FacilityDevice",
+    "s": "const FacilityDevice",
+    "d": "FacilityDevice 是设备/工具数据面就绪（工具注册与分发、inputch、outputch）。",
+    "k": "const",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "facilities.go",
+    "l": 71
   },
   {
     "n": "FacilityDocStore",
@@ -772,6 +899,17 @@
     "b": false,
     "f": "facilities.go",
     "l": 59
+  },
+  {
+    "n": "FacilitySecurity",
+    "s": "const FacilitySecurity",
+    "d": "FacilitySecurity 是安全防火墙就绪。",
+    "k": "const",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "facilities.go",
+    "l": 69
   },
   {
     "n": "FacilityStageHost",
@@ -976,7 +1114,7 @@
     "p": "misc",
     "b": false,
     "f": "plugin.go",
-    "l": 1093
+    "l": 1242
   },
   {
     "n": "InjectInputMedia",
@@ -987,7 +1125,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 937,
+    "l": 1086,
     "g": [
       "注入输入",
       "投喂输入",
@@ -1006,7 +1144,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 378,
+    "l": 477,
     "g": [
       "注入输入",
       "投喂输入",
@@ -1025,7 +1163,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 976,
+    "l": 1125,
     "g": [
       "注入输入",
       "投喂输入",
@@ -1044,26 +1182,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 389,
-    "g": [
-      "注入输入",
-      "投喂输入",
-      "模拟用户输入",
-      "媒体",
-      "图片",
-      "音频"
-    ]
-  },
-  {
-    "n": "InjectInputMediaSync",
-    "s": "InjectInputMediaSync(source, channel, text string, blocks []ContentBlock) string",
-    "d": "",
-    "k": "method",
-    "r": "IOInjector",
-    "p": "channels",
-    "b": false,
-    "f": "plugin.go",
-    "l": 379,
+    "l": 488,
     "g": [
       "注入输入",
       "投喂输入",
@@ -1082,7 +1201,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 943,
+    "l": 1092,
     "g": [
       "注入输入",
       "投喂输入",
@@ -1093,15 +1212,15 @@
     ]
   },
   {
-    "n": "InjectInputMediaSyncOpts",
-    "s": "InjectInputMediaSyncOpts(source, channel, text string, blocks []ContentBlock, opts InjectOptions) string",
+    "n": "InjectInputMediaSync",
+    "s": "InjectInputMediaSync(source, channel, text string, blocks []ContentBlock) string",
     "d": "",
     "k": "method",
     "r": "IOInjector",
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 390,
+    "l": 478,
     "g": [
       "注入输入",
       "投喂输入",
@@ -1120,7 +1239,26 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 983,
+    "l": 1132,
+    "g": [
+      "注入输入",
+      "投喂输入",
+      "模拟用户输入",
+      "媒体",
+      "图片",
+      "音频"
+    ]
+  },
+  {
+    "n": "InjectInputMediaSyncOpts",
+    "s": "InjectInputMediaSyncOpts(source, channel, text string, blocks []ContentBlock, opts InjectOptions) string",
+    "d": "",
+    "k": "method",
+    "r": "IOInjector",
+    "p": "channels",
+    "b": false,
+    "f": "plugin.go",
+    "l": 489,
     "g": [
       "注入输入",
       "投喂输入",
@@ -1139,7 +1277,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 928,
+    "l": 1077,
     "g": [
       "注入输入",
       "投喂输入",
@@ -1155,23 +1293,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 374,
-    "g": [
-      "注入输入",
-      "投喂输入",
-      "模拟用户输入"
-    ]
-  },
-  {
-    "n": "InjectInputSyncOpts",
-    "s": "InjectInputSyncOpts(source, channel, text string, opts InjectOptions) string",
-    "d": "",
-    "k": "method",
-    "r": "IOInjector",
-    "p": "channels",
-    "b": false,
-    "f": "plugin.go",
-    "l": 388,
+    "l": 473,
     "g": [
       "注入输入",
       "投喂输入",
@@ -1187,7 +1309,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 967,
+    "l": 1116,
     "g": [
       "注入输入",
       "投喂输入",
@@ -1195,23 +1317,19 @@
     ]
   },
   {
-    "n": "InjectInterruptMedia",
-    "s": "InjectInterruptMedia(source, channel, text string, blocks []ContentBlock)",
+    "n": "InjectInputSyncOpts",
+    "s": "InjectInputSyncOpts(source, channel, text string, opts InjectOptions) string",
     "d": "",
     "k": "method",
     "r": "IOInjector",
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 380,
+    "l": 487,
     "g": [
-      "中断注入",
-      "插话",
-      "打断",
-      "抢占",
-      "媒体",
-      "图片",
-      "音频"
+      "注入输入",
+      "投喂输入",
+      "模拟用户输入"
     ]
   },
   {
@@ -1223,7 +1341,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 1000,
+    "l": 1149,
     "g": [
       "中断注入",
       "插话",
@@ -1235,15 +1353,15 @@
     ]
   },
   {
-    "n": "InjectInterruptMediaOpts",
-    "s": "func (s *PluginSDK) InjectInterruptMediaOpts(source, channel, text string, blocks []ContentBlock, opts InjectOptions)",
-    "d": "InjectInterruptMediaOpts 注入带媒体块的中断，并声明记忆/裁剪行为。",
+    "n": "InjectInterruptMedia",
+    "s": "InjectInterruptMedia(source, channel, text string, blocks []ContentBlock)",
+    "d": "",
     "k": "method",
-    "r": "PluginSDK",
+    "r": "IOInjector",
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 992,
+    "l": 479,
     "g": [
       "中断注入",
       "插话",
@@ -1263,7 +1381,27 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 391,
+    "l": 490,
+    "g": [
+      "中断注入",
+      "插话",
+      "打断",
+      "抢占",
+      "媒体",
+      "图片",
+      "音频"
+    ]
+  },
+  {
+    "n": "InjectInterruptMediaOpts",
+    "s": "func (s *PluginSDK) InjectInterruptMediaOpts(source, channel, text string, blocks []ContentBlock, opts InjectOptions)",
+    "d": "InjectInterruptMediaOpts 注入带媒体块的中断，并声明记忆/裁剪行为。",
+    "k": "method",
+    "r": "PluginSDK",
+    "p": "channels",
+    "b": false,
+    "f": "plugin.go",
+    "l": 1141,
     "g": [
       "中断注入",
       "插话",
@@ -1276,14 +1414,14 @@
   },
   {
     "n": "InjectInterruptText",
-    "s": "func (s *PluginSDK) InjectInterruptText(source, channel, text string)",
-    "d": "InjectInterruptText injects a text interrupt that can preempt current LLM processing.",
+    "s": "InjectInterruptText(source, channel, text string)",
+    "d": "",
     "k": "method",
-    "r": "PluginSDK",
+    "r": "IOInjector",
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 909,
+    "l": 468,
     "g": [
       "中断注入",
       "插话",
@@ -1293,31 +1431,14 @@
   },
   {
     "n": "InjectInterruptText",
-    "s": "InjectInterruptText(source, channel, text string)",
-    "d": "",
+    "s": "func (s *PluginSDK) InjectInterruptText(source, channel, text string)",
+    "d": "InjectInterruptText injects a text interrupt that can preempt current LLM processing.",
     "k": "method",
-    "r": "IOInjector",
+    "r": "PluginSDK",
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 369,
-    "g": [
-      "中断注入",
-      "插话",
-      "打断",
-      "抢占"
-    ]
-  },
-  {
-    "n": "InjectInterruptTextOpts",
-    "s": "InjectInterruptTextOpts(source, channel, text string, opts InjectOptions)",
-    "d": "",
-    "k": "method",
-    "r": "IOInjector",
-    "p": "channels",
-    "b": false,
-    "f": "plugin.go",
-    "l": 387,
+    "l": 1058,
     "g": [
       "中断注入",
       "插话",
@@ -1334,7 +1455,24 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 960,
+    "l": 1109,
+    "g": [
+      "中断注入",
+      "插话",
+      "打断",
+      "抢占"
+    ]
+  },
+  {
+    "n": "InjectInterruptTextOpts",
+    "s": "InjectInterruptTextOpts(source, channel, text string, opts InjectOptions)",
+    "d": "",
+    "k": "method",
+    "r": "IOInjector",
+    "p": "channels",
+    "b": false,
+    "f": "plugin.go",
+    "l": 486,
     "g": [
       "中断注入",
       "插话",
@@ -1351,7 +1489,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 132,
+    "l": 166,
     "g": [
       "注入选项",
       "是否记入记忆",
@@ -1367,7 +1505,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 915,
+    "l": 1064,
     "g": [
       "注入文本",
       "注入消息",
@@ -1384,7 +1522,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 370,
+    "l": 469,
     "g": [
       "注入文本",
       "注入消息",
@@ -1401,7 +1539,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 921,
+    "l": 1070,
     "g": [
       "注入文本",
       "注入消息",
@@ -1420,7 +1558,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 371,
+    "l": 470,
     "g": [
       "注入文本",
       "注入消息",
@@ -1432,14 +1570,14 @@
   },
   {
     "n": "InjectTextOpts",
-    "s": "InjectTextOpts(source, channel, text string, opts InjectOptions)",
-    "d": "以下 Opts 变体让调用点在**这一次注入**上声明记忆与裁剪行为。",
+    "s": "func (s *PluginSDK) InjectTextOpts(source, channel, text string, opts InjectOptions)",
+    "d": "InjectTextOpts 注入文本到 agent，并在这一次注入上声明记忆与裁剪行为。",
     "k": "method",
-    "r": "IOInjector",
+    "r": "PluginSDK",
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 386,
+    "l": 1099,
     "g": [
       "注入文本",
       "注入消息",
@@ -1449,14 +1587,14 @@
   },
   {
     "n": "InjectTextOpts",
-    "s": "func (s *PluginSDK) InjectTextOpts(source, channel, text string, opts InjectOptions)",
-    "d": "InjectTextOpts 注入文本到 agent，并在这一次注入上声明记忆与裁剪行为。",
+    "s": "InjectTextOpts(source, channel, text string, opts InjectOptions)",
+    "d": "以下 Opts 变体让调用点在**这一次注入**上声明记忆与裁剪行为。",
     "k": "method",
-    "r": "PluginSDK",
+    "r": "IOInjector",
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 950,
+    "l": 485,
     "g": [
       "注入文本",
       "注入消息",
@@ -1473,7 +1611,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 489,
+    "l": 588,
     "g": [
       "通道",
       "频道"
@@ -1534,7 +1672,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 438,
+    "l": 537,
     "g": [
       "查插件是否被禁用"
     ]
@@ -1548,7 +1686,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 465
+    "l": 564
   },
   {
     "n": "IsResponded",
@@ -1559,7 +1697,7 @@
     "p": "stages",
     "b": false,
     "f": "plugin.go",
-    "l": 243
+    "l": 342
   },
   {
     "n": "KernelControl",
@@ -1570,7 +1708,7 @@
     "p": "misc",
     "b": false,
     "f": "plugin.go",
-    "l": 889
+    "l": 1038
   },
   {
     "n": "KernelControlAPI",
@@ -1585,6 +1723,21 @@
   },
   {
     "n": "Knowledge",
+    "s": "func (s *PluginSDK) Knowledge() KnowledgeAPI",
+    "d": "Knowledge returns the knowledge store API (may be nil if not available).",
+    "k": "method",
+    "r": "PluginSDK",
+    "p": "memory",
+    "b": false,
+    "f": "plugin.go",
+    "l": 709,
+    "g": [
+      "知识库",
+      "知识"
+    ]
+  },
+  {
+    "n": "Knowledge",
     "s": "type Knowledge struct { Name string `json:\"name\"` // Category 是该条目的父分类路径（如 \"tech/go\"），根下条目为空。 // // 为何加这个字段：对�� …",
     "d": "Knowledge represents a knowledge entry.",
     "k": "type",
@@ -1593,21 +1746,6 @@
     "b": false,
     "f": "knowledge.go",
     "l": 11,
-    "g": [
-      "知识库",
-      "知识"
-    ]
-  },
-  {
-    "n": "Knowledge",
-    "s": "func (s *PluginSDK) Knowledge() KnowledgeAPI",
-    "d": "Knowledge returns the knowledge store API (may be nil if not available).",
-    "k": "method",
-    "r": "PluginSDK",
-    "p": "memory",
-    "b": false,
-    "f": "plugin.go",
-    "l": 608,
     "g": [
       "知识库",
       "知识"
@@ -1633,7 +1771,7 @@
     "p": "misc",
     "b": false,
     "f": "facilities.go",
-    "l": 70
+    "l": 78
   },
   {
     "n": "LLM",
@@ -1644,7 +1782,7 @@
     "p": "llm",
     "b": false,
     "f": "plugin.go",
-    "l": 615
+    "l": 716
   },
   {
     "n": "LLMAPI",
@@ -1659,20 +1797,6 @@
   },
   {
     "n": "List",
-    "s": "List() ([]string, error)",
-    "d": "",
-    "k": "method",
-    "r": "KnowledgeAPI",
-    "p": "memory",
-    "b": false,
-    "f": "knowledge.go",
-    "l": 7,
-    "g": [
-      "列出"
-    ]
-  },
-  {
-    "n": "List",
     "s": "List(prefix string) ([]string, error)",
     "d": "List returns all keys matching the given prefix.",
     "k": "method",
@@ -1681,6 +1805,20 @@
     "b": false,
     "f": "settings.go",
     "l": 26,
+    "g": [
+      "列出"
+    ]
+  },
+  {
+    "n": "List",
+    "s": "List() []SecretInfo",
+    "d": "List 列出变量库的元信息（别名/来源/备注/命中次数）—— **不含明文**。",
+    "k": "method",
+    "r": "SecretsAPI",
+    "p": "misc",
+    "b": false,
+    "f": "secrets.go",
+    "l": 63,
     "g": [
       "列出"
     ]
@@ -1701,14 +1839,14 @@
   },
   {
     "n": "List",
-    "s": "List() []SecretInfo",
-    "d": "List 列出变量库的元信息（别名/来源/备注/命中次数）—— **不含明文**。",
+    "s": "List() ([]string, error)",
+    "d": "",
     "k": "method",
-    "r": "SecretsAPI",
-    "p": "misc",
+    "r": "KnowledgeAPI",
+    "p": "memory",
     "b": false,
-    "f": "secrets.go",
-    "l": 63,
+    "f": "knowledge.go",
+    "l": 7,
     "g": [
       "列出"
     ]
@@ -1736,7 +1874,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 436,
+    "l": 535,
     "g": [
       "已加载插件列表"
     ]
@@ -1792,7 +1930,7 @@
     "p": "stages",
     "b": false,
     "f": "plugin.go",
-    "l": 241
+    "l": 340
   },
   {
     "n": "MediaAttachment",
@@ -1820,7 +1958,7 @@
     "p": "misc",
     "b": false,
     "f": "plugin.go",
-    "l": 250
+    "l": 349
   },
   {
     "n": "Memory",
@@ -1831,7 +1969,7 @@
     "p": "memory",
     "b": false,
     "f": "plugin.go",
-    "l": 587,
+    "l": 688,
     "g": [
       "记忆",
       "内存"
@@ -1871,7 +2009,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 14,
+    "l": 15,
     "g": [
       "名称"
     ]
@@ -1885,7 +2023,7 @@
     "p": "misc",
     "b": false,
     "f": "proxy.go",
-    "l": 202
+    "l": 225
   },
   {
     "n": "OnDemandNeedsSkill",
@@ -1907,7 +2045,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 492,
+    "l": 591,
     "g": [
       "通道",
       "频道"
@@ -1922,7 +2060,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 499,
+    "l": 598,
     "g": [
       "通道",
       "频道"
@@ -1962,7 +2100,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 870,
+    "l": 1019,
     "g": [
       "插件管理",
       "重载插件",
@@ -1990,21 +2128,21 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 580,
+    "l": 681,
     "g": [
       "插件名"
     ]
   },
   {
     "n": "PluginSDK",
-    "s": "type PluginSDK struct { name string regTool ToolRegistrar regStage StageRegistrar regAPI APIRegistrar regOutput OutputChannelRegistrar …",
+    "s": "type PluginSDK struct { name string regTool ToolRegistrar regToolCtx ToolRegistrarCtx regStage StageRegistrar regAPI APIRegistrar regO …",
     "d": "PluginSDK is the main API surface provided to plugins at runtime.",
     "k": "type",
     "r": "",
     "p": "misc",
     "b": false,
     "f": "plugin.go",
-    "l": 512
+    "l": 611
   },
   {
     "n": "Plugins",
@@ -2029,7 +2167,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 191,
+    "l": 276,
     "g": [
       "优先级",
       "中断级别"
@@ -2044,7 +2182,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 192,
+    "l": 277,
     "g": [
       "优先级",
       "中断级别"
@@ -2059,7 +2197,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 193,
+    "l": 278,
     "g": [
       "优先级",
       "中断级别"
@@ -2074,16 +2212,16 @@
     "p": "channels",
     "b": true,
     "f": "plugin.go",
-    "l": 195,
+    "l": 280,
     "g": [
       "优先级",
       "中断级别"
     ]
   },
   {
-    "n": "ProxyAuthHomeAgent",
-    "s": "const ProxyAuthHomeAgent",
-    "d": "ProxyAuthHomeAgent 表示由 HologramAgent 统一保护：浏览器走门户会话",
+    "n": "ProxyAuthAgent",
+    "s": "const ProxyAuthAgent",
+    "d": "ProxyAuthAgent 表示由内核统一保护：浏览器走门户会话",
     "k": "const",
     "r": "",
     "p": "misc",
@@ -2092,9 +2230,31 @@
     "l": 149
   },
   {
+    "n": "ProxyAuthAgentLegacy",
+    "s": "const ProxyAuthAgentLegacy",
+    "d": "ProxyAuthAgentLegacy 是旧值的字面量，**只用于兼容读取**，不要在新声明里写它。",
+    "k": "const",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "proxy.go",
+    "l": 167
+  },
+  {
+    "n": "ProxyAuthHomeAgent",
+    "s": "const ProxyAuthHomeAgent",
+    "d": "ProxyAuthHomeAgent 是 ProxyAuthAgent 的旧名，仅为**存量源码**保留。",
+    "k": "const",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "proxy.go",
+    "l": 174
+  },
+  {
     "n": "ProxyAuthNone",
     "s": "const ProxyAuthNone",
-    "d": "ProxyAuthNone 表示不经 HologramAgent 鉴权，直接把请求转发给上游。",
+    "d": "ProxyAuthNone 表示不经内核鉴权，直接把请求转发给上游。",
     "k": "const",
     "r": "",
     "p": "misc",
@@ -2122,7 +2282,18 @@
     "p": "misc",
     "b": false,
     "f": "proxy.go",
-    "l": 306
+    "l": 329
+  },
+  {
+    "n": "Publish",
+    "s": "Publish(eventType string, payload map[string]interface{}) error",
+    "d": "Publish 发布一个事件。",
+    "k": "method",
+    "r": "EventsAPI",
+    "p": "events",
+    "b": false,
+    "f": "events.go",
+    "l": 34
   },
   {
     "n": "Purge",
@@ -2163,7 +2334,7 @@
     "p": "stages",
     "b": false,
     "f": "plugin.go",
-    "l": 239
+    "l": 338
   },
   {
     "n": "RUnlock",
@@ -2174,7 +2345,7 @@
     "p": "stages",
     "b": false,
     "f": "plugin.go",
-    "l": 240
+    "l": 339
   },
   {
     "n": "RawFiles",
@@ -2185,7 +2356,7 @@
     "p": "misc",
     "b": false,
     "f": "plugin.go",
-    "l": 799
+    "l": 941
   },
   {
     "n": "RawFilesAPI",
@@ -2235,7 +2406,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 65,
+    "l": 99,
     "g": [
       "策略",
       "召回",
@@ -2253,7 +2424,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 64,
+    "l": 98,
     "g": [
       "策略",
       "召回",
@@ -2287,7 +2458,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 754,
+    "l": 896,
     "g": [
       "注册输入通道",
       "收消息",
@@ -2306,7 +2477,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 1062,
+    "l": 1211,
     "g": [
       "卸载回调",
       "删除清理",
@@ -2323,7 +2494,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 721,
+    "l": 863,
     "g": [
       "注册输出通道",
       "发消息",
@@ -2342,7 +2513,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 695,
+    "l": 837,
     "g": [
       "注册插件接口",
       "暴露接口"
@@ -2357,7 +2528,7 @@
     "p": "misc",
     "b": false,
     "f": "proxy.go",
-    "l": 335
+    "l": 358
   },
   {
     "n": "RegisterStage",
@@ -2368,7 +2539,7 @@
     "p": "stages",
     "b": false,
     "f": "plugin.go",
-    "l": 660,
+    "l": 802,
     "g": [
       "注册阶段",
       "阶段钩子",
@@ -2388,7 +2559,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 1037,
+    "l": 1186,
     "g": [
       "停止回调",
       "关闭清理",
@@ -2404,7 +2575,7 @@
     "p": "tools",
     "b": false,
     "f": "plugin.go",
-    "l": 646,
+    "l": 788,
     "g": [
       "注册工具",
       "添加工具",
@@ -2415,6 +2586,25 @@
       "怎么注册工具",
       "工具怎么加",
       "自定义工具"
+    ]
+  },
+  {
+    "n": "RegisterToolCtx",
+    "s": "func (s *PluginSDK) RegisterToolCtx(name string, def ToolDef, handler ToolHandlerCtx) error",
+    "d": "RegisterToolCtx 注册一个**可取消**的工具（可选，长任务推荐）。",
+    "k": "method",
+    "r": "PluginSDK",
+    "p": "misc",
+    "b": false,
+    "f": "plugin.go",
+    "l": 770,
+    "g": [
+      "注册工具",
+      "添加工具",
+      "暴露工具",
+      "工具定义",
+      "让模型调用",
+      "工具"
     ]
   },
   {
@@ -2441,7 +2631,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 434,
+    "l": 533,
     "g": [
       "重载单个插件"
     ]
@@ -2469,7 +2659,7 @@
     "p": "misc",
     "b": false,
     "f": "kernel.go",
-    "l": 33
+    "l": 34
   },
   {
     "n": "RequestKernelShutdown",
@@ -2480,7 +2670,7 @@
     "p": "misc",
     "b": false,
     "f": "kernel.go",
-    "l": 35
+    "l": 36
   },
   {
     "n": "RunOnRemoveHandlers",
@@ -2491,7 +2681,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 1073
+    "l": 1222
   },
   {
     "n": "RunStopHandlers",
@@ -2502,7 +2692,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 1048
+    "l": 1197
   },
   {
     "n": "SDKVersion",
@@ -2513,7 +2703,7 @@
     "p": "misc",
     "b": false,
     "f": "plugin.go",
-    "l": 10,
+    "l": 11,
     "g": [
       "SDK 版本"
     ]
@@ -2527,7 +2717,7 @@
     "p": "misc",
     "b": false,
     "f": "plugin.go",
-    "l": 98,
+    "l": 132,
     "g": [
       "策略"
     ]
@@ -2541,7 +2731,7 @@
     "p": "misc",
     "b": false,
     "f": "plugin.go",
-    "l": 99,
+    "l": 133,
     "g": [
       "策略"
     ]
@@ -2562,7 +2752,7 @@
   },
   {
     "n": "SecretInfo",
-    "s": "type SecretInfo struct { Alias string `json:\"alias\"` Source string `json:\"source\"` // intercepted | submitted Note string `json:\"note,omitempty\"` …",
+    "s": "type SecretInfo struct { Alias string `json:\"alias\"` Source string `json:\"source\"` // intercepted | submitted Note string `json:\"note,omitempty\"` CreatedAt stri …",
     "d": "SecretInfo 是一条变量的元信息（**不含明文**）。",
     "k": "type",
     "r": "",
@@ -2580,7 +2770,7 @@
     "p": "misc",
     "b": false,
     "f": "plugin.go",
-    "l": 626
+    "l": 727
   },
   {
     "n": "SecretsAPI",
@@ -2592,6 +2782,39 @@
     "b": false,
     "f": "",
     "l": 0
+  },
+  {
+    "n": "Security",
+    "s": "func (s *PluginSDK) Security() SecurityAPI",
+    "d": "Security 返回**策略声明面**（插件声明安全档位；判定由内核执行）。",
+    "k": "method",
+    "r": "PluginSDK",
+    "p": "misc",
+    "b": false,
+    "f": "plugin.go",
+    "l": 737
+  },
+  {
+    "n": "SecurityAPI",
+    "s": "type SecurityAPI interface",
+    "d": "SecurityAPI 是插件**声明**自身安全策略的接口。",
+    "k": "interface",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "",
+    "l": 0
+  },
+  {
+    "n": "SecurityProfile",
+    "s": "type SecurityProfile struct { // Name 是档位名，必须形如 `\u003cowner\u003e.\u003c档位\u003e`（如 \"qq.guest\"）。 Name string // Owner 是声明者（插件名）。与 Name 的前缀� …",
+    "d": "SecurityProfile 是一个**命名安全档位**的声明。",
+    "k": "type",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "security.go",
+    "l": 79
   },
   {
     "n": "Set",
@@ -2618,7 +2841,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 1020,
+    "l": 1169,
     "g": [
       "设置",
       "装配",
@@ -2654,7 +2877,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 831,
+    "l": 980,
     "g": [
       "设置",
       "装配",
@@ -2672,7 +2895,7 @@
     "p": "bridge",
     "b": true,
     "f": "plugin.go",
-    "l": 855,
+    "l": 1004,
     "g": [
       "设置",
       "装配",
@@ -2689,7 +2912,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 788,
+    "l": 930,
     "g": [
       "设置",
       "装配"
@@ -2704,7 +2927,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 781,
+    "l": 923,
     "g": [
       "设置",
       "装配",
@@ -2721,7 +2944,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 878,
+    "l": 1027,
     "g": [
       "设置",
       "装配"
@@ -2736,7 +2959,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 837,
+    "l": 986,
     "g": [
       "设置",
       "装配",
@@ -2753,7 +2976,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 843,
+    "l": 992,
     "g": [
       "设置",
       "装配"
@@ -2768,7 +2991,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 819,
+    "l": 968,
     "g": [
       "设置",
       "装配",
@@ -2785,7 +3008,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 767,
+    "l": 909,
     "g": [
       "设置",
       "装配",
@@ -2802,7 +3025,7 @@
     "p": "bridge",
     "b": true,
     "f": "plugin.go",
-    "l": 774,
+    "l": 916,
     "g": [
       "设置",
       "装配",
@@ -2835,7 +3058,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 862,
+    "l": 1011,
     "g": [
       "设置",
       "装配",
@@ -2853,7 +3076,7 @@
     "p": "misc",
     "b": false,
     "f": "proxy.go",
-    "l": 309,
+    "l": 332,
     "g": [
       "设置",
       "装配"
@@ -2868,7 +3091,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 806,
+    "l": 948,
     "g": [
       "设置",
       "装配"
@@ -2898,7 +3121,22 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 813,
+    "l": 955,
+    "g": [
+      "设置",
+      "装配"
+    ]
+  },
+  {
+    "n": "SetSecurityAPI",
+    "s": "func (s *PluginSDK) SetSecurityAPI(v SecurityAPI)",
+    "d": "SetSecurityAPI 由内核注入策略声明面的实现（插件不调用）。",
+    "k": "method",
+    "r": "PluginSDK",
+    "p": "bridge",
+    "b": false,
+    "f": "plugin.go",
+    "l": 962,
     "g": [
       "设置",
       "装配"
@@ -2913,7 +3151,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 849,
+    "l": 998,
     "g": [
       "设置",
       "装配",
@@ -2947,31 +3185,12 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 825,
+    "l": 974,
     "g": [
       "设置",
       "装配",
       "记忆",
       "内存"
-    ]
-  },
-  {
-    "n": "SetToolBlocks",
-    "s": "SetToolBlocks(blocks []ContentBlock)",
-    "d": "SetToolBlocks 插件工具注入多模态内容块（image_url/audio_url），内核在下一条",
-    "k": "method",
-    "r": "IOInjector",
-    "p": "channels",
-    "b": false,
-    "f": "plugin.go",
-    "l": 377,
-    "g": [
-      "设置",
-      "装配",
-      "工具",
-      "工具返回图片",
-      "多模态返回",
-      "让模型看图"
     ]
   },
   {
@@ -2983,7 +3202,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 1008,
+    "l": 1157,
     "g": [
       "设置",
       "装配",
@@ -2991,6 +3210,41 @@
       "工具返回图片",
       "多模态返回",
       "让模型看图"
+    ]
+  },
+  {
+    "n": "SetToolBlocks",
+    "s": "SetToolBlocks(blocks []ContentBlock)",
+    "d": "SetToolBlocks 插件工具注入多模态内容块（image_url/audio_url），内核在下一条",
+    "k": "method",
+    "r": "IOInjector",
+    "p": "channels",
+    "b": false,
+    "f": "plugin.go",
+    "l": 476,
+    "g": [
+      "设置",
+      "装配",
+      "工具",
+      "工具返回图片",
+      "多模态返回",
+      "让模型看图"
+    ]
+  },
+  {
+    "n": "SetToolRegistrarCtx",
+    "s": "func (s *PluginSDK) SetToolRegistrarCtx(r ToolRegistrarCtx)",
+    "d": "SetToolRegistrarCtx 由**运行时**注入带 ctx 的注册口。",
+    "k": "method",
+    "r": "PluginSDK",
+    "p": "misc",
+    "b": false,
+    "f": "plugin.go",
+    "l": 760,
+    "g": [
+      "设置",
+      "装配",
+      "工具"
     ]
   },
   {
@@ -3002,7 +3256,7 @@
     "p": "settings",
     "b": false,
     "f": "plugin.go",
-    "l": 584,
+    "l": 685,
     "g": [
       "设置",
       "装配"
@@ -3028,7 +3282,7 @@
     "p": "memory",
     "b": false,
     "f": "plugin.go",
-    "l": 632,
+    "l": 743,
     "g": [
       "社交",
       "关系",
@@ -3072,7 +3326,7 @@
     "p": "stages",
     "b": false,
     "f": "plugin.go",
-    "l": 26,
+    "l": 60,
     "g": [
       "阶段",
       "钩子",
@@ -3089,7 +3343,7 @@
     "p": "constants",
     "b": false,
     "f": "plugin.go",
-    "l": 35,
+    "l": 69,
     "g": [
       "阶段",
       "钩子"
@@ -3104,7 +3358,7 @@
     "p": "constants",
     "b": false,
     "f": "plugin.go",
-    "l": 33,
+    "l": 67,
     "g": [
       "阶段",
       "钩子",
@@ -3120,7 +3374,7 @@
     "p": "constants",
     "b": false,
     "f": "plugin.go",
-    "l": 34,
+    "l": 68,
     "g": [
       "阶段",
       "钩子"
@@ -3135,7 +3389,7 @@
     "p": "constants",
     "b": false,
     "f": "plugin.go",
-    "l": 32,
+    "l": 66,
     "g": [
       "阶段",
       "钩子",
@@ -3151,7 +3405,7 @@
     "p": "stages",
     "b": false,
     "f": "plugin.go",
-    "l": 219,
+    "l": 318,
     "g": [
       "阶段",
       "钩子",
@@ -3168,7 +3422,7 @@
     "p": "stages",
     "b": false,
     "f": "plugin.go",
-    "l": 23,
+    "l": 57,
     "g": [
       "阶段",
       "钩子",
@@ -3184,7 +3438,7 @@
     "p": "constants",
     "b": false,
     "f": "plugin.go",
-    "l": 29,
+    "l": 63,
     "g": [
       "阶段",
       "钩子"
@@ -3199,7 +3453,7 @@
     "p": "constants",
     "b": false,
     "f": "plugin.go",
-    "l": 31,
+    "l": 65,
     "g": [
       "阶段",
       "钩子"
@@ -3214,7 +3468,7 @@
     "p": "constants",
     "b": false,
     "f": "plugin.go",
-    "l": 30,
+    "l": 64,
     "g": [
       "阶段",
       "钩子"
@@ -3229,7 +3483,7 @@
     "p": "stages",
     "b": false,
     "f": "plugin.go",
-    "l": 483,
+    "l": 582,
     "g": [
       "阶段",
       "钩子"
@@ -3244,7 +3498,7 @@
     "p": "stages",
     "b": false,
     "f": "plugin.go",
-    "l": 469,
+    "l": 568,
     "g": [
       "阶段",
       "钩子",
@@ -3261,7 +3515,7 @@
     "p": "constants",
     "b": false,
     "f": "plugin.go",
-    "l": 473,
+    "l": 572,
     "g": [
       "阶段",
       "钩子"
@@ -3276,7 +3530,7 @@
     "p": "constants",
     "b": false,
     "f": "plugin.go",
-    "l": 476,
+    "l": 575,
     "g": [
       "阶段",
       "钩子",
@@ -3292,7 +3546,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 15,
+    "l": 16,
     "g": [
       "启动"
     ]
@@ -3306,7 +3560,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 463
+    "l": 562
   },
   {
     "n": "Stats",
@@ -3331,7 +3585,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 16,
+    "l": 17,
     "g": [
       "停止",
       "关闭"
@@ -3346,7 +3600,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 458
+    "l": 557
   },
   {
     "n": "Store",
@@ -3368,7 +3622,18 @@
     "p": "events",
     "b": true,
     "f": "plugin.go",
-    "l": 427
+    "l": 526
+  },
+  {
+    "n": "Subscribe",
+    "s": "Subscribe(eventType string, handler func(payload map[string]interface{})) (cancel func(), err error)",
+    "d": "Subscribe 订阅一个白名单内的事件（只读面）。",
+    "k": "method",
+    "r": "EventsAPI",
+    "p": "events",
+    "b": false,
+    "f": "events.go",
+    "l": 40
   },
   {
     "n": "TextEvent",
@@ -3394,7 +3659,7 @@
     "p": "memory",
     "b": false,
     "f": "plugin.go",
-    "l": 594,
+    "l": 695,
     "g": [
       "记忆",
       "内存"
@@ -3420,7 +3685,7 @@
     "p": "tools",
     "b": false,
     "f": "plugin.go",
-    "l": 257,
+    "l": 356,
     "g": [
       "工具",
       "工具调用"
@@ -3435,7 +3700,7 @@
     "p": "tools",
     "b": false,
     "f": "plugin.go",
-    "l": 309,
+    "l": 408,
     "g": [
       "工具",
       "工具定义",
@@ -3452,7 +3717,7 @@
     "p": "misc",
     "b": false,
     "f": "plugin.go",
-    "l": 282,
+    "l": 381,
     "g": [
       "工具"
     ]
@@ -3466,11 +3731,25 @@
     "p": "tools",
     "b": false,
     "f": "plugin.go",
-    "l": 20,
+    "l": 21,
     "g": [
       "工具",
       "工具实现",
       "处理函数"
+    ]
+  },
+  {
+    "n": "ToolHandlerCtx",
+    "s": "type ToolHandlerCtx func(ctx context.Context, args map[string]interface{}) (interface{}, error)",
+    "d": "ToolHandlerCtx 是**可选**的带取消语义 handler。",
+    "k": "type",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "plugin.go",
+    "l": 41,
+    "g": [
+      "工具"
     ]
   },
   {
@@ -3482,7 +3761,21 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 480,
+    "l": 579,
+    "g": [
+      "工具"
+    ]
+  },
+  {
+    "n": "ToolRegistrarCtx",
+    "s": "type ToolRegistrarCtx func(name string, def ToolDef, handler ToolHandlerCtx) error",
+    "d": "ToolRegistrarCtx 是带 ctx 的注册口（由运行时/宿主注入）。",
+    "k": "type",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "plugin.go",
+    "l": 54,
     "g": [
       "工具"
     ]
@@ -3496,7 +3789,7 @@
     "p": "tools",
     "b": false,
     "f": "plugin.go",
-    "l": 265,
+    "l": 364,
     "g": [
       "工具",
       "工具结果",
@@ -3526,7 +3819,7 @@
     "p": "stages",
     "b": false,
     "f": "plugin.go",
-    "l": 242
+    "l": 341
   },
   {
     "n": "UnregisterOutputChannel",
@@ -3537,7 +3830,7 @@
     "p": "misc",
     "b": true,
     "f": "plugin.go",
-    "l": 732,
+    "l": 874,
     "g": [
       "通道",
       "频道",
@@ -3554,7 +3847,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 49,
+    "l": 83,
     "g": [
       "策略",
       "校验裁剪策略"
@@ -3563,13 +3856,13 @@
   {
     "n": "ValidProxyAuth",
     "s": "func ValidProxyAuth(auth string) bool",
-    "d": "ValidProxyAuth 校验 Auth 取值；空串合法（等价 ProxyAuthHomeAgent）。",
+    "d": "ValidProxyAuth 校验 Auth 取值；空串合法（等价 ProxyAuthAgent）。",
     "k": "func",
     "r": "",
     "p": "misc",
     "b": false,
     "f": "proxy.go",
-    "l": 160
+    "l": 179
   },
   {
     "n": "ValidProxyHostLabel",
@@ -3580,7 +3873,7 @@
     "p": "misc",
     "b": false,
     "f": "proxy.go",
-    "l": 180
+    "l": 203
   },
   {
     "n": "ValidRecallPolicy",
@@ -3591,7 +3884,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 69,
+    "l": 103,
     "g": [
       "策略",
       "召回",
@@ -3608,7 +3901,7 @@
     "p": "misc",
     "b": false,
     "f": "plugin.go",
-    "l": 103,
+    "l": 137,
     "g": [
       "策略"
     ]
@@ -3622,7 +3915,7 @@
     "p": "misc",
     "b": false,
     "f": "proxy.go",
-    "l": 229
+    "l": 252
   },
   {
     "n": "WorkDir",

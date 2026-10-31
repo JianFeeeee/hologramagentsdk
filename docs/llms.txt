@@ -30,6 +30,7 @@
 - [多平台构建](https://sdk.hologramagent.jianfgit.xyz/guide/multi-platform.md): hmapdev build 默认 bundle 模式，一次产出含三个平台的单个 
 - [打包与发布](https://sdk.hologramagent.jianfgit.xyz/guide/packaging.md): hmapdev build 一次完成编译与打包，产出 
 - [工具并发声明：`ParallelSafe` / `Serial`](https://sdk.hologramagent.jianfgit.xyz/guide/parallel-tool-declaration.md): > 对应 sdk
+- [实时通道（rt 流）](https://sdk.hologramagent.jianfgit.xyz/guide/realtime-channel.md): > 用于实时通话场景：输入不断覆盖，输出连续流式
 - [场景记忆（Scene Memory）](https://sdk.hologramagent.jianfgit.xyz/guide/scene-memory.md): > 场景式记忆是内核 v1
 - [受限 SDK 与安全](https://sdk.hologramagent.jianfgit.xyz/guide/security.md): 外部插件与内置插件的区别不只是「能不能调某个函数」，还包含一层安全边界：
 - [流式多 `tool_call`：适配器必须透传 `index`](https://sdk.hologramagent.jianfgit.xyz/guide/stream-tool-call-index.md): > 面向在 Lua 里写适配器（transform_stream_chunk）的插件作者

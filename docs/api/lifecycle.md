@@ -20,7 +20,7 @@ Plugin is the interface every plugin must implement.
 Name() string
 ```
 
-<small>`plugin.go:14`</small>
+<small>`plugin.go:15`</small>
 
 ### `Plugin.Start`
 
@@ -28,7 +28,7 @@ Name() string
 Start(sdk *PluginSDK) error
 ```
 
-<small>`plugin.go:15`</small>
+<small>`plugin.go:16`</small>
 
 ### `Plugin.Stop`
 
@@ -36,7 +36,7 @@ Start(sdk *PluginSDK) error
 Stop() error
 ```
 
-<small>`plugin.go:16`</small>
+<small>`plugin.go:17`</small>
 
 ## `PluginMgrAPI`
 
@@ -60,7 +60,7 @@ IsPluginDisabled(name string) bool
 
 IsPluginDisabled 查询插件是否被**持久**禁用。
 
-<small>`plugin.go:438`</small>
+<small>`plugin.go:537`</small>
 
 ### `PluginMgrAPI.IsPluginRuntimeStopped`
 
@@ -70,7 +70,7 @@ IsPluginRuntimeStopped(name string) bool
 
 IsPluginRuntimeStopped 查询插件是否处于运行态关闭。
 
-<small>`plugin.go:465`</small>
+<small>`plugin.go:564`</small>
 
 ### `PluginMgrAPI.ListLoadedPlugins`
 
@@ -80,7 +80,7 @@ ListLoadedPlugins() []string
 
 ListLoadedPlugins 列出已加载插件。
 
-<small>`plugin.go:436`</small>
+<small>`plugin.go:535`</small>
 
 ### `PluginMgrAPI.ReloadOne`
 
@@ -90,7 +90,7 @@ ReloadOne(name string) error
 
 ReloadOne 重载单个插件（停止后重新加载）。
 
-<small>`plugin.go:434`</small>
+<small>`plugin.go:533`</small>
 
 ### `PluginMgrAPI.StartPlugin`
 
@@ -103,7 +103,7 @@ StartPlugin 运行态启动：现在拉起，**不解除持久禁用**。
 被持久禁用的插件会被拒绝（提示先用 EnablePlugin）——
 持久禁用是用户的明确决定，运行态操作不该绕过它。
 
-<small>`plugin.go:463`</small>
+<small>`plugin.go:562`</small>
 
 ### `PluginMgrAPI.StopPlugin`
 
@@ -116,7 +116,7 @@ auto_start + disabled_plugins 正常决定。
 
 拒绝作用于 pluginmgr 自身与 webui（自锁/失联，内核层面拦死）。
 
-<small>`plugin.go:458`</small>
+<small>`plugin.go:557`</small>
 
 ### `PluginSDK.AutoRestart`
 
@@ -126,7 +126,7 @@ func (s *PluginSDK) AutoRestart() bool
 
 AutoRestart 返回插件是否允许自动重启。
 
-<small>`plugin.go:1027`</small>
+<small>`plugin.go:1176`</small>
 
 ### `PluginSDK.PluginMgr`
 
@@ -137,7 +137,7 @@ func (s *PluginSDK) PluginMgr() PluginMgrAPI
 PluginMgr returns the plugin manager API (ReloadOne / ReloadPlugins / list).
 May be nil if the host did not wire it.
 
-<small>`plugin.go:870`</small>
+<small>`plugin.go:1019`</small>
 
 ### `PluginSDK.PluginName`
 
@@ -147,7 +147,7 @@ func (s *PluginSDK) PluginName() string
 
 PluginName returns the name of the plugin.
 
-<small>`plugin.go:580`</small>
+<small>`plugin.go:681`</small>
 
 ### `PluginSDK.RegisterOnRemoveHandler`
 
@@ -164,11 +164,12 @@ RegisterOnRemoveHandler 注册插件被删除（卸载）时的清理回调。
 
 | 插件 | 位置 | 代码 |
 |---|---|---|
+| [`bilibili`](../examples/index.md#bilibili) | `example/bilibili/plugin.go:155` | `s.RegisterOnRemoveHandler(p.cleanupData)` |
 | [`calendar`](../examples/index.md#calendar) | `example/calendar/plugin.go:297` | `s.RegisterOnRemoveHandler(p.cleanupData)` |
 | [`memo`](../examples/index.md#memo) | `example/memo/plugin.go:69` | `s.RegisterOnRemoveHandler(p.cleanupData)` |
 | [`rss`](../examples/index.md#rss) | `example/rss/plugin.go:128` | `s.RegisterOnRemoveHandler(p.cleanupData)` |
 
-<small>`plugin.go:1062`</small>
+<small>`plugin.go:1211`</small>
 
 ### `PluginSDK.RegisterPluginAPI`
 
@@ -178,7 +179,7 @@ func (s *PluginSDK) RegisterPluginAPI(name string) error
 
 RegisterPluginAPI registers this plugin's API for access by other plugins.
 
-<small>`plugin.go:695`</small>
+<small>`plugin.go:837`</small>
 
 ### `PluginSDK.RegisterStopHandler`
 
@@ -198,7 +199,7 @@ RegisterStopHandler 注册插件停止阶段的清理回调。
 | [`calendar`](../examples/index.md#calendar) | `example/calendar/plugin.go:295` | `s.RegisterStopHandler(p.saveEvents)` |
 | [`deepsearch`](../examples/index.md#deepsearch) | `example/deepsearch/plugin.go:695` | `s.RegisterStopHandler(func() { p.shutdownSearxng() })` |
 
-<small>`plugin.go:1037`</small>
+<small>`plugin.go:1186`</small>
 
 ### `PluginSDK.RunOnRemoveHandlers`
 
@@ -209,7 +210,7 @@ func (s *PluginSDK) RunOnRemoveHandlers()
 RunOnRemoveHandlers 执行全部已注册的 onRemove handler（后注册先执行，执行后清空，幂等）。
 由内核在卸载插件（registry.RemovePlugin）时、插件 Stop() 之后执行。
 
-<small>`plugin.go:1073`</small>
+<small>`plugin.go:1222`</small>
 
 ### `PluginSDK.RunStopHandlers`
 
@@ -220,7 +221,7 @@ func (s *PluginSDK) RunStopHandlers()
 RunStopHandlers 执行全部已注册的 stop handler（后注册先执行，执行后清空，幂等）。
 由内核（内置插件）或插件桥接层（外部插件 z_bridge 的 StopPlugin）在调用插件 Stop() 前执行。
 
-<small>`plugin.go:1048`</small>
+<small>`plugin.go:1197`</small>
 
 ### `PluginSDK.SetAutoRestart`
 
@@ -239,10 +240,10 @@ SetAutoRestart 设置插件崩溃后内核是否自动重启它。
 
 | 插件 | 位置 | 代码 |
 |---|---|---|
-| [`a2a`](../examples/index.md#a2a) | `example/a2a/plugin.go:47` | `s.SetAutoRestart(true)` |
-| [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:47` | `s.SetAutoRestart(true)` |
+| [`a2a`](../examples/index.md#a2a) | `example/a2a/plugin.go:63` | `s.SetAutoRestart(true)` |
+| [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:63` | `s.SetAutoRestart(true)` |
 | [`ai_image`](../examples/index.md#ai_image) | `example/ai_image/plugin.go:110` | `s.SetAutoRestart(true)` |
 | [`bili`](../examples/index.md#bili) | `example/bili/plugin.go:63` | `s.SetAutoRestart(true)` |
 
-<small>`plugin.go:1020`</small>
+<small>`plugin.go:1169`</small>
 

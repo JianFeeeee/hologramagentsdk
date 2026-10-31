@@ -4,6 +4,20 @@
 
 SDK 里的取值枚举。其中带「仅内置」标注的取值在内核侧会被夹到较低级别。
 
+## ProxyAuthAgent 等
+
+| 名称 | 说明 |
+|---|---|
+| `ProxyAuthAgent` | ProxyAuthAgent 表示由内核统一保护：浏览器走门户会话 |
+| `ProxyAuthNone` | ProxyAuthNone 表示不经内核鉴权，直接把请求转发给上游。 |
+| `ProxyAuthAgentLegacy` | ProxyAuthAgentLegacy 是旧值的字面量，**只用于兼容读取**，不要在新声明里写它。 |
+
+## ProxyAuthHomeAgent
+
+| 名称 | 说明 |
+|---|---|
+| `ProxyAuthHomeAgent` |  |
+
 ## AutoStartOnKernel 等
 
 | 名称 | 说明 |
@@ -16,6 +30,15 @@ SDK 里的取值枚举。其中带「仅内置」标注的取值在内核侧会�
 | 名称 | 说明 |
 |---|---|
 | `OnDemandNeedsSkill` |  |
+
+## EventNameSkillDetected 等
+
+| 名称 | 说明 |
+|---|---|
+| `EventNameSkillDetected` | EventNameSkillDetected：兼容层把发现的纯 SKILL 条目交给 skillmgr 接管。 |
+| `EventNameToolsReady` | EventNameToolsReady：全部插件加载完、工具注册齐（只读订阅）。 |
+| `EventNameSecurityReady` | EventNameSecurityReady：安全闸门装配完成（只读订阅）。 |
+| `EventNameDeviceReady` | EventNameDeviceReady：工具/设备数据面就绪（只读订阅）。 |
 
 ## FacilityConfig 等
 
@@ -35,15 +58,8 @@ SDK 里的取值枚举。其中带「仅内置」标注的取值在内核侧会�
 | `FacilityONNX` | FacilityONNX 是依存句法分析器就绪。 |
 | `FacilityStageHost` | FacilityStageHost 是阶段管道 + 插件注册表就绪。 |
 | `FacilityAgent` | FacilityAgent 是主 Agent 就绪（**最晚**的一个，通常在插件加载前）。 |
-
-## ProxyAuthAgent 等
-
-| 名称 | 说明 |
-|---|---|
-| `ProxyAuthAgent` | 表示由内核统一保护：浏览器走门户会话，非浏览器客户端走 X-API-Key |
-| `ProxyAuthNone` | 表示不经内核鉴权，直接把请求转发给上游 |
-| `ProxyAuthAgentLegacy` | **仅用于兼容读取**的旧值 `"homeagent"`，存量 plugin.json 里写的仍是它；不要在新声明里用 |
-| `ProxyAuthHomeAgent` | 旧常量名，等价于 `ProxyAuthAgent`（Deprecated） |
+| `FacilitySecurity` | FacilitySecurity 是安全防火墙就绪。 |
+| `FacilityDevice` | FacilityDevice 是设备/工具数据面就绪（工具注册与分发、inputch、outputch）。 |
 
 ## StageOnInput 等
 

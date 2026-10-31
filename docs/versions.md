@@ -14,6 +14,7 @@
 
 | SDK | 内核 | 变化 | 需要重编？ |
 |---|---|---|---|
+| **1.4.0** | 1.4.0+ | **声明式安全**（`SecurityAPI`：`DeclareProfile`/`DeclareProfiles`、`SecurityProfile`）、**实时通道**（`ChannelDef.Realtime`）、`ScenePolicy` | 想用新 API 才需要 |
 | **1.3.0** | 1.4.0+ | 驻留子 agent、`RecallPolicy` 等 | 想用新 API 才需要 |
 | **1.2.0** | 1.2.0 / 1.3.x | `InjectOptions{NoMemory, ContextPolicy}`、六个 `*Opts` 变体、`ChannelDef.ContextPolicy` | 不需要 |
 | **1.1.0** | 1.1.x | 多模态贯通：`Triple.SentenceText`、`Doc.Attachments`、`MediaAttachment`、`InsertWithMedia`、媒体注入方法 | 不需要 |

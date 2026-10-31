@@ -8,11 +8,11 @@ SDK 仓 `example/` 下有多个**真实可编译**的示例插件，覆盖工具
 
 ## `a2a`
 
-用到的 API：`Error` · `InjectInputSync` · `Lock` · `RegisterInputChannel` · `RegisterOutputChannel` · `RegisterTool` · `SetAutoRestart` · `Settings` · `Unlock`
+用到的 API：`Error` · `InjectInputSyncOpts` · `Lock` · `RLock` · `RUnlock` · `RegisterInputChannel` · `RegisterOutputChannel` · `RegisterStage` · `RegisterTool` · `SetAutoRestart` · `Settings` · `Unlock`
 
 ## `acp`
 
-用到的 API：`Error` · `InjectInputSync` · `Lock` · `RLock` · `RUnlock` · `RegisterInputChannel` · `RegisterOutputChannel` · `RegisterTool` · `SetAutoRestart` · `Settings` · `Unlock`
+用到的 API：`Error` · `InjectInputSyncOpts` · `Lock` · `RLock` · `RUnlock` · `RegisterInputChannel` · `RegisterOutputChannel` · `RegisterStage` · `RegisterTool` · `SetAutoRestart` · `Settings` · `Unlock`
 
 ## `ai_image`
 
@@ -22,9 +22,13 @@ SDK 仓 `example/` 下有多个**真实可编译**的示例插件，覆盖工具
 
 用到的 API：`Lock` · `RegisterTool` · `SetAutoRestart` · `Settings` · `Unlock`
 
+## `bilibili`
+
+用到的 API：`Error` · `Lock` · `RLock` · `RUnlock` · `RegisterOnRemoveHandler` · `Unlock`
+
 ## `browser`
 
-用到的 API：`Error` · `InjectInterruptTextOpts` · `InjectTextNoMemory` · `Lock` · `RegisterInputChannel` · `Unlock`
+用到的 API：`InjectInterruptTextOpts` · `InjectTextNoMemory` · `RegisterInputChannel`
 
 ## `calendar`
 
@@ -44,11 +48,11 @@ SDK 仓 `example/` 下有多个**真实可编译**的示例插件，覆盖工具
 
 ## `memo`
 
-用到的 API：`InjectInterruptTextOpts` · `RLock` · `RUnlock` · `RegisterOnRemoveHandler` · `RegisterStage`
+用到的 API：`InjectInterruptTextOpts` · `RegisterOnRemoveHandler` · `RegisterStage`
 
 ## `qq`
 
-用到的 API：`InjectInterruptTextOpts` · `RLock` · `RUnlock` · `RegisterOutputChannel` · `RegisterStage`
+用到的 API：`InjectInterruptTextOpts` · `RegisterOutputChannel` · `Security` · `SetSecurityAPI`
 
 ## `recoverydiag`
 
@@ -57,8 +61,4 @@ SDK 仓 `example/` 下有多个**真实可编译**的示例插件，覆盖工具
 ## `rss`
 
 用到的 API：`RegisterOnRemoveHandler`
-
-## `sanitizer`
-
-用到的 API：`RegisterStage`
 

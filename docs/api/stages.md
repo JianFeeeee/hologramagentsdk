@@ -10,7 +10,7 @@
 func (c *StageContext) IsResponded() bool
 ```
 
-<small>`plugin.go:243`</small>
+<small>`plugin.go:342`</small>
 
 ### `StageContext.Lock`
 
@@ -22,12 +22,12 @@ func (c *StageContext) Lock()
 
 | 插件 | 位置 | 代码 |
 |---|---|---|
-| [`a2a`](../examples/index.md#a2a) | `example/a2a/plugin.go:158` | `p.sessMu.Lock()` |
-| [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:128` | `p.srvMu.Lock()` |
+| [`a2a`](../examples/index.md#a2a) | `example/a2a/plugin.go:197` | `p.sessMu.Lock()` |
+| [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:170` | `p.srvMu.Lock()` |
 | [`bili`](../examples/index.md#bili) | `example/bili/plugin.go:37` | `p.runMu.Lock()` |
-| [`browser`](../examples/index.md#browser) | `example/browser/plugin.go:450` | `p.mu.Lock()` |
+| [`bilibili`](../examples/index.md#bilibili) | `example/bilibili/plugin.go:140` | `p.mu.Lock()` |
 
-<small>`plugin.go:241`</small>
+<small>`plugin.go:340`</small>
 
 ### `StageContext.RLock`
 
@@ -39,12 +39,12 @@ func (c *StageContext) RLock()
 
 | 插件 | 位置 | 代码 |
 |---|---|---|
-| [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:267` | `p.mu.RLock()` |
+| [`a2a`](../examples/index.md#a2a) | `example/a2a/plugin.go:886` | `ctx.RLock()` |
+| [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:351` | `p.mu.RLock()` |
+| [`bilibili`](../examples/index.md#bilibili) | `example/bilibili/plugin.go:279` | `p.mu.RLock()` |
 | [`calendar`](../examples/index.md#calendar) | `example/calendar/plugin.go:650` | `p.mu.RLock()` |
-| [`memo`](../examples/index.md#memo) | `example/memo/plugin.go:224` | `p.mu.RLock()` |
-| [`qq`](../examples/index.md#qq) | `example/qq/status.go:569` | `ctx.RLock()` |
 
-<small>`plugin.go:239`</small>
+<small>`plugin.go:338`</small>
 
 ### `StageContext.RUnlock`
 
@@ -56,12 +56,12 @@ func (c *StageContext) RUnlock()
 
 | 插件 | 位置 | 代码 |
 |---|---|---|
-| [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:273` | `p.mu.RUnlock()` |
+| [`a2a`](../examples/index.md#a2a) | `example/a2a/plugin.go:888` | `ctx.RUnlock()` |
+| [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:357` | `p.mu.RUnlock()` |
+| [`bilibili`](../examples/index.md#bilibili) | `example/bilibili/plugin.go:280` | `defer p.mu.RUnlock()` |
 | [`calendar`](../examples/index.md#calendar) | `example/calendar/plugin.go:651` | `defer p.mu.RUnlock()` |
-| [`memo`](../examples/index.md#memo) | `example/memo/plugin.go:229` | `p.mu.RUnlock()` |
-| [`qq`](../examples/index.md#qq) | `example/qq/status.go:570` | `defer ctx.RUnlock()` |
 
-<small>`plugin.go:240`</small>
+<small>`plugin.go:339`</small>
 
 ### `PluginSDK.RegisterStage`
 
@@ -78,12 +78,12 @@ RegisterStage registers a handler for a pipeline stage.
 
 | 插件 | 位置 | 代码 |
 |---|---|---|
+| [`a2a`](../examples/index.md#a2a) | `example/a2a/plugin.go:91` | `s.RegisterStage(sdk.StageOnInput, p.stageBindSession, sdk.StageScopeGlobal)` |
+| [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:102` | `s.RegisterStage(sdk.StageOnInput, p.stageBindSession, sdk.StageScopeGlobal)` |
 | [`cmd`](../examples/index.md#cmd) | `example/cmd/plugin.go:221` | `s.RegisterStage(sdk.StageBeforeToolcall, func(ctx *sdk.StageContext) error {` |
 | [`memo`](../examples/index.md#memo) | `example/memo/plugin.go:152` | `s.RegisterStage(sdk.StagePreAction, p.stagePreAction)` |
-| [`qq`](../examples/index.md#qq) | `example/qq/plugin.go:1040` | `s.RegisterStage(sdk.StageOnInput, p.onInputAuthContext, sdk.StageScopeGlobal)` |
-| [`sanitizer`](../examples/index.md#sanitizer) | `example/sanitizer/plugin.go:52` | `s.RegisterStage(sdk.StageOnInput, func(ctx *sdk.StageContext) error {` |
 
-<small>`plugin.go:660`</small>
+<small>`plugin.go:802`</small>
 
 ### `Stage`
 
@@ -93,7 +93,7 @@ type Stage string
 
 Stage represents a point in the message processing pipeline.
 
-<small>`plugin.go:26`</small>
+<small>`plugin.go:60`</small>
 
 ### `StageContext`
 
@@ -103,7 +103,7 @@ type StageContext struct { mu sync.RWMutex RawMessage string UserID string Group
 
 StageContext provides context for stage handlers.
 
-<small>`plugin.go:219`</small>
+<small>`plugin.go:318`</small>
 
 ### `StageHandler`
 
@@ -113,7 +113,7 @@ type StageHandler func(ctx *StageContext) error
 
 StageHandler is a function that handles a pipeline stage event.
 
-<small>`plugin.go:23`</small>
+<small>`plugin.go:57`</small>
 
 ### `StageRegistrar`
 
@@ -123,7 +123,7 @@ type StageRegistrar func(stage Stage, handler StageHandler)
 
 StageRegistrar registers a stage handler.
 
-<small>`plugin.go:483`</small>
+<small>`plugin.go:582`</small>
 
 ### `StageScope`
 
@@ -133,7 +133,7 @@ type StageScope int
 
 StageScope controls which events a stage handler receives.
 
-<small>`plugin.go:469`</small>
+<small>`plugin.go:568`</small>
 
 ### `StageContext.Unlock`
 
@@ -145,10 +145,10 @@ func (c *StageContext) Unlock()
 
 | 插件 | 位置 | 代码 |
 |---|---|---|
-| [`a2a`](../examples/index.md#a2a) | `example/a2a/plugin.go:164` | `p.sessMu.Unlock()` |
-| [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:129` | `defer p.srvMu.Unlock()` |
+| [`a2a`](../examples/index.md#a2a) | `example/a2a/plugin.go:205` | `p.sessMu.Unlock()` |
+| [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:171` | `defer p.srvMu.Unlock()` |
 | [`bili`](../examples/index.md#bili) | `example/bili/plugin.go:40` | `p.runMu.Unlock()` |
-| [`browser`](../examples/index.md#browser) | `example/browser/plugin.go:455` | `p.mu.Unlock()` |
+| [`bilibili`](../examples/index.md#bilibili) | `example/bilibili/plugin.go:142` | `p.mu.Unlock()` |
 
-<small>`plugin.go:242`</small>
+<small>`plugin.go:341`</small>
 

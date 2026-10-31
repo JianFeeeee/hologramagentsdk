@@ -134,6 +134,7 @@ nav:
       - 工具并发声明（ParallelSafe/Serial）: guide/parallel-tool-declaration.md
       - 流式多 tool_call（适配器透传 index）: guide/stream-tool-call-index.md
       - 场景记忆（按场合召回）: guide/scene-memory.md
+      - 实时通道（rt 流 / 通话）: guide/realtime-channel.md
       - 打包与发布: guide/packaging.md
       - 多平台构建: guide/multi-platform.md
       - 受限 SDK 与安全: guide/security.md

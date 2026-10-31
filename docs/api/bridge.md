@@ -12,7 +12,7 @@ type APIRegistrar func(name string) error
 
 APIRegistrar registers a plugin API for external access.
 
-<small>`plugin.go:486`</small>
+<small>`plugin.go:585`</small>
 
 ### `InputChannelRegistrar`
 
@@ -22,7 +22,7 @@ type InputChannelRegistrar func(name string, def ChannelDef) error
 
 InputChannelRegistrar registers an input channel with its memory behavior.
 
-<small>`plugin.go:489`</small>
+<small>`plugin.go:588`</small>
 
 ### `OutputChannelRegistrar`
 
@@ -32,7 +32,7 @@ type OutputChannelRegistrar func(name string, caps int, desc string, def Channel
 
 OutputChannelRegistrar registers an output channel that the output_send tool can use.
 
-<small>`plugin.go:492`</small>
+<small>`plugin.go:591`</small>
 
 ### `OutputChannelUnregistrar`
 
@@ -46,7 +46,7 @@ OutputChannelUnregistrar 注销一个输出通道。
 动态通道 —— 典型是远程设备：`device/<id>` 只在设备在线期间存在，设备掉线后
 必须注销，否则 output_list_channels 会一直列着它、模型会往一个死通道发消息。
 
-<small>`plugin.go:499`</small>
+<small>`plugin.go:598`</small>
 
 ### `PluginSDK.SetDocMemoryAPI`
 
@@ -57,7 +57,7 @@ OutputChannelUnregistrar 注销一个输出通道。
 func (s *PluginSDK) SetDocMemoryAPI(dm DocMemoryAPI)
 ```
 
-<small>`plugin.go:831`</small>
+<small>`plugin.go:980`</small>
 
 ### `PluginSDK.SetEventSubscriber`
 
@@ -68,7 +68,7 @@ func (s *PluginSDK) SetDocMemoryAPI(dm DocMemoryAPI)
 func (s *PluginSDK) SetEventSubscriber(es EventSubscriber)
 ```
 
-<small>`plugin.go:855`</small>
+<small>`plugin.go:1004`</small>
 
 ### `PluginSDK.SetIOInjector`
 
@@ -81,7 +81,7 @@ func (s *PluginSDK) SetIOInjector(io IOInjector)
 
 SetIOInjector sets the IO injector (called by the core at startup).
 
-<small>`plugin.go:788`</small>
+<small>`plugin.go:930`</small>
 
 ### `PluginSDK.SetInputChannelRegistrar`
 
@@ -94,7 +94,7 @@ func (s *PluginSDK) SetInputChannelRegistrar(r InputChannelRegistrar)
 
 SetInputChannelRegistrar sets the input channel registrar (called by the core at startup).
 
-<small>`plugin.go:781`</small>
+<small>`plugin.go:923`</small>
 
 ### `PluginSDK.SetKernelControlAPI`
 
@@ -105,7 +105,7 @@ func (s *PluginSDK) SetKernelControlAPI(k KernelControlAPI)
 SetKernelControlAPI sets the kernel control API (restart/shutdown).
 Called by the bridge at startup; nil means "not available".
 
-<small>`plugin.go:878`</small>
+<small>`plugin.go:1027`</small>
 
 ### `PluginSDK.SetKnowledgeAPI`
 
@@ -116,7 +116,7 @@ Called by the bridge at startup; nil means "not available".
 func (s *PluginSDK) SetKnowledgeAPI(kn KnowledgeAPI)
 ```
 
-<small>`plugin.go:837`</small>
+<small>`plugin.go:986`</small>
 
 ### `PluginSDK.SetLLMAPI`
 
@@ -127,7 +127,7 @@ func (s *PluginSDK) SetKnowledgeAPI(kn KnowledgeAPI)
 func (s *PluginSDK) SetLLMAPI(llm LLMAPI)
 ```
 
-<small>`plugin.go:843`</small>
+<small>`plugin.go:992`</small>
 
 ### `PluginSDK.SetMemoryAPI`
 
@@ -138,7 +138,7 @@ func (s *PluginSDK) SetLLMAPI(llm LLMAPI)
 func (s *PluginSDK) SetMemoryAPI(mem MemoryAPI)
 ```
 
-<small>`plugin.go:819`</small>
+<small>`plugin.go:968`</small>
 
 ### `PluginSDK.SetOutputChannelRegistrar`
 
@@ -151,7 +151,7 @@ func (s *PluginSDK) SetOutputChannelRegistrar(r OutputChannelRegistrar)
 
 SetOutputChannelRegistrar sets the output channel registrar (called by the core at startup).
 
-<small>`plugin.go:767`</small>
+<small>`plugin.go:909`</small>
 
 ### `PluginSDK.SetOutputChannelUnregistrar`
 
@@ -164,7 +164,7 @@ func (s *PluginSDK) SetOutputChannelUnregistrar(r OutputChannelUnregistrar)
 
 SetOutputChannelUnregistrar sets the output channel unregistrar (called by the core at startup).
 
-<small>`plugin.go:774`</small>
+<small>`plugin.go:916`</small>
 
 ### `PluginSDK.SetPluginMgrAPI`
 
@@ -177,7 +177,7 @@ func (s *PluginSDK) SetPluginMgrAPI(pm PluginMgrAPI)
 
 SetPluginMgrAPI sets the plugin manager API (called by the bridge at startup).
 
-<small>`plugin.go:862`</small>
+<small>`plugin.go:1011`</small>
 
 ### `PluginSDK.SetRawFilesAPI`
 
@@ -193,7 +193,7 @@ SetRawFilesAPI 由内核装配时注入（插件不调用它）。
 |---|---|---|
 | [`commondev`](../examples/index.md#commondev) | `example/commondev/full_pipeline_test.go:168` | `p.sdk.SetRawFilesAPI(&testRawFiles{root: filepath.Join(root, "rawfile")})` |
 
-<small>`plugin.go:806`</small>
+<small>`plugin.go:948`</small>
 
 ### `PluginSDK.SetSecretsAPI`
 
@@ -203,7 +203,23 @@ func (s *PluginSDK) SetSecretsAPI(v SecretsAPI)
 
 SetSecretsAPI 由内核装配时注入（插件不调用它）。
 
-<small>`plugin.go:813`</small>
+<small>`plugin.go:955`</small>
+
+### `PluginSDK.SetSecurityAPI`
+
+```go
+func (s *PluginSDK) SetSecurityAPI(v SecurityAPI)
+```
+
+SetSecurityAPI 由内核注入策略声明面的实现（插件不调用）。
+
+**示例插件里的真实用法**
+
+| 插件 | 位置 | 代码 |
+|---|---|---|
+| [`qq`](../examples/index.md#qq) | `example/qq/security_profile_test.go:53` | `s.SetSecurityAPI(cap)` |
+
+<small>`plugin.go:962`</small>
 
 ### `PluginSDK.SetSocialAPI`
 
@@ -214,7 +230,7 @@ SetSecretsAPI 由内核装配时注入（插件不调用它）。
 func (s *PluginSDK) SetSocialAPI(social SocialAPI)
 ```
 
-<small>`plugin.go:849`</small>
+<small>`plugin.go:998`</small>
 
 ### `PluginSDK.SetTextMemoryAPI`
 
@@ -225,7 +241,7 @@ func (s *PluginSDK) SetSocialAPI(social SocialAPI)
 func (s *PluginSDK) SetTextMemoryAPI(tm TextMemoryAPI)
 ```
 
-<small>`plugin.go:825`</small>
+<small>`plugin.go:974`</small>
 
 ### `ToolRegistrar`
 
@@ -235,5 +251,5 @@ type ToolRegistrar func(name string, def ToolDef, handler ToolHandler) error
 
 ToolRegistrar registers a tool dynamically.
 
-<small>`plugin.go:480`</small>
+<small>`plugin.go:579`</small>
 

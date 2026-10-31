@@ -17,7 +17,7 @@ const PriorityL4
 
 PriorityL4 仅内核级（内置）插件可用；外部插件声明会被夹到 L3。
 
-<small>`plugin.go:195`</small>
+<small>`plugin.go:280`</small>
 
 ### `PluginSDK.Events`
 
@@ -30,7 +30,7 @@ func (s *PluginSDK) Events() EventSubscriber
 
 Events returns the event subscriber for listening to kernel events (may be nil if not available).
 
-<small>`plugin.go:639`</small>
+<small>`plugin.go:750`</small>
 
 ### `PluginSDK.SetEventSubscriber`
 
@@ -41,7 +41,7 @@ Events returns the event subscriber for listening to kernel events (may be nil i
 func (s *PluginSDK) SetEventSubscriber(es EventSubscriber)
 ```
 
-<small>`plugin.go:855`</small>
+<small>`plugin.go:1004`</small>
 
 ### `PluginSDK.SetOutputChannelUnregistrar`
 
@@ -54,7 +54,7 @@ func (s *PluginSDK) SetOutputChannelUnregistrar(r OutputChannelUnregistrar)
 
 SetOutputChannelUnregistrar sets the output channel unregistrar (called by the core at startup).
 
-<small>`plugin.go:774`</small>
+<small>`plugin.go:916`</small>
 
 ### `PluginSDK.UnregisterOutputChannel`
 
@@ -67,7 +67,7 @@ func (s *PluginSDK) UnregisterOutputChannel(name string) error
 
 UnregisterOutputChannel 注销一个输出通道（动态通道随资源生灭时必须调用）。
 
-<small>`plugin.go:732`</small>
+<small>`plugin.go:874`</small>
 
 ### `EventSubscriber.Subscribe`
 
