@@ -159,4 +159,5 @@ hmapdev build --no-bundle  # 只构建当前平台
 - [能力边界](capability-boundary.md) —— 哪些 API 外部插件能用
 - [工具（Tools）](../api/tools.md) —— `ToolDef` 的完整字段
 - [记忆（Memory）](../api/memory.md) —— 让插件读写长期记忆
-- [示例插件](../examples/index.md) —— `example/memo` 是个完整的可读实现
+- [示例插件](../examples/index.md) —— `example/rtvoice` 是完整的可读实现；
+  其余插件见 [GitHub 组织 HologramAgent](https://github.com/HologramAgent)

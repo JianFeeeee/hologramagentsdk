@@ -978,14 +978,18 @@ func TestBuildExitsNonZeroOnRawfileFailure(t *testing.T) {
 //
 // 为什么不能像上面那条判据一样只写 `package main`：那条只走到 rawfile
 // 校验就退出了（校验在编译之前），而本判据要走到**打包**，所以插件必须
-// 真的能编过。用 example/memo 的 plugin.go 作源（只读复制，不改仓库）。
+// 真的能编过。用 example/rtvoice 的 plugin.go 作源（只读复制，不改仓库）。
+//
+// 为什么是 rtvoice：2026-10-31 把 26 个插件迁到 GitHub 组织 HologramAgent
+// 后，example/ 下只剩 `rtvoice` 与 `feiyu_voice`（这两个未迁移）。
+// 原用 example/memo，迁移后目录被删 ⇒ 判据前提消失。
 func buildProbePlugin(t *testing.T, plgJSON string) string {
 	t.Helper()
 	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
-	memoSrc := filepath.Join(repoRoot, "example", "memo", "plugin.go")
+	memoSrc := filepath.Join(repoRoot, "example", "rtvoice", "plugin.go")
 	src, err := os.ReadFile(memoSrc)
 	if err != nil {
 		t.Fatalf("读 %s 失败（判据的前提变了？）: %v", memoSrc, err)

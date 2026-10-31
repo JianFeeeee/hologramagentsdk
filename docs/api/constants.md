@@ -4,20 +4,6 @@
 
 SDK 里的取值枚举。其中带「仅内置」标注的取值在内核侧会被夹到较低级别。
 
-## ProxyAuthAgent 等
-
-| 名称 | 说明 |
-|---|---|
-| `ProxyAuthAgent` | ProxyAuthAgent 表示由内核统一保护：浏览器走门户会话 |
-| `ProxyAuthNone` | ProxyAuthNone 表示不经内核鉴权，直接把请求转发给上游。 |
-| `ProxyAuthAgentLegacy` | ProxyAuthAgentLegacy 是旧值的字面量，**只用于兼容读取**，不要在新声明里写它。 |
-
-## ProxyAuthHomeAgent
-
-| 名称 | 说明 |
-|---|---|
-| `ProxyAuthHomeAgent` |  |
-
 ## AutoStartOnKernel 等
 
 | 名称 | 说明 |
@@ -133,4 +119,18 @@ SDK 里的取值枚举。其中带「仅内置」标注的取值在内核侧会�
 | `CapImage` |  |
 | `CapAudio` |  |
 | `CapStructured` |  |
+
+## ProxyAuthAgent 等
+
+| 名称 | 说明 |
+|---|---|
+| `ProxyAuthAgent` | ProxyAuthAgent 表示由内核统一保护：浏览器走门户会话 |
+| `ProxyAuthNone` | ProxyAuthNone 表示不经内核鉴权，直接把请求转发给上游。 |
+| `ProxyAuthAgentLegacy` | ProxyAuthAgentLegacy 是旧值的字面量，**只用于兼容读取**，不要在新声明里写它。 |
+
+## ProxyAuthHomeAgent
+
+| 名称 | 说明 |
+|---|---|
+| `ProxyAuthHomeAgent` |  |
 

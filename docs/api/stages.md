@@ -22,10 +22,7 @@ func (c *StageContext) Lock()
 
 | 插件 | 位置 | 代码 |
 |---|---|---|
-| [`a2a`](../examples/index.md#a2a) | `example/a2a/plugin.go:197` | `p.sessMu.Lock()` |
-| [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:170` | `p.srvMu.Lock()` |
-| [`bili`](../examples/index.md#bili) | `example/bili/plugin.go:37` | `p.runMu.Lock()` |
-| [`bilibili`](../examples/index.md#bilibili) | `example/bilibili/plugin.go:140` | `p.mu.Lock()` |
+| [`rtvoice`](../examples/index.md#rtvoice) | `example/rtvoice/plugin_test.go:29` | `r.mu.Lock()` |
 
 <small>`plugin.go:340`</small>
 
@@ -35,15 +32,6 @@ func (c *StageContext) Lock()
 func (c *StageContext) RLock()
 ```
 
-**示例插件里的真实用法**
-
-| 插件 | 位置 | 代码 |
-|---|---|---|
-| [`a2a`](../examples/index.md#a2a) | `example/a2a/plugin.go:886` | `ctx.RLock()` |
-| [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:351` | `p.mu.RLock()` |
-| [`bilibili`](../examples/index.md#bilibili) | `example/bilibili/plugin.go:279` | `p.mu.RLock()` |
-| [`calendar`](../examples/index.md#calendar) | `example/calendar/plugin.go:650` | `p.mu.RLock()` |
-
 <small>`plugin.go:338`</small>
 
 ### `StageContext.RUnlock`
@@ -51,15 +39,6 @@ func (c *StageContext) RLock()
 ```go
 func (c *StageContext) RUnlock()
 ```
-
-**示例插件里的真实用法**
-
-| 插件 | 位置 | 代码 |
-|---|---|---|
-| [`a2a`](../examples/index.md#a2a) | `example/a2a/plugin.go:888` | `ctx.RUnlock()` |
-| [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:357` | `p.mu.RUnlock()` |
-| [`bilibili`](../examples/index.md#bilibili) | `example/bilibili/plugin.go:280` | `defer p.mu.RUnlock()` |
-| [`calendar`](../examples/index.md#calendar) | `example/calendar/plugin.go:651` | `defer p.mu.RUnlock()` |
 
 <small>`plugin.go:339`</small>
 
@@ -73,15 +52,6 @@ RegisterStage registers a handler for a pipeline stage.
 
 	scope: StageScopeGlobal (default) — receives all stage events.
 	       StageScopeOwnTools — only before_toolcall/after_toolcall for this plugin's tools.
-
-**示例插件里的真实用法**
-
-| 插件 | 位置 | 代码 |
-|---|---|---|
-| [`a2a`](../examples/index.md#a2a) | `example/a2a/plugin.go:91` | `s.RegisterStage(sdk.StageOnInput, p.stageBindSession, sdk.StageScopeGlobal)` |
-| [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:102` | `s.RegisterStage(sdk.StageOnInput, p.stageBindSession, sdk.StageScopeGlobal)` |
-| [`cmd`](../examples/index.md#cmd) | `example/cmd/plugin.go:221` | `s.RegisterStage(sdk.StageBeforeToolcall, func(ctx *sdk.StageContext) error {` |
-| [`memo`](../examples/index.md#memo) | `example/memo/plugin.go:152` | `s.RegisterStage(sdk.StagePreAction, p.stagePreAction)` |
 
 <small>`plugin.go:802`</small>
 
@@ -145,10 +115,7 @@ func (c *StageContext) Unlock()
 
 | 插件 | 位置 | 代码 |
 |---|---|---|
-| [`a2a`](../examples/index.md#a2a) | `example/a2a/plugin.go:205` | `p.sessMu.Unlock()` |
-| [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:171` | `defer p.srvMu.Unlock()` |
-| [`bili`](../examples/index.md#bili) | `example/bili/plugin.go:40` | `p.runMu.Unlock()` |
-| [`bilibili`](../examples/index.md#bilibili) | `example/bilibili/plugin.go:142` | `p.mu.Unlock()` |
+| [`rtvoice`](../examples/index.md#rtvoice) | `example/rtvoice/plugin_test.go:31` | `r.mu.Unlock()` |
 
 <small>`plugin.go:341`</small>
 

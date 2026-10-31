@@ -2,63 +2,16 @@
 
 # 示例插件
 
-SDK 仓 `example/` 下有多个**真实可编译**的示例插件，覆盖工具注册、通道、记忆读写、LLM 调用、生命周期等常见形态。
+SDK 仓 `example/` 里保留的是**未迁移到组织仓**的示例插件，都能用 `hmapdev build` 打成 `.hmap` 装进内核直接跑。
 
-每个示例都能用 `hmapdev build` 打成 `.hmap` 装进内核直接跑。
+★ **其余 26 个插件已迁到 GitHub 组织** [`HologramAgent`](https://github.com/HologramAgent) —— 一插件一仓，覆盖工具注册、通道、记忆读写、LLM 调用、生命周期等全部常见形态。
+想看完整实现时去那里 clone，不要以为本仓就是全部。
 
-## `a2a`
+## `feiyu_voice`
 
-用到的 API：`Error` · `InjectInputSyncOpts` · `Lock` · `RLock` · `RUnlock` · `RegisterInputChannel` · `RegisterOutputChannel` · `RegisterStage` · `RegisterTool` · `SetAutoRestart` · `Settings` · `Unlock`
+用到的 API：`RegisterTool` · `SetAutoRestart` · `Settings`
 
-## `acp`
+## `rtvoice`
 
-用到的 API：`Error` · `InjectInputSyncOpts` · `Lock` · `RLock` · `RUnlock` · `RegisterInputChannel` · `RegisterOutputChannel` · `RegisterStage` · `RegisterTool` · `SetAutoRestart` · `Settings` · `Unlock`
-
-## `ai_image`
-
-用到的 API：`Error` · `RegisterTool` · `SetAutoRestart` · `Settings`
-
-## `bili`
-
-用到的 API：`Lock` · `RegisterTool` · `SetAutoRestart` · `Settings` · `Unlock`
-
-## `bilibili`
-
-用到的 API：`Error` · `Lock` · `RLock` · `RUnlock` · `RegisterOnRemoveHandler` · `Unlock`
-
-## `browser`
-
-用到的 API：`InjectInterruptTextOpts` · `InjectTextNoMemory` · `RegisterInputChannel`
-
-## `calendar`
-
-用到的 API：`InjectInterruptTextOpts` · `RLock` · `RUnlock` · `RegisterInputChannel` · `RegisterOnRemoveHandler` · `RegisterStopHandler`
-
-## `cmd`
-
-用到的 API：`RegisterStage`
-
-## `commondev`
-
-用到的 API：`InjectText` · `RawFiles` · `RegisterOutputChannel` · `Secrets` · `SetRawFilesAPI`
-
-## `deepsearch`
-
-用到的 API：`RegisterStopHandler`
-
-## `memo`
-
-用到的 API：`InjectInterruptTextOpts` · `RegisterOnRemoveHandler` · `RegisterStage`
-
-## `qq`
-
-用到的 API：`InjectInterruptTextOpts` · `RegisterOutputChannel` · `Security` · `SetSecurityAPI`
-
-## `recoverydiag`
-
-用到的 API：`Knowledge`
-
-## `rss`
-
-用到的 API：`RegisterOnRemoveHandler`
+用到的 API：`InjectInterruptTextOpts` · `Lock` · `RegisterInputChannel` · `RegisterOutputChannel` · `RegisterTool` · `Settings` · `Unlock`
 

@@ -28,10 +28,8 @@ RegisterTool registers a tool that the LLM can call.
 
 | 插件 | 位置 | 代码 |
 |---|---|---|
-| [`a2a`](../examples/index.md#a2a) | `example/a2a/plugin.go:115` | `s.RegisterTool(tp+"a2a_query", sdk.ToolDef{` |
-| [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:112` | `s.RegisterTool(tp+"acp_query", sdk.ToolDef{` |
-| [`ai_image`](../examples/index.md#ai_image) | `example/ai_image/plugin.go:159` | `s.RegisterTool(tp+"generate", sdk.ToolDef{` |
-| [`bili`](../examples/index.md#bili) | `example/bili/plugin.go:85` | `s.RegisterTool(tp+"video", sdk.ToolDef{` |
+| [`feiyu_voice`](../examples/index.md#feiyu_voice) | `example/feiyu_voice/plugin.go:83` | `s.RegisterTool(p.name+"_say", sdk.ToolDef{` |
+| [`rtvoice`](../examples/index.md#rtvoice) | `example/rtvoice/plugin.go:225` | `s.RegisterTool(p.name+"_say", sdk.ToolDef{` |
 
 <small>`plugin.go:788`</small>
 

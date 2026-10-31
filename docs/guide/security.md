@@ -144,7 +144,8 @@ if sec == nil {
 
 - **不要在 `Start` 里长时间阻塞** —— 内核在等待它返回。
 - **工具处理器要可并发**：模型可能并发发起多个调用；共享状态用锁保护
-  （`example/memo` 用 `sync.RWMutex`）。
+  （`example/rtvoice` 用 `sync.RWMutex`；`memo` 等已迁插件见
+  [`github.com/HologramAgent/memo`](https://github.com/HologramAgent/memo)）。
 - **写文件用原子替换**（临时文件 + rename），避免进程被强杀时截断数据。
 - **声明 `NoMemory`**：定时提醒、连接状态这类不是对话内容的东西，
   别让它们污染记忆（`InjectOptions{NoMemory: true}`）。

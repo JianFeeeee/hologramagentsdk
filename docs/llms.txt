@@ -22,7 +22,7 @@
 - [配置（Settings）](https://sdk.hologramagent.jianfgit.xyz/api/settings.md): 声明插件自己的配置项，内核会把它渲染到 WebUI 的设置页，并为每个插件维护独立的配置表
 - [阶段钩子（Stages）](https://sdk.hologramagent.jianfgit.xyz/api/stages.md): 在消息处理管道的固定点位插入自己的逻辑
 - [工具（Tools）](https://sdk.hologramagent.jianfgit.xyz/api/tools.md): 注册 LLM 可调用的工具
-- [示例插件](https://sdk.hologramagent.jianfgit.xyz/examples/index.md): SDK 仓 example/ 下有多个真实可编译的示例插件，覆盖工具注册、通道、记忆读写、LLM 调用、生命周期等常见形态
+- [示例插件](https://sdk.hologramagent.jianfgit.xyz/examples/index.md): SDK 仓 example/ 里保留的是未迁移到组织仓的示例插件，都能用 hmapdev build 打成 
 - [能力边界：哪些 API 外部插件能用](https://sdk.hologramagent.jianfgit.xyz/guide/capability-boundary.md): HologramAgent 有两类插件：
 - [第一个 Lua 插件](https://sdk.hologramagent.jianfgit.xyz/guide/first-lua-plugin.md): Lua 插件适合轻量、快速原型：不需要 Go 编译环境，改完重启内核即可生效
 - [第一个 Go 插件](https://sdk.hologramagent.jianfgit.xyz/guide/first-plugin.md): 以下是一个能直接跑起来的最小插件：注册一个工具、声明一项配置、处理停止与卸载

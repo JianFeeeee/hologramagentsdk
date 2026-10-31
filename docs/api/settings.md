@@ -219,10 +219,8 @@ sett 在 New 时一次性写入且无 setter，故不需要加锁。
 
 | 插件 | 位置 | 代码 |
 |---|---|---|
-| [`a2a`](../examples/index.md#a2a) | `example/a2a/plugin.go:107` | `s.Settings().RegisterDef(sdk.ConfigDef{` |
-| [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:105` | `s.Settings().RegisterDef(sdk.ConfigDef{` |
-| [`ai_image`](../examples/index.md#ai_image) | `example/ai_image/plugin.go:114` | `s.Settings().RegisterDef(sdk.ConfigDef{` |
-| [`bili`](../examples/index.md#bili) | `example/bili/plugin.go:67` | `s.Settings().RegisterDef(sdk.ConfigDef{` |
+| [`feiyu_voice`](../examples/index.md#feiyu_voice) | `example/feiyu_voice/plugin.go:65` | `s.Settings().RegisterDef(sdk.ConfigDef{Key: "base_url", Default: "http://127.0.0.1:8765", Type: "string",` |
+| [`rtvoice`](../examples/index.md#rtvoice) | `example/rtvoice/plugin.go:256` | `s.Settings().RegisterDef(sdk.ConfigDef{` |
 
 <small>`plugin.go:685`</small>
 

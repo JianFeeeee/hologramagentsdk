@@ -187,12 +187,6 @@ func (s *PluginSDK) SetRawFilesAPI(v RawFilesAPI)
 
 SetRawFilesAPI 由内核装配时注入（插件不调用它）。
 
-**示例插件里的真实用法**
-
-| 插件 | 位置 | 代码 |
-|---|---|---|
-| [`commondev`](../examples/index.md#commondev) | `example/commondev/full_pipeline_test.go:168` | `p.sdk.SetRawFilesAPI(&testRawFiles{root: filepath.Join(root, "rawfile")})` |
-
 <small>`plugin.go:948`</small>
 
 ### `PluginSDK.SetSecretsAPI`
@@ -212,12 +206,6 @@ func (s *PluginSDK) SetSecurityAPI(v SecurityAPI)
 ```
 
 SetSecurityAPI 由内核注入策略声明面的实现（插件不调用）。
-
-**示例插件里的真实用法**
-
-| 插件 | 位置 | 代码 |
-|---|---|---|
-| [`qq`](../examples/index.md#qq) | `example/qq/security_profile_test.go:53` | `s.SetSecurityAPI(cap)` |
 
 <small>`plugin.go:962`</small>
 

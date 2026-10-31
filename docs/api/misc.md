@@ -212,13 +212,6 @@ InjectInputSync 注入输入事件并同步等待 agent 回复，返回回复文
 InjectInputSyncOpts(source, channel, text string, opts InjectOptions) string
 ```
 
-**示例插件里的真实用法**
-
-| 插件 | 位置 | 代码 |
-|---|---|---|
-| [`a2a`](../examples/index.md#a2a) | `example/a2a/plugin.go:471` | `reply = p.sdk.InjectInputSyncOpts(p.name, p.name,` |
-| [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:313` | `reply = p.sdk.InjectInputSyncOpts(p.name, p.name,` |
-
 <small>`plugin.go:487`</small>
 
 ### `IOInjector.InjectInterruptMedia`
@@ -255,10 +248,7 @@ InjectInterruptTextOpts(source, channel, text string, opts InjectOptions)
 
 | 插件 | 位置 | 代码 |
 |---|---|---|
-| [`browser`](../examples/index.md#browser) | `example/browser/plugin.go:1426` | `p.sdk.InjectInterruptTextOpts(p.name, p.name,` |
-| [`calendar`](../examples/index.md#calendar) | `example/calendar/plugin.go:528` | `p.sdk.InjectInterruptTextOpts("calendar", "calendar", msg, sdk.InjectOptions{NoMemory: true})` |
-| [`memo`](../examples/index.md#memo) | `example/memo/plugin.go:299` | `p.sdk.InjectInterruptTextOpts(p.name, p.name,` |
-| [`qq`](../examples/index.md#qq) | `example/qq/plugin.go:2078` | `p.sdk.InjectInterruptTextOpts(p.name, p.name, text, sdk.InjectOptions{` |
+| [`rtvoice`](../examples/index.md#rtvoice) | `example/rtvoice/plugin.go:268` | `s.InjectInterruptTextOpts(p.name, p.name+"-in", text,` |
 
 <small>`plugin.go:486`</small>
 
@@ -268,12 +258,6 @@ InjectInterruptTextOpts(source, channel, text string, opts InjectOptions)
 InjectText(source, channel, text string)
 ```
 
-**示例插件里的真实用法**
-
-| 插件 | 位置 | 代码 |
-|---|---|---|
-| [`commondev`](../examples/index.md#commondev) | `example/commondev/sidecar.go:673` | `p.sdk.InjectText("commondev", inCh, text)` |
-
 <small>`plugin.go:469`</small>
 
 ### `IOInjector.InjectTextNoMemory`
@@ -281,12 +265,6 @@ InjectText(source, channel, text string)
 ```go
 InjectTextNoMemory(source, channel, text string)
 ```
-
-**示例插件里的真实用法**
-
-| 插件 | 位置 | 代码 |
-|---|---|---|
-| [`browser`](../examples/index.md#browser) | `example/browser/plugin.go:1142` | `p.sdk.InjectTextNoMemory(p.name, p.name, fmt.Sprintf("[浏览器 %s 已导航到 %s]", id, rawURL))` |
 
 <small>`plugin.go:470`</small>
 
@@ -1269,15 +1247,6 @@ func (e *ToolError) Error() string
 
 Error 实现 error，便于工具同时走 (ToolError, error) 通道。
 
-**示例插件里的真实用法**
-
-| 插件 | 位置 | 代码 |
-|---|---|---|
-| [`a2a`](../examples/index.md#a2a) | `example/a2a/plugin.go:380` | `writeRPCError(w, "", -32700, "读取请求体失败: "+err.Error())` |
-| [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:224` | `http.Error(w, "", http.StatusMethodNotAllowed)` |
-| [`ai_image`](../examples/index.md#ai_image) | `example/ai_image/plugin.go:259` | `return map[string]interface{}{"isError": true, "content": "Request failed: " + err.Error()}, nil` |
-| [`bilibili`](../examples/index.md#bilibili) | `example/bilibili/store_test.go:118` | `if !strings.Contains(err.Error(), "损坏") {` |
-
 <small>`plugin.go:393`</small>
 
 ### `FacilityAgent`
@@ -1683,12 +1652,6 @@ RawFiles 返回随包分发资源的读取接口（内核装配时注入）。
 未注入时返回 nil —— 那是旧内核或测试环境。插件应判空后**响亮失败**，
 而不是拿一个空实现继续（会表现为"资源读出来是空的"，与"资源不存在"难区分）。
 
-**示例插件里的真实用法**
-
-| 插件 | 位置 | 代码 |
-|---|---|---|
-| [`commondev`](../examples/index.md#commondev) | `example/commondev/sidecar.go:573` | `return p.sdk.RawFiles()` |
-
 <small>`plugin.go:941`</small>
 
 ### `PluginSDK.RegisterProxy`
@@ -1820,12 +1783,6 @@ Secrets returns the kernel secret vault API.
 ★ 内核未启用安全模块时它**不是 nil**，而是 Available() 返回 false 的
 实现 —— 这样插件可以统一地"先问 Available 再决定"，不必到处判空。
 
-**示例插件里的真实用法**
-
-| 插件 | 位置 | 代码 |
-|---|---|---|
-| [`commondev`](../examples/index.md#commondev) | `example/commondev/encstore.go:397` | `return p.sdk.Secrets()` |
-
 <small>`plugin.go:727`</small>
 
 ### `PluginSDK.Security`
@@ -1838,12 +1795,6 @@ Security 返回**策略声明面**（插件声明安全档位；判定由内核�
 
 ★ 只声明、不判定：本接口没有 CheckTool 之类的方法 —— 那属于内核。
 插件自判会让策略分散到每个插件、且插件崩溃即策略失效。
-
-**示例插件里的真实用法**
-
-| 插件 | 位置 | 代码 |
-|---|---|---|
-| [`qq`](../examples/index.md#qq) | `example/qq/plugin.go:2002` | `sec := s.Security()` |
 
 <small>`plugin.go:737`</small>
 

@@ -53,7 +53,7 @@ import (
 // 造一个**最小 SDK 镜像**（临时目录）：
 //
 //	<tmp>/package/build-examples.sh   ← 复制真实脚本
-//	<tmp>/example/memo/               ← symlink 到真实示例（含 plg.json targets）
+//	<tmp>/example/rtvoice/            ← symlink 到真实示例（含 plg.json targets）
 //	<tmp>/build/hmapdev_<host>        ← 宿主工具链（脚本按此名查找）
 //
 // 然后以 arm64 为目标跑脚本，读**它产出的**文件里的 ELF machine。
@@ -77,7 +77,7 @@ func TestPackagingScriptPicksTargetArchArtifact(t *testing.T) {
 	if _, err := os.Stat(scriptSrc); err != nil {
 		t.Skipf("找不到打包脚本: %v", err)
 	}
-	exampleSrc := filepath.Join(sdkRoot, "example", "memo")
+	exampleSrc := filepath.Join(sdkRoot, "example", "rtvoice")
 	plg, err := os.ReadFile(filepath.Join(exampleSrc, "plg.json"))
 	if err != nil || !strings.Contains(string(plg), `"targets"`) {
 		t.Skip("示例未声明 targets，复现不了「追加」前提")
@@ -90,10 +90,10 @@ func TestPackagingScriptPicksTargetArchArtifact(t *testing.T) {
 	mustMkdir(t, filepath.Join(mirror, "build"))
 	copyFile(t, scriptSrc, filepath.Join(mirror, "package", "build-examples.sh"))
 	// ★ symlink 目标必须是**绝对路径**：脚本与插件内部有 `cd`，
-	// 相对目标会相对**链接所在目录**解析（实测 `../../example/memo` 从
+	// 相对目标会相对**链接所在目录**解析（实测 `../../example/rtvoice` 从
 	// mirror/example/ 解析成了 mirror 的父目录 ⇒ 循环匹配不到任何插件，
 	// 表现为「成功 0 / 失败 0」而不报错）。
-	if err := os.Symlink(absOf(t, exampleSrc), filepath.Join(mirror, "example", "memo")); err != nil {
+	if err := os.Symlink(absOf(t, exampleSrc), filepath.Join(mirror, "example", "rtvoice")); err != nil {
 		t.Fatalf("symlink: %v", err)
 	}
 	// 脚本按 hmapdev_<host> 名查找工具链

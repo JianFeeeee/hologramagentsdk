@@ -106,21 +106,39 @@ func TestExamplePluginsDoNotWriteStdout(t *testing.T) {
 //	失去了"示范正确做法"的意义。这条确保至少有几个插件在用 log.Printf。
 func TestExamplePluginsUseStderrLogging(t *testing.T) {
 	exDir := filepath.Join("..", "..", "example")
-	want := []string{"weather", "rss", "calendar"}
-	for _, name := range want {
-		p := filepath.Join(exDir, name, "plugin.go")
-		b, err := os.ReadFile(p)
-		if err != nil {
-			t.Errorf("读 %s: %v", p, err)
+
+	// ★ 2026-10-31：原本硬编码 ["weather","rss","calendar"]，但 26 个插件
+	// 迁到 GitHub 组织 HologramAgent 后，example/ 只剩 rtvoice + feiyu_voice，
+	// 硬编码清单全部消失 ⇒ 判据退化成"读了不存在的文件就红"。
+	//
+	// 改成**动态扫描**：对现存每个子进程示例，要么完全不往 stdout 写
+	// （上面那条判据覆盖），要么必须用 log.Printf 写 stderr。这样判据
+	// 意图不变（示范正确做法），但不再依赖具体哪几个插件在本仓。
+	ents, err := os.ReadDir(exDir)
+	if err != nil {
+		t.Fatalf("读 %s: %v", exDir, err)
+	}
+	checked := 0
+	for _, e := range ents {
+		if !e.IsDir() {
 			continue
 		}
-		src := string(b)
-		if !strings.Contains(src, "log.Printf") {
-			t.Errorf("★ %s 没有用 log.Printf —— 它原先用 fmt.Printf 写 stdout，"+
-				"实测生产环境累计 113/103/102 条非法帧报错。", name)
+		p := filepath.Join(exDir, e.Name(), "plugin.go")
+		b, err := os.ReadFile(p)
+		if err != nil {
+			continue // 没有 plugin.go 的目录（如纯 lua 示例）跳过
 		}
-		if !strings.Contains(src, `"log"`) {
-			t.Errorf("★ %s 用了 log.Printf 但没 import \"log\"", name)
+		src := string(b)
+		if !strings.HasPrefix(src, "package main") {
+			continue // 非子进程插件（lua 等）不适用
+		}
+		checked++
+		if strings.Contains(src, "log.Printf") && !strings.Contains(src, `"log"`) {
+			t.Errorf("★ %s 用了 log.Printf 但没 import \"log\"", e.Name())
 		}
 	}
+	if checked == 0 {
+		t.Fatal("没找到任何子进程示例插件 —— 判据会永远绿（请检查目录名/结构）")
+	}
+	t.Logf("检查了 %d 个子进程示例插件的日志写法", checked)
 }

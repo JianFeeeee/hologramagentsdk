@@ -539,9 +539,15 @@ func renderExamples(usages map[string][]Usage) string {
 	var b strings.Builder
 	b.WriteString(genBanner)
 	b.WriteString("# 示例插件\n\n")
-	b.WriteString("SDK 仓 `example/` 下有多个**真实可编译**的示例插件，" +
-		"覆盖工具注册、通道、记忆读写、LLM 调用、生命周期等常见形态。\n\n")
-	b.WriteString("每个示例都能用 `hmapdev build` 打成 `.hmap` 装进内核直接跑。\n\n")
+	// ★ 2026-10-31：26 个插件已迁到 GitHub 组织 HologramAgent（一插件一仓），
+	// 本仓 example/ 只剩未迁移的少数。旧文案写"下有多个示例，覆盖工具注册、
+	// 通道、记忆读写、LLM 调用、生命周期"—— 在只剩两个示例时是**误导**。
+	b.WriteString("SDK 仓 `example/` 里保留的是**未迁移到组织仓**的示例插件，" +
+		"都能用 `hmapdev build` 打成 `.hmap` 装进内核直接跑。\n\n")
+	b.WriteString("★ **其余 26 个插件已迁到 GitHub 组织** " +
+		"[`HologramAgent`](https://github.com/HologramAgent) —— 一插件一仓，" +
+		"覆盖工具注册、通道、记忆读写、LLM 调用、生命周期等全部常见形态。\n" +
+		"想看完整实现时去那里 clone，不要以为本仓就是全部。\n\n")
 	for _, n := range names {
 		apis := make([]string, 0, len(byPlugin[n]))
 		for a := range byPlugin[n] {

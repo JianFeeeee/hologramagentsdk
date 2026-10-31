@@ -256,12 +256,6 @@ type Knowledge struct { Name string `json:"name"` // Category 是该条目的父
 
 Knowledge represents a knowledge entry.
 
-**示例插件里的真实用法**
-
-| 插件 | 位置 | 代码 |
-|---|---|---|
-| [`recoverydiag`](../examples/index.md#recoverydiag) | `example/recoverydiag/plugin.go:978` | `if p.sdk != nil && p.sdk.Knowledge() != nil {` |
-
 <small>`knowledge.go:11`</small>
 
 ### `PluginSDK.Knowledge`
@@ -271,12 +265,6 @@ func (s *PluginSDK) Knowledge() KnowledgeAPI
 ```
 
 Knowledge returns the knowledge store API (may be nil if not available).
-
-**示例插件里的真实用法**
-
-| 插件 | 位置 | 代码 |
-|---|---|---|
-| [`recoverydiag`](../examples/index.md#recoverydiag) | `example/recoverydiag/plugin.go:978` | `if p.sdk != nil && p.sdk.Knowledge() != nil {` |
 
 <small>`plugin.go:709`</small>
 

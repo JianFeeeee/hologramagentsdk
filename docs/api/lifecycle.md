@@ -160,15 +160,6 @@ RegisterOnRemoveHandler 注册插件被删除（卸载）时的清理回调。
 适用于清理外部资源、删除配置表、下线状态等删除后处理。
 可注册多个；执行后清空（一次删除只执行一次）。
 
-**示例插件里的真实用法**
-
-| 插件 | 位置 | 代码 |
-|---|---|---|
-| [`bilibili`](../examples/index.md#bilibili) | `example/bilibili/plugin.go:155` | `s.RegisterOnRemoveHandler(p.cleanupData)` |
-| [`calendar`](../examples/index.md#calendar) | `example/calendar/plugin.go:297` | `s.RegisterOnRemoveHandler(p.cleanupData)` |
-| [`memo`](../examples/index.md#memo) | `example/memo/plugin.go:69` | `s.RegisterOnRemoveHandler(p.cleanupData)` |
-| [`rss`](../examples/index.md#rss) | `example/rss/plugin.go:128` | `s.RegisterOnRemoveHandler(p.cleanupData)` |
-
 <small>`plugin.go:1211`</small>
 
 ### `PluginSDK.RegisterPluginAPI`
@@ -191,13 +182,6 @@ RegisterStopHandler 注册插件停止阶段的清理回调。
 注册的 handler 会在插件 Stop() 之前按"后注册先执行"的顺序调用，
 适用于释放资源、落盘状态、关闭子进程等停止时清理操作。
 可注册多个；执行后清空（进程停止前只执行一次）。
-
-**示例插件里的真实用法**
-
-| 插件 | 位置 | 代码 |
-|---|---|---|
-| [`calendar`](../examples/index.md#calendar) | `example/calendar/plugin.go:295` | `s.RegisterStopHandler(p.saveEvents)` |
-| [`deepsearch`](../examples/index.md#deepsearch) | `example/deepsearch/plugin.go:695` | `s.RegisterStopHandler(func() { p.shutdownSearxng() })` |
 
 <small>`plugin.go:1186`</small>
 
@@ -240,10 +224,7 @@ SetAutoRestart 设置插件崩溃后内核是否自动重启它。
 
 | 插件 | 位置 | 代码 |
 |---|---|---|
-| [`a2a`](../examples/index.md#a2a) | `example/a2a/plugin.go:63` | `s.SetAutoRestart(true)` |
-| [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:63` | `s.SetAutoRestart(true)` |
-| [`ai_image`](../examples/index.md#ai_image) | `example/ai_image/plugin.go:110` | `s.SetAutoRestart(true)` |
-| [`bili`](../examples/index.md#bili) | `example/bili/plugin.go:63` | `s.SetAutoRestart(true)` |
+| [`feiyu_voice`](../examples/index.md#feiyu_voice) | `example/feiyu_voice/plugin.go:63` | `s.SetAutoRestart(true)` |
 
 <small>`plugin.go:1169`</small>
 

@@ -76,13 +76,6 @@ InjectInputSync 注入输入事件并同步等待 agent 回复，返回回复文
 InjectInputSyncOpts(source, channel, text string, opts InjectOptions) string
 ```
 
-**示例插件里的真实用法**
-
-| 插件 | 位置 | 代码 |
-|---|---|---|
-| [`a2a`](../examples/index.md#a2a) | `example/a2a/plugin.go:471` | `reply = p.sdk.InjectInputSyncOpts(p.name, p.name,` |
-| [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:313` | `reply = p.sdk.InjectInputSyncOpts(p.name, p.name,` |
-
 <small>`plugin.go:487`</small>
 
 ### `IOInjector.InjectInterruptMedia`
@@ -119,10 +112,7 @@ InjectInterruptTextOpts(source, channel, text string, opts InjectOptions)
 
 | 插件 | 位置 | 代码 |
 |---|---|---|
-| [`browser`](../examples/index.md#browser) | `example/browser/plugin.go:1426` | `p.sdk.InjectInterruptTextOpts(p.name, p.name,` |
-| [`calendar`](../examples/index.md#calendar) | `example/calendar/plugin.go:528` | `p.sdk.InjectInterruptTextOpts("calendar", "calendar", msg, sdk.InjectOptions{NoMemory: true})` |
-| [`memo`](../examples/index.md#memo) | `example/memo/plugin.go:299` | `p.sdk.InjectInterruptTextOpts(p.name, p.name,` |
-| [`qq`](../examples/index.md#qq) | `example/qq/plugin.go:2078` | `p.sdk.InjectInterruptTextOpts(p.name, p.name, text, sdk.InjectOptions{` |
+| [`rtvoice`](../examples/index.md#rtvoice) | `example/rtvoice/plugin.go:268` | `s.InjectInterruptTextOpts(p.name, p.name+"-in", text,` |
 
 <small>`plugin.go:486`</small>
 
@@ -132,12 +122,6 @@ InjectInterruptTextOpts(source, channel, text string, opts InjectOptions)
 InjectText(source, channel, text string)
 ```
 
-**示例插件里的真实用法**
-
-| 插件 | 位置 | 代码 |
-|---|---|---|
-| [`commondev`](../examples/index.md#commondev) | `example/commondev/sidecar.go:673` | `p.sdk.InjectText("commondev", inCh, text)` |
-
 <small>`plugin.go:469`</small>
 
 ### `IOInjector.InjectTextNoMemory`
@@ -145,12 +129,6 @@ InjectText(source, channel, text string)
 ```go
 InjectTextNoMemory(source, channel, text string)
 ```
-
-**示例插件里的真实用法**
-
-| 插件 | 位置 | 代码 |
-|---|---|---|
-| [`browser`](../examples/index.md#browser) | `example/browser/plugin.go:1142` | `p.sdk.InjectTextNoMemory(p.name, p.name, fmt.Sprintf("[浏览器 %s 已导航到 %s]", id, rawURL))` |
 
 <small>`plugin.go:470`</small>
 
@@ -340,13 +318,6 @@ func (s *PluginSDK) InjectInputSyncOpts(source, channel, text string, opts Injec
 
 InjectInputSyncOpts 注入输入并同步等待回复，同时在这次注入上声明记忆/裁剪行为。
 
-**示例插件里的真实用法**
-
-| 插件 | 位置 | 代码 |
-|---|---|---|
-| [`a2a`](../examples/index.md#a2a) | `example/a2a/plugin.go:471` | `reply = p.sdk.InjectInputSyncOpts(p.name, p.name,` |
-| [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:313` | `reply = p.sdk.InjectInputSyncOpts(p.name, p.name,` |
-
 <small>`plugin.go:1116`</small>
 
 ### `PluginSDK.InjectInterruptMedia`
@@ -396,10 +367,7 @@ InjectInterruptTextOpts 注入可抢占当前处理的中断文本。
 
 | 插件 | 位置 | 代码 |
 |---|---|---|
-| [`browser`](../examples/index.md#browser) | `example/browser/plugin.go:1426` | `p.sdk.InjectInterruptTextOpts(p.name, p.name,` |
-| [`calendar`](../examples/index.md#calendar) | `example/calendar/plugin.go:528` | `p.sdk.InjectInterruptTextOpts("calendar", "calendar", msg, sdk.InjectOptions{NoMemory: true})` |
-| [`memo`](../examples/index.md#memo) | `example/memo/plugin.go:299` | `p.sdk.InjectInterruptTextOpts(p.name, p.name,` |
-| [`qq`](../examples/index.md#qq) | `example/qq/plugin.go:2078` | `p.sdk.InjectInterruptTextOpts(p.name, p.name, text, sdk.InjectOptions{` |
+| [`rtvoice`](../examples/index.md#rtvoice) | `example/rtvoice/plugin.go:268` | `s.InjectInterruptTextOpts(p.name, p.name+"-in", text,` |
 
 <small>`plugin.go:1109`</small>
 
@@ -442,12 +410,6 @@ func (s *PluginSDK) InjectText(source, channel, text string)
 InjectText injects a text message into the agent pipeline.
 等价于 InjectTextOpts(..., InjectOptions{})：记入记忆、不裁剪。
 
-**示例插件里的真实用法**
-
-| 插件 | 位置 | 代码 |
-|---|---|---|
-| [`commondev`](../examples/index.md#commondev) | `example/commondev/sidecar.go:673` | `p.sdk.InjectText("commondev", inCh, text)` |
-
 <small>`plugin.go:1064`</small>
 
 ### `PluginSDK.InjectTextNoMemory`
@@ -458,12 +420,6 @@ func (s *PluginSDK) InjectTextNoMemory(source, channel, text string)
 
 InjectTextNoMemory injects a text message without generating memory.
 等价于 InjectTextOpts(..., InjectOptions{NoMemory: true})。
-
-**示例插件里的真实用法**
-
-| 插件 | 位置 | 代码 |
-|---|---|---|
-| [`browser`](../examples/index.md#browser) | `example/browser/plugin.go:1142` | `p.sdk.InjectTextNoMemory(p.name, p.name, fmt.Sprintf("[浏览器 %s 已导航到 %s]", id, rawURL))` |
 
 <small>`plugin.go:1070`</small>
 
@@ -585,10 +541,7 @@ def.Cleaner:  计算层对输入文本清洗后（不改原文）再向量化/�
 
 | 插件 | 位置 | 代码 |
 |---|---|---|
-| [`a2a`](../examples/index.md#a2a) | `example/a2a/plugin.go:79` | `_ = s.RegisterInputChannel(p.name, sdk.ChannelDef{` |
-| [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:76` | `_ = s.RegisterInputChannel(p.name, sdk.ChannelDef{` |
-| [`browser`](../examples/index.md#browser) | `example/browser/plugin.go:227` | `_ = s.RegisterInputChannel(p.name, sdk.ChannelDef{})` |
-| [`calendar`](../examples/index.md#calendar) | `example/calendar/plugin.go:282` | `_ = s.RegisterInputChannel("calendar", sdk.ChannelDef{NoMemory: true})` |
+| [`rtvoice`](../examples/index.md#rtvoice) | `example/rtvoice/plugin.go:189` | `if err := s.RegisterInputChannel(p.name+"-in", sdk.ChannelDef{` |
 
 <small>`plugin.go:896`</small>
 
@@ -622,10 +575,7 @@ handler: receives args map with keys: payload (string), type (string), meta (str
 
 | 插件 | 位置 | 代码 |
 |---|---|---|
-| [`a2a`](../examples/index.md#a2a) | `example/a2a/plugin.go:96` | `if err := s.RegisterOutputChannel(p.name, 1, "A2A Agent 互联通道（外部 agent 查询的回复由此返回）", sdk.ChannelDef{}, func(args…` |
-| [`acp`](../examples/index.md#acp) | `example/acp/plugin.go:85` | `s.RegisterOutputChannel(p.name, 1, "ACP Agent 互联通道（外部 agent 会话的回复由此返回）", sdk.ChannelDef{}, func(args map[strin…` |
-| [`commondev`](../examples/index.md#commondev) | `example/commondev/plugin.go:1291` | `if err := p.sdk.RegisterOutputChannel(outCh, sdk.CapText,` |
-| [`qq`](../examples/index.md#qq) | `example/qq/plugin.go:591` | `s.RegisterOutputChannel("qq", sdk.CapText\|sdk.CapFile\|sdk.CapImage\|sdk.CapAudio,` |
+| [`rtvoice`](../examples/index.md#rtvoice) | `example/rtvoice/plugin.go:203` | `if err := s.RegisterOutputChannel(p.name, 1, "实时通话输出（文本流）",` |
 
 <small>`plugin.go:863`</small>
 
