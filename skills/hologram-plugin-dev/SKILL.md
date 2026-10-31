@@ -265,9 +265,20 @@ git clone --depth 1 https://github.com/HologramAgent/qq /tmp/qq-ref
 ★ **写插件前先翻真实示例**：org 各仓与 `example/` 里的代码是**编译通过**的，
 比文档更可靠。文档与示例冲突时以示例为准。
 
-⚠️ org 各仓的快照是 **2026-10-26** 的迁移版本，之后 SDK 仓 `example/` 里的
-修复**未必已回灌**（实测 `qq` 落后 504 处、`a2a` 落后 9 处）。
-需要最新版时以 SDK 仓 `example/` 的 HEAD 为准，或先在 org 仓确认。
+✅ **同步状态（2026-10-31 核对）**：10 个已迁移仓的 `plugin.go` 与
+SDK 仓 `example/` 的 HEAD **完全一致**。
+
+```bash
+# 自己的核对命令
+git show HEAD:example/qq/plugin.go > /tmp/l.go
+git clone --depth 1 git@github.com:HologramAgent/qq /tmp/o
+diff /tmp/l.go /tmp/o/plugin.go
+```
+
+⚠️ 但注意：**两条线会再次分叉**。org 各仓是独立仓库，SDK 仓 `example/`
+也会继续演进 —— 改了一边记得同步另一边。分叉时的判断原则：
+`example/` 是开发现场（含最新修复），org 仓是发布形态（README/plugin.json
+是为组织仓写的，与开发文档不同，**不要相互覆盖**）。
 
 ## 7. 边界（别越界）
 
