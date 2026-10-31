@@ -101,7 +101,7 @@ p.sdk.InjectInterruptTextOpts("qq", "qq", text, sdk.InjectOptions{
 ## 场面记忆不改变什么
 
 - **不改记忆本体**：场景是记忆的**附加索引**，删掉场景不删记忆。
-- **不让模型负责**：`memory_commit` 的 `scene` 留空即可，内核会挂到本轮
+- **不让模型负责**：`stablemem_commit` 的 `scene` 留空即可，内核会挂到本轮
   解析出的场面上。留空是安全的一侧——猜错的场面会把无关记忆钉死。
 - **不影响同步通道**：`webui` / `cli` / 终端走 `ResponseCh`，不经
   `output_send__*`，与场面无关。

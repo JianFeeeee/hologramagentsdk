@@ -29,7 +29,8 @@
 
 -   :material-code-braces: **示例插件**
 
-    `example/` 下有多个真实可编译的插件，覆盖常见形态。
+    本仓 `example/` 只留未迁移的示例；其余 26 个插件在
+    [GitHub 组织](https://github.com/HologramAgent) 下，一插件一仓。
 
     [:octicons-arrow-right-24: 示例总览](examples/index.md)
 
