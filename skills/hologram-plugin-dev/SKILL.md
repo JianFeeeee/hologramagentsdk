@@ -48,7 +48,7 @@ hmapdev sdk list       # 本机已装的所有 SDK 版本
 ```
 
 **核心仓在** `/home/program/TrueAgent`（Go module `github.com/JianFeeeee/HologramAgent`）。
-**SDK 仓在** `third_party/homeagent-sdk`（独立 git 仓，独立版本号）。
+**SDK 仓在** `third_party/hologramagentsdk`（独立 git 仓，独立版本号）。
 
 ## 1. 工具链：hmapdev
 
@@ -86,7 +86,7 @@ hmapdev sdk install --from <本地源码目录>   # 2) 直接用本地 SDK 源�
 
 ⇒ **动手前先 `hmapdev sdk current`**，别照着旧文档写。
 ⇒ 核心仓有**新能力但 SDK 未跟上**时（本机发生过），用 `--from` 指向本地源码：
-   `hmapdev sdk install --from /home/program/TrueAgent/third_party/homeagent-sdk`
+   `hmapdev sdk install --from /home/program/TrueAgent/third_party/hologramagentsdk`
 
 ## 3. 开发流程
 
@@ -229,9 +229,9 @@ curl -s -H "X-API-Key: $K" http://127.0.0.1:8080/api/v1/status | grep -oE '"comm
 
 | 内容 | 路径 |
 | --- | --- |
-| SDK 源码 | `third_party/homeagent-sdk/sdk/` |
+| SDK 源码 | `third_party/hologramagentsdk/sdk/` |
 | **插件仓库（26 个，一插件一仓）** | `https://github.com/HologramAgent/<name>` |
-| SDK 仓内置示例 | `third_party/homeagent-sdk/example/`（`rtvoice` / `luademo` / `commondev` 等） |
+| SDK 仓内置示例 | `third_party/hologramagentsdk/example/`（`rtvoice` / `luademo` / `commondev` 等） |
 | 文档站 | `https://sdk.hologramagent.jianfgit.xyz`（本地源 `docs/`，构建 `tools/apidoc/build.sh`） |
 | 能力边界（哪些 API 外部可用） | `docs/guide/capability-boundary.md` |
 | 并发声明 | `docs/guide/parallel-tool-declaration.md` |

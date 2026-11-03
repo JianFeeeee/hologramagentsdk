@@ -188,7 +188,7 @@
 
 ```bash
 # 1) 用**当前**hmapdev 把本机源码装成 store（--from 在旧版也支持）
-hmapdev sdk install --from <SDK 源码目录>     # 例：third_party/homeagent-sdk
+hmapdev sdk install --from <SDK 源码目录>     # 例：third_party/hologramagentsdk
 
 # 2) 重编 hmapdev 二进制（模板 embed 进去了，必须重编）
 cd <SDK 源码>/tools/hmapdev
@@ -221,7 +221,7 @@ diff <源码>/tools/hmapdev/templates/proc_main.go.tmpl \
 2. `TestBridgeDispatchesEveryPluginMethod` —— 内核 Handle 分派
 3. `TestHmapdevTemplateImplementsAllPluginMgrMethods` —— **hmapdev 模板**
 
-第 3 条直接读 `third_party/homeagent-sdk/tools/hmapdev/templates/proc_main.go.tmpl`，
+第 3 条直接读 `third_party/hologramagentsdk/tools/hmapdev/templates/proc_main.go.tmpl`，
 所以**源码模板**始终被守；store 里的副本靠上面的 `diff` 验证。
 
 !!! tip "什么时候必须重编"

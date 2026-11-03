@@ -22,7 +22,7 @@ SDK_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # 默认产物落到内核仓的 dist/plugins。判定方式：从 SDK 目录向上找“含 internal/ 与
 # go.mod”的目录（即内核仓根），找不到就用 SDK 仓自己的 dist/plugins。
-# 为何不写死 ../../：SDK 仓在主仓里是 third_party/homeagent-sdk，但也可以被单独
+# 为何不写死 ../../：SDK 仓在主仓里是 third_party/hologramagentsdk，但也可以被单独
 # clone 出来，写死相对路径会把产物丢到仓外或 third_party/dist。
 default_out() {
   local d="$SDK_DIR"

@@ -9,7 +9,7 @@
 #                                    HologramAgent（一插件一仓），本仓 example/
 #                                    下已无该目录 ⇒ 此副本自动跳过。
 #   - <core>/internal/lua/sdk/sdk.lua 内核内嵌副本（本仓被 vendored 到
-#     <core>/third_party/homeagent-sdk 时自动识别；独立 clone 时跳过）
+#     <core>/third_party/hologramagentsdk 时自动识别；独立 clone 时跳过）
 #
 # 为什么要有它：三份 sdk.lua 曾各自漂移，出现「mock 有、内核没有」的静默失配。
 # 改 mock 只改事实源，然后跑这个脚本；内核仓另有契约测试比对。
@@ -40,7 +40,7 @@ else
   echo "  skip -> $LUADEMO_COPY（luademo 已迁出本仓，见 GitHub 组织 HologramAgent）"
 fi
 
-# 被内核仓 vendored 时（本仓位于 <core>/third_party/homeagent-sdk）同步内核副本。
+# 被内核仓 vendored 时（本仓位于 <core>/third_party/hologramagentsdk）同步内核副本。
 CORE_COPY="$ROOT/../../internal/lua/sdk/sdk.lua"
 if [ -d "$ROOT/../../internal" ]; then
   copy "$(cd "$(dirname "$CORE_COPY")" && pwd)/sdk.lua"
