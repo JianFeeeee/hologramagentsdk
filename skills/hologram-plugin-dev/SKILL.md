@@ -392,6 +392,77 @@ s.RegisterOutputChannel("rtvoice", 1, "实时通话输出（文本流）",
 
 参考实现：`example/rtvoice/`（SDK 仓内置，未迁移）。
 
+### 8.2 实时通道（`ChannelDef.Realtime`）
+
+用于**通话**场景：输入不断覆盖（新值作废旧值），输出连续流式。
+
+```go
+s.RegisterInputChannel("rtvoice-in", sdk.ChannelDef{
+    Realtime: true,
+    NoMemory: true,   // 通话每句都进记忆会把图谱灌满噪声
+})
+s.RegisterOutputChannel("rtvoice", 1, "实时通话输出（文本流）",
+    sdk.ChannelDef{Realtime: true}, handler)
+```
+
+**三条最容易误解的**：
+
+- `outputch(rt)` **只产文本**，不是音频。TTS/播放是插件的事。
+  所以能力位取 `1`（CapText）即可，不需要声明音频。
+- `Realtime` 标记**不是准入门槛**：普通通道同样可以划给 rtchild，只是不能承载 rt 流。
+- input 与 output **必须成对**。只给一半 = 坏掉一半（只给 output ⇒
+  永远听不到用户 ⇒ 自言自语后静默待机，且不报错）。
+
+### 8.2.1 rtchild 的使用契约（内核第三种子 agent）
+
+`rtchild` 是**第三种、独立的子 agent 类型**，只用于实时通话；不要把它当成
+驻留子或一次性 `spawn_child` 的加速版。插件负责采集/播放，内核负责实时对话调度。
+
+创建与管理由主 agent 的 `rt_children` 工具完成：
+
+```text
+rt_children(action="create", inputch="rtvoice-in", outputch="rtvoice")
+rt_children(action="list")
+rt_children(action="stop", id="rtchild-...")
+rt_transcript(id="rtchild-...", offset=0, limit=20)
+```
+
+插件作者必须遵守：
+
+1. **通道成对注册**：inputch 与 outputch 都应声明 `Realtime: true`；两侧名字
+   必须分别是 input channel / output channel，不能把 output 名填到 inputch。
+2. **输出文本交付**：`outputch(rt)` 的 payload 是文本；TTS、字幕、播放由插件完成，
+   内核不做音频合成，也不需要给 output channel 声明音频能力。
+3. **实时输入会打断当前 LLM 轮**：新输入不排队、不重排、不回放旧输入；唯一不打断
+   的窗口是工具执行期。为了让用户知道此时仍在处理，模型在调用工具前应先经 outputch
+   说一句“稍等”。
+4. **空闲不调用模型**：没有输入时 rtchild 使用零 token；通话结束、通道注销或建错
+   通道时，主 agent 应 stop，释放登记和通道占用。
+5. **回收后分段取 transcript**：stop 会把通话交给主 agent；不要把完整 transcript
+   一次性塞回上下文，用 `rt_transcript(offset, limit)` 分段读取，由主 agent 自己选择保留内容。
+
+最小示例（通道声明仍由插件完成，rtchild 不需要 SDK 便捷封装）：
+
+```go
+// Start 阶段：两侧都声明 Realtime；input/output 由插件实际接入音频链。
+s.RegisterInputChannel("rtvoice-in", sdk.ChannelDef{Realtime: true, NoMemory: true})
+s.RegisterOutputChannel("rtvoice", 1, "实时通话输出（文本）",
+    sdk.ChannelDef{Realtime: true}, handleVoiceOutput)
+```
+
+常见症状：
+
+| 现象 | 真因 |
+| --- | --- |
+| create 报“通道不能承载 rt 流” | 该通道没声明 `Realtime`，或只注册了一侧 |
+| create 成功但轮次永远为 0 | inputch 名填错，常把 outputch 名当 inputch |
+| 用户说“它不听我说话” | 工具执行期不可打断，且模型没先输出“稍等” |
+| 期望收到音频却只有文本 | 内核只出文本，TTS/播放是插件职责 |
+| stop 后拿不到原文 | 用 `rt_transcript` 分段读取，不要期待整段自动进入上下文 |
+
+参考实现/内核详细规则见主仓的 `kernel-rtchild` skill；外部插件只依赖
+`ChannelDef.Realtime`，不要新增 SDK rt 专用便捷方法。
+
 ### 8.3 场合策略（`InjectOptions.ScenePolicy`）
 
 声明这次注入**是否参与场面识别**：
