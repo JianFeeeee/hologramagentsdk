@@ -82,6 +82,19 @@ func cmdSDK(args []string) {
 		sdkHelp()
 		return
 	}
+	// ★ 任何位置出现 -h/--help 都直接打帮助，不要走后面的"当作版本号下载"。
+	//
+	// 曾经的缺陷（2026-11-04 实测）：`hmapdev sdk install --help` 会把 `--help`
+	// 当成版本号，去下载 `.../archive/--help/...`，网络超时后回退 git clone，
+	// 最后报 "Remote branch --help not found" —— 用户看到的是网络/仓库错误，
+	// 而真实原因只是"你想看帮助"。这类"参数被误当成值"的缺陷排查成本很高，
+	// 因为错误信息指向了完全无关的地方。
+	for _, a := range args {
+		if a == "-h" || a == "--help" || a == "help" {
+			sdkHelp()
+			return
+		}
+	}
 	// install --from <本地目录> [version]：用本地 SDK 源码装一个版本并激活。
 	if args[0] == "install" {
 		from := ""
