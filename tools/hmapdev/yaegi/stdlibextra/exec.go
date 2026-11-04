@@ -1,18 +1,21 @@
-// os/exec 包的补丁符号（最小集）。
+// os/exec 包的补丁符号。
+//
+// # 为什么需要
+//
+// yaegi v0.16.1 的 stdlib.Symbols 里**没有 os/exec**，任何调用外部命令的
+// 插件（TTS/ffmpeg/pactl 这类很常见）在 debug 时报
+//
+//	eval xxx.go: import "os/exec" error: unable to find source related to: "os/exec"
+//
+// build 走真实 Go 工具链不受影响，所以只有 debug 暴露，看起来像插件写错了。
 //
 // # 为什么只导出函数，不导出类型
 //
-// yaegi v0.16.1 在反射 `exec.Cmd` 这类复合类型时会 **nil 解引用直接 panic**
-// （实测：interp.ptrOf → type.go:235）。原因是 Cmd 含 func 字段、
-// chan、平台相关结构，yaegi 的类型还原做不了。
+// 插件里 `*exec.Cmd` 作为**结构体字段**时，光注册符号是不够的：yaegi 需要
+// 完整的类型定义，而 os/exec 源码依赖 internal/* 等解释器不支持的包。
+// 那种情况由 interp.go 的 execStubSource（源码级桩）处理，不走这里。
 //
-// 但**函数指针**没问题：`exec.Command` 返回值在解释器里当作不透明值传递，
-// 只要调用方能接着调 `.Output()` / `.Run()`，yaegi 就能通过反射执行到
-// 真实方法 —— 这部分走的不是类型还原，是 method 调用。
-//
-// 所以：声明函数、不声明类型，既能满足 `import "os/exec"`，
-// 又不会触发那段崩溃路径。副作用是解释器内不能写 `&exec.Cmd{}` 字面量，
-// 但插件里没有人这么写（都是 exec.Command 构造）。
+// 这里只负责让 `import "os/exec"` 成立、函数调用可解析。
 package stdlibextra
 
 import (

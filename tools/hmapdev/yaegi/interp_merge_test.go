@@ -44,12 +44,16 @@ func B() { fmt.Println("b") }
 	}
 }
 
-// TestMergePackageSourceSkipsSDKImport 钉住：SDK import 必须剔除。
+// TestMergePackageSourceKeepsSDKImport 钉住：SDK import 必须**保留**。
 //
-// SDK 通过 interp.Use(sdkExports) 注入，不是源码。保留 import 会让 yaegi
-// 去 GoPath 找 `…/hologramagentsdk/sdk` 目录，而 SDK 是 module 布局
-// （<root>/sdk，没有 src/ 前缀），永远找不到。
-func TestMergePackageSourceSkipsSDKImport(t *testing.T) {
+// 曾经的方案是剔除 SDK import、把 `sdk.Xxx` 重写成裸名 `Xxx`，靠
+// i.Use(sdkExports) 的裸名导出来解析。实测走不通：
+//   - 函数签名的类型位置会报 `undefined: PluginSDK`
+//   - 插件自己的 `type Plugin struct` 与 SDK 的 Plugin 接口撞名
+//
+// 现在的方案是**保留 import**，由 buildSDKGopathLink 搭出 GOPATH 布局的
+// 软链让 yaegi 能按 import 路径找到 SDK 源码。这样类型解析与真实编译一致。
+func TestMergePackageSourceKeepsSDKImport(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "a.go", `package main
 
@@ -64,8 +68,11 @@ func A(s *sdk.PluginSDK) {}
 	if err != nil {
 		t.Fatalf("合并失败: %v", err)
 	}
-	if strings.Contains(src, "hologramagentsdk/sdk") {
-		t.Fatal("SDK import 未剔除 —— yaegi 会去 GoPath 找源码并失败")
+	if !strings.Contains(src, "hologramagentsdk/sdk") {
+		t.Fatal("SDK import 被剔除了 —— 类型会解析不到")
+	}
+	if !strings.Contains(src, "sdk.PluginSDK") {
+		t.Fatal("sdk. 限定名被改写了 —— 应保持原样")
 	}
 }
 
