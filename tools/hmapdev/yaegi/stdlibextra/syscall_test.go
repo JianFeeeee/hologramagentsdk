@@ -2,15 +2,30 @@ package stdlibextra
 
 import (
 	"reflect"
+	"runtime"
 	"testing"
 )
 
 // TestSyscallSymbolsHasKill 钉住进程组控制所需的最小符号。
+//
+// ★ 只在 Unix 上断言：Windows 没有 Kill/SIG*（那不是遗漏，是平台事实），
+//
+//	详见 syscall.go 文件头。此前这条判据不分平台，导致
+//	`GOOS=windows go test` 会红 —— 而实际上 Windows 就不该有这些符号。
+//
+//	跨平台真正该保证的是：**导出表本身存在**，且 Unix 上含进程组控制符号。
 func TestSyscallSymbolsHasKill(t *testing.T) {
 	ex := SyscallSymbols()
 	pkg, ok := ex["syscall/syscall"]
 	if !ok {
 		t.Fatal("缺少 syscall/syscall 导出表")
+	}
+	if runtime.GOOS == "windows" {
+		// Windows：表可以为空，但不能为 nil（nil 会让 yaegi 解引用 panic）。
+		if pkg == nil {
+			t.Fatal("★ 导出表为 nil —— yaegi 反射时会 panic")
+		}
+		return
 	}
 	for _, name := range []string{"Kill", "SIGTERM", "SIGKILL", "ESRCH"} {
 		if _, ok := pkg[name]; !ok {
