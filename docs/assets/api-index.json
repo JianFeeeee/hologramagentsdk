@@ -69,7 +69,7 @@
     "p": "misc",
     "b": false,
     "f": "plugin.go",
-    "l": 1247
+    "l": 1266
   },
   {
     "n": "AutoRestart",
@@ -80,7 +80,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 1176,
+    "l": 1195,
     "g": [
       "自动重启",
       "崩溃自愈",
@@ -245,7 +245,7 @@
     "p": "tools",
     "b": false,
     "f": "plugin.go",
-    "l": 1235,
+    "l": 1254,
     "g": [
       "多模态内容块",
       "图片块",
@@ -335,6 +335,17 @@
     "l": 72
   },
   {
+    "n": "DeclarePromptSection",
+    "s": "DeclarePromptSection(s PromptSection) error",
+    "d": "DeclarePromptSection 声明或更新一段系统提示词内容。",
+    "k": "method",
+    "r": "SystemPromptAPI",
+    "p": "misc",
+    "b": false,
+    "f": "systemprompt.go",
+    "l": 78
+  },
+  {
     "n": "Decrypt",
     "s": "Decrypt(stored string) ([]byte, error)",
     "d": "Decrypt 解密由 Encrypt 产生的串。",
@@ -394,7 +405,7 @@
     "p": "memory",
     "b": false,
     "f": "plugin.go",
-    "l": 702,
+    "l": 703,
     "g": [
       "记忆",
       "内存",
@@ -435,7 +446,7 @@
     "p": "misc",
     "b": false,
     "f": "proxy.go",
-    "l": 192
+    "l": 209
   },
   {
     "n": "Encrypt",
@@ -738,7 +749,7 @@
     "p": "events",
     "b": true,
     "f": "plugin.go",
-    "l": 750,
+    "l": 769,
     "g": [
       "事件",
       "订阅",
@@ -1114,7 +1125,7 @@
     "p": "misc",
     "b": false,
     "f": "plugin.go",
-    "l": 1242
+    "l": 1261
   },
   {
     "n": "InjectInputMedia",
@@ -1125,7 +1136,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 1086,
+    "l": 1105,
     "g": [
       "注入输入",
       "投喂输入",
@@ -1163,7 +1174,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 1125,
+    "l": 1144,
     "g": [
       "注入输入",
       "投喂输入",
@@ -1201,7 +1212,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 1092,
+    "l": 1111,
     "g": [
       "注入输入",
       "投喂输入",
@@ -1239,7 +1250,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 1132,
+    "l": 1151,
     "g": [
       "注入输入",
       "投喂输入",
@@ -1277,7 +1288,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 1077,
+    "l": 1096,
     "g": [
       "注入输入",
       "投喂输入",
@@ -1302,22 +1313,6 @@
   },
   {
     "n": "InjectInputSyncOpts",
-    "s": "func (s *PluginSDK) InjectInputSyncOpts(source, channel, text string, opts InjectOptions) string",
-    "d": "InjectInputSyncOpts 注入输入并同步等待回复，同时在这次注入上声明记忆/裁剪行为。",
-    "k": "method",
-    "r": "PluginSDK",
-    "p": "channels",
-    "b": false,
-    "f": "plugin.go",
-    "l": 1116,
-    "g": [
-      "注入输入",
-      "投喂输入",
-      "模拟用户输入"
-    ]
-  },
-  {
-    "n": "InjectInputSyncOpts",
     "s": "InjectInputSyncOpts(source, channel, text string, opts InjectOptions) string",
     "d": "",
     "k": "method",
@@ -1333,23 +1328,19 @@
     ]
   },
   {
-    "n": "InjectInterruptMedia",
-    "s": "func (s *PluginSDK) InjectInterruptMedia(source, channel, text string, blocks []ContentBlock)",
-    "d": "InjectInterruptMedia 注入带媒体内容块的中断，可抢占当前 LLM 处理。",
+    "n": "InjectInputSyncOpts",
+    "s": "func (s *PluginSDK) InjectInputSyncOpts(source, channel, text string, opts InjectOptions) string",
+    "d": "InjectInputSyncOpts 注入输入并同步等待回复，同时在这次注入上声明记忆/裁剪行为。",
     "k": "method",
     "r": "PluginSDK",
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 1149,
+    "l": 1135,
     "g": [
-      "中断注入",
-      "插话",
-      "打断",
-      "抢占",
-      "媒体",
-      "图片",
-      "音频"
+      "注入输入",
+      "投喂输入",
+      "模拟用户输入"
     ]
   },
   {
@@ -1362,6 +1353,26 @@
     "b": false,
     "f": "plugin.go",
     "l": 479,
+    "g": [
+      "中断注入",
+      "插话",
+      "打断",
+      "抢占",
+      "媒体",
+      "图片",
+      "音频"
+    ]
+  },
+  {
+    "n": "InjectInterruptMedia",
+    "s": "func (s *PluginSDK) InjectInterruptMedia(source, channel, text string, blocks []ContentBlock)",
+    "d": "InjectInterruptMedia 注入带媒体内容块的中断，可抢占当前 LLM 处理。",
+    "k": "method",
+    "r": "PluginSDK",
+    "p": "channels",
+    "b": false,
+    "f": "plugin.go",
+    "l": 1168,
     "g": [
       "中断注入",
       "插话",
@@ -1401,7 +1412,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 1141,
+    "l": 1160,
     "g": [
       "中断注入",
       "插话",
@@ -1438,7 +1449,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 1058,
+    "l": 1077,
     "g": [
       "中断注入",
       "插话",
@@ -1455,7 +1466,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 1109,
+    "l": 1128,
     "g": [
       "中断注入",
       "插话",
@@ -1505,7 +1516,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 1064,
+    "l": 1083,
     "g": [
       "注入文本",
       "注入消息",
@@ -1539,7 +1550,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 1070,
+    "l": 1089,
     "g": [
       "注入文本",
       "注入消息",
@@ -1577,7 +1588,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 1099,
+    "l": 1118,
     "g": [
       "注入文本",
       "注入消息",
@@ -1708,7 +1719,7 @@
     "p": "misc",
     "b": false,
     "f": "plugin.go",
-    "l": 1038
+    "l": 1057
   },
   {
     "n": "KernelControlAPI",
@@ -1730,7 +1741,7 @@
     "p": "memory",
     "b": false,
     "f": "plugin.go",
-    "l": 709,
+    "l": 710,
     "g": [
       "知识库",
       "知识"
@@ -1782,7 +1793,7 @@
     "p": "llm",
     "b": false,
     "f": "plugin.go",
-    "l": 716
+    "l": 717
   },
   {
     "n": "LLMAPI",
@@ -1797,14 +1808,14 @@
   },
   {
     "n": "List",
-    "s": "List(prefix string) ([]string, error)",
-    "d": "List returns all keys matching the given prefix.",
+    "s": "List() ([]string, error)",
+    "d": "",
     "k": "method",
-    "r": "SettingsAPI",
-    "p": "settings",
+    "r": "KnowledgeAPI",
+    "p": "memory",
     "b": false,
-    "f": "settings.go",
-    "l": 26,
+    "f": "knowledge.go",
+    "l": 7,
     "g": [
       "列出"
     ]
@@ -1839,14 +1850,14 @@
   },
   {
     "n": "List",
-    "s": "List() ([]string, error)",
-    "d": "",
+    "s": "List(prefix string) ([]string, error)",
+    "d": "List returns all keys matching the given prefix.",
     "k": "method",
-    "r": "KnowledgeAPI",
-    "p": "memory",
+    "r": "SettingsAPI",
+    "p": "settings",
     "b": false,
-    "f": "knowledge.go",
-    "l": 7,
+    "f": "settings.go",
+    "l": 26,
     "g": [
       "列出"
     ]
@@ -1969,7 +1980,7 @@
     "p": "memory",
     "b": false,
     "f": "plugin.go",
-    "l": 688,
+    "l": 689,
     "g": [
       "记忆",
       "内存"
@@ -2023,7 +2034,7 @@
     "p": "misc",
     "b": false,
     "f": "proxy.go",
-    "l": 225
+    "l": 242
   },
   {
     "n": "OnDemandNeedsSkill",
@@ -2100,7 +2111,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 1019,
+    "l": 1038,
     "g": [
       "插件管理",
       "重载插件",
@@ -2128,7 +2139,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 681,
+    "l": 682,
     "g": [
       "插件名"
     ]
@@ -2219,6 +2230,17 @@
     ]
   },
   {
+    "n": "PromptSection",
+    "s": "type PromptSection struct { // Section 是段名，必须形如 `\u003cowner\u003e.\u003c名字\u003e`（如 \"skillmgr.skills\"）。 Section string // Owner 是声明者（插件名），必须与 …",
+    "d": "PromptSection 是一段声明的系统提示词内容。",
+    "k": "type",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "systemprompt.go",
+    "l": 91
+  },
+  {
     "n": "ProxyAuthAgent",
     "s": "const ProxyAuthAgent",
     "d": "ProxyAuthAgent 表示由内核统一保护：浏览器走门户会话",
@@ -2227,7 +2249,7 @@
     "p": "misc",
     "b": false,
     "f": "proxy.go",
-    "l": 149
+    "l": 166
   },
   {
     "n": "ProxyAuthAgentLegacy",
@@ -2238,7 +2260,7 @@
     "p": "misc",
     "b": false,
     "f": "proxy.go",
-    "l": 167
+    "l": 184
   },
   {
     "n": "ProxyAuthHomeAgent",
@@ -2249,7 +2271,7 @@
     "p": "misc",
     "b": false,
     "f": "proxy.go",
-    "l": 174
+    "l": 191
   },
   {
     "n": "ProxyAuthNone",
@@ -2260,7 +2282,7 @@
     "p": "misc",
     "b": false,
     "f": "proxy.go",
-    "l": 156
+    "l": 173
   },
   {
     "n": "ProxyDef",
@@ -2271,7 +2293,7 @@
     "p": "misc",
     "b": false,
     "f": "proxy.go",
-    "l": 64
+    "l": 81
   },
   {
     "n": "ProxyRegistrar",
@@ -2282,7 +2304,7 @@
     "p": "misc",
     "b": false,
     "f": "proxy.go",
-    "l": 329
+    "l": 346
   },
   {
     "n": "Publish",
@@ -2356,7 +2378,7 @@
     "p": "misc",
     "b": false,
     "f": "plugin.go",
-    "l": 941
+    "l": 960
   },
   {
     "n": "RawFilesAPI",
@@ -2458,7 +2480,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 896,
+    "l": 915,
     "g": [
       "注册输入通道",
       "收消息",
@@ -2477,7 +2499,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 1211,
+    "l": 1230,
     "g": [
       "卸载回调",
       "删除清理",
@@ -2494,7 +2516,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 863,
+    "l": 882,
     "g": [
       "注册输出通道",
       "发消息",
@@ -2513,7 +2535,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 837,
+    "l": 856,
     "g": [
       "注册插件接口",
       "暴露接口"
@@ -2528,7 +2550,7 @@
     "p": "misc",
     "b": false,
     "f": "proxy.go",
-    "l": 358
+    "l": 383
   },
   {
     "n": "RegisterStage",
@@ -2539,7 +2561,7 @@
     "p": "stages",
     "b": false,
     "f": "plugin.go",
-    "l": 802,
+    "l": 821,
     "g": [
       "注册阶段",
       "阶段钩子",
@@ -2559,7 +2581,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 1186,
+    "l": 1205,
     "g": [
       "停止回调",
       "关闭清理",
@@ -2575,7 +2597,7 @@
     "p": "tools",
     "b": false,
     "f": "plugin.go",
-    "l": 788,
+    "l": 807,
     "g": [
       "注册工具",
       "添加工具",
@@ -2597,7 +2619,7 @@
     "p": "misc",
     "b": false,
     "f": "plugin.go",
-    "l": 770,
+    "l": 789,
     "g": [
       "注册工具",
       "添加工具",
@@ -2651,6 +2673,17 @@
     ]
   },
   {
+    "n": "RemovePromptSection",
+    "s": "RemovePromptSection(section string) error",
+    "d": "RemovePromptSection 移除一段声明。",
+    "k": "method",
+    "r": "SystemPromptAPI",
+    "p": "misc",
+    "b": false,
+    "f": "systemprompt.go",
+    "l": 87
+  },
+  {
     "n": "RequestKernelRestart",
     "s": "RequestKernelRestart(reason string) error",
     "d": "RequestKernelRestart 请求重启内核（热重启，guard 重拉）。",
@@ -2681,7 +2714,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 1222
+    "l": 1241
   },
   {
     "n": "RunStopHandlers",
@@ -2692,7 +2725,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 1197
+    "l": 1216
   },
   {
     "n": "SDKVersion",
@@ -2770,7 +2803,7 @@
     "p": "misc",
     "b": false,
     "f": "plugin.go",
-    "l": 727
+    "l": 728
   },
   {
     "n": "SecretsAPI",
@@ -2792,7 +2825,7 @@
     "p": "misc",
     "b": false,
     "f": "plugin.go",
-    "l": 737
+    "l": 738
   },
   {
     "n": "SecurityAPI",
@@ -2841,7 +2874,7 @@
     "p": "lifecycle",
     "b": false,
     "f": "plugin.go",
-    "l": 1169,
+    "l": 1188,
     "g": [
       "设置",
       "装配",
@@ -2877,7 +2910,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 980,
+    "l": 999,
     "g": [
       "设置",
       "装配",
@@ -2895,7 +2928,7 @@
     "p": "bridge",
     "b": true,
     "f": "plugin.go",
-    "l": 1004,
+    "l": 1023,
     "g": [
       "设置",
       "装配",
@@ -2912,7 +2945,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 930,
+    "l": 949,
     "g": [
       "设置",
       "装配"
@@ -2927,7 +2960,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 923,
+    "l": 942,
     "g": [
       "设置",
       "装配",
@@ -2944,7 +2977,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 1027,
+    "l": 1046,
     "g": [
       "设置",
       "装配"
@@ -2959,7 +2992,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 986,
+    "l": 1005,
     "g": [
       "设置",
       "装配",
@@ -2976,7 +3009,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 992,
+    "l": 1011,
     "g": [
       "设置",
       "装配"
@@ -2991,7 +3024,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 968,
+    "l": 987,
     "g": [
       "设置",
       "装配",
@@ -3008,7 +3041,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 909,
+    "l": 928,
     "g": [
       "设置",
       "装配",
@@ -3025,7 +3058,7 @@
     "p": "bridge",
     "b": true,
     "f": "plugin.go",
-    "l": 916,
+    "l": 935,
     "g": [
       "设置",
       "装配",
@@ -3058,7 +3091,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 1011,
+    "l": 1030,
     "g": [
       "设置",
       "装配",
@@ -3076,7 +3109,7 @@
     "p": "misc",
     "b": false,
     "f": "proxy.go",
-    "l": 332,
+    "l": 349,
     "g": [
       "设置",
       "装配"
@@ -3091,7 +3124,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 948,
+    "l": 967,
     "g": [
       "设置",
       "装配"
@@ -3121,7 +3154,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 955,
+    "l": 974,
     "g": [
       "设置",
       "装配"
@@ -3136,7 +3169,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 962,
+    "l": 981,
     "g": [
       "设置",
       "装配"
@@ -3151,7 +3184,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 998,
+    "l": 1017,
     "g": [
       "设置",
       "装配",
@@ -3177,6 +3210,21 @@
     ]
   },
   {
+    "n": "SetSystemPromptAPI",
+    "s": "func (s *PluginSDK) SetSystemPromptAPI(v SystemPromptAPI)",
+    "d": "SetSystemPromptAPI 由内核注入声明面的实现（插件不调用）。",
+    "k": "method",
+    "r": "PluginSDK",
+    "p": "bridge",
+    "b": false,
+    "f": "plugin.go",
+    "l": 756,
+    "g": [
+      "设置",
+      "装配"
+    ]
+  },
+  {
     "n": "SetTextMemoryAPI",
     "s": "func (s *PluginSDK) SetTextMemoryAPI(tm TextMemoryAPI)",
     "d": "",
@@ -3185,7 +3233,7 @@
     "p": "bridge",
     "b": false,
     "f": "plugin.go",
-    "l": 974,
+    "l": 993,
     "g": [
       "设置",
       "装配",
@@ -3202,7 +3250,7 @@
     "p": "channels",
     "b": false,
     "f": "plugin.go",
-    "l": 1157,
+    "l": 1176,
     "g": [
       "设置",
       "装配",
@@ -3240,7 +3288,7 @@
     "p": "misc",
     "b": false,
     "f": "plugin.go",
-    "l": 760,
+    "l": 779,
     "g": [
       "设置",
       "装配",
@@ -3256,7 +3304,7 @@
     "p": "settings",
     "b": false,
     "f": "plugin.go",
-    "l": 685,
+    "l": 686,
     "g": [
       "设置",
       "装配"
@@ -3282,7 +3330,7 @@
     "p": "memory",
     "b": false,
     "f": "plugin.go",
-    "l": 743,
+    "l": 762,
     "g": [
       "社交",
       "关系",
@@ -3636,6 +3684,28 @@
     "l": 40
   },
   {
+    "n": "SystemPrompt",
+    "s": "func (s *PluginSDK) SystemPrompt() SystemPromptAPI",
+    "d": "SystemPrompt 返回**系统提示词声明面**（插件声明自己的段；渲染由内核做）。",
+    "k": "method",
+    "r": "PluginSDK",
+    "p": "misc",
+    "b": false,
+    "f": "plugin.go",
+    "l": 749
+  },
+  {
+    "n": "SystemPromptAPI",
+    "s": "type SystemPromptAPI interface",
+    "d": "SystemPromptAPI 是插件**声明**自身系统提示词段的接口。",
+    "k": "interface",
+    "r": "",
+    "p": "misc",
+    "b": false,
+    "f": "",
+    "l": 0
+  },
+  {
     "n": "TextEvent",
     "s": "type TextEvent struct { Role string `json:\"role\"` Content string `json:\"content\"` Timestamp int64 `json:\"timestamp\"` Channel …",
     "d": "",
@@ -3659,7 +3729,7 @@
     "p": "memory",
     "b": false,
     "f": "plugin.go",
-    "l": 695,
+    "l": 696,
     "g": [
       "记忆",
       "内存"
@@ -3830,7 +3900,7 @@
     "p": "misc",
     "b": true,
     "f": "plugin.go",
-    "l": 874,
+    "l": 893,
     "g": [
       "通道",
       "频道",
@@ -3862,7 +3932,7 @@
     "p": "misc",
     "b": false,
     "f": "proxy.go",
-    "l": 179
+    "l": 196
   },
   {
     "n": "ValidProxyHostLabel",
@@ -3873,7 +3943,7 @@
     "p": "misc",
     "b": false,
     "f": "proxy.go",
-    "l": 203
+    "l": 220
   },
   {
     "n": "ValidRecallPolicy",
@@ -3915,7 +3985,7 @@
     "p": "misc",
     "b": false,
     "f": "proxy.go",
-    "l": 252
+    "l": 269
   },
   {
     "n": "WorkDir",

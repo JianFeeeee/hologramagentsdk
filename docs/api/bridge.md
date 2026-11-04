@@ -57,7 +57,7 @@ OutputChannelUnregistrar 注销一个输出通道。
 func (s *PluginSDK) SetDocMemoryAPI(dm DocMemoryAPI)
 ```
 
-<small>`plugin.go:980`</small>
+<small>`plugin.go:999`</small>
 
 ### `PluginSDK.SetEventSubscriber`
 
@@ -68,7 +68,7 @@ func (s *PluginSDK) SetDocMemoryAPI(dm DocMemoryAPI)
 func (s *PluginSDK) SetEventSubscriber(es EventSubscriber)
 ```
 
-<small>`plugin.go:1004`</small>
+<small>`plugin.go:1023`</small>
 
 ### `PluginSDK.SetIOInjector`
 
@@ -81,7 +81,7 @@ func (s *PluginSDK) SetIOInjector(io IOInjector)
 
 SetIOInjector sets the IO injector (called by the core at startup).
 
-<small>`plugin.go:930`</small>
+<small>`plugin.go:949`</small>
 
 ### `PluginSDK.SetInputChannelRegistrar`
 
@@ -94,7 +94,7 @@ func (s *PluginSDK) SetInputChannelRegistrar(r InputChannelRegistrar)
 
 SetInputChannelRegistrar sets the input channel registrar (called by the core at startup).
 
-<small>`plugin.go:923`</small>
+<small>`plugin.go:942`</small>
 
 ### `PluginSDK.SetKernelControlAPI`
 
@@ -105,7 +105,7 @@ func (s *PluginSDK) SetKernelControlAPI(k KernelControlAPI)
 SetKernelControlAPI sets the kernel control API (restart/shutdown).
 Called by the bridge at startup; nil means "not available".
 
-<small>`plugin.go:1027`</small>
+<small>`plugin.go:1046`</small>
 
 ### `PluginSDK.SetKnowledgeAPI`
 
@@ -116,7 +116,7 @@ Called by the bridge at startup; nil means "not available".
 func (s *PluginSDK) SetKnowledgeAPI(kn KnowledgeAPI)
 ```
 
-<small>`plugin.go:986`</small>
+<small>`plugin.go:1005`</small>
 
 ### `PluginSDK.SetLLMAPI`
 
@@ -127,7 +127,7 @@ func (s *PluginSDK) SetKnowledgeAPI(kn KnowledgeAPI)
 func (s *PluginSDK) SetLLMAPI(llm LLMAPI)
 ```
 
-<small>`plugin.go:992`</small>
+<small>`plugin.go:1011`</small>
 
 ### `PluginSDK.SetMemoryAPI`
 
@@ -138,7 +138,7 @@ func (s *PluginSDK) SetLLMAPI(llm LLMAPI)
 func (s *PluginSDK) SetMemoryAPI(mem MemoryAPI)
 ```
 
-<small>`plugin.go:968`</small>
+<small>`plugin.go:987`</small>
 
 ### `PluginSDK.SetOutputChannelRegistrar`
 
@@ -151,7 +151,7 @@ func (s *PluginSDK) SetOutputChannelRegistrar(r OutputChannelRegistrar)
 
 SetOutputChannelRegistrar sets the output channel registrar (called by the core at startup).
 
-<small>`plugin.go:909`</small>
+<small>`plugin.go:928`</small>
 
 ### `PluginSDK.SetOutputChannelUnregistrar`
 
@@ -164,7 +164,7 @@ func (s *PluginSDK) SetOutputChannelUnregistrar(r OutputChannelUnregistrar)
 
 SetOutputChannelUnregistrar sets the output channel unregistrar (called by the core at startup).
 
-<small>`plugin.go:916`</small>
+<small>`plugin.go:935`</small>
 
 ### `PluginSDK.SetPluginMgrAPI`
 
@@ -177,7 +177,7 @@ func (s *PluginSDK) SetPluginMgrAPI(pm PluginMgrAPI)
 
 SetPluginMgrAPI sets the plugin manager API (called by the bridge at startup).
 
-<small>`plugin.go:1011`</small>
+<small>`plugin.go:1030`</small>
 
 ### `PluginSDK.SetRawFilesAPI`
 
@@ -187,7 +187,7 @@ func (s *PluginSDK) SetRawFilesAPI(v RawFilesAPI)
 
 SetRawFilesAPI 由内核装配时注入（插件不调用它）。
 
-<small>`plugin.go:948`</small>
+<small>`plugin.go:967`</small>
 
 ### `PluginSDK.SetSecretsAPI`
 
@@ -197,7 +197,7 @@ func (s *PluginSDK) SetSecretsAPI(v SecretsAPI)
 
 SetSecretsAPI 由内核装配时注入（插件不调用它）。
 
-<small>`plugin.go:955`</small>
+<small>`plugin.go:974`</small>
 
 ### `PluginSDK.SetSecurityAPI`
 
@@ -207,7 +207,7 @@ func (s *PluginSDK) SetSecurityAPI(v SecurityAPI)
 
 SetSecurityAPI 由内核注入策略声明面的实现（插件不调用）。
 
-<small>`plugin.go:962`</small>
+<small>`plugin.go:981`</small>
 
 ### `PluginSDK.SetSocialAPI`
 
@@ -218,7 +218,17 @@ SetSecurityAPI 由内核注入策略声明面的实现（插件不调用）。
 func (s *PluginSDK) SetSocialAPI(social SocialAPI)
 ```
 
-<small>`plugin.go:998`</small>
+<small>`plugin.go:1017`</small>
+
+### `PluginSDK.SetSystemPromptAPI`
+
+```go
+func (s *PluginSDK) SetSystemPromptAPI(v SystemPromptAPI)
+```
+
+SetSystemPromptAPI 由内核注入声明面的实现（插件不调用）。
+
+<small>`plugin.go:756`</small>
 
 ### `PluginSDK.SetTextMemoryAPI`
 
@@ -229,7 +239,7 @@ func (s *PluginSDK) SetSocialAPI(social SocialAPI)
 func (s *PluginSDK) SetTextMemoryAPI(tm TextMemoryAPI)
 ```
 
-<small>`plugin.go:974`</small>
+<small>`plugin.go:993`</small>
 
 ### `ToolRegistrar`
 

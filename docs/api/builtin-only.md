@@ -30,7 +30,7 @@ func (s *PluginSDK) Events() EventSubscriber
 
 Events returns the event subscriber for listening to kernel events (may be nil if not available).
 
-<small>`plugin.go:750`</small>
+<small>`plugin.go:769`</small>
 
 ### `PluginSDK.SetEventSubscriber`
 
@@ -41,7 +41,7 @@ Events returns the event subscriber for listening to kernel events (may be nil i
 func (s *PluginSDK) SetEventSubscriber(es EventSubscriber)
 ```
 
-<small>`plugin.go:1004`</small>
+<small>`plugin.go:1023`</small>
 
 ### `PluginSDK.SetOutputChannelUnregistrar`
 
@@ -54,7 +54,7 @@ func (s *PluginSDK) SetOutputChannelUnregistrar(r OutputChannelUnregistrar)
 
 SetOutputChannelUnregistrar sets the output channel unregistrar (called by the core at startup).
 
-<small>`plugin.go:916`</small>
+<small>`plugin.go:935`</small>
 
 ### `PluginSDK.UnregisterOutputChannel`
 
@@ -67,7 +67,7 @@ func (s *PluginSDK) UnregisterOutputChannel(name string) error
 
 UnregisterOutputChannel 注销一个输出通道（动态通道随资源生灭时必须调用）。
 
-<small>`plugin.go:874`</small>
+<small>`plugin.go:893`</small>
 
 ### `EventSubscriber.Subscribe`
 

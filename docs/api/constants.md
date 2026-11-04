@@ -17,15 +17,6 @@ SDK 里的取值枚举。其中带「仅内置」标注的取值在内核侧会�
 |---|---|
 | `OnDemandNeedsSkill` |  |
 
-## EventNameSkillDetected 等
-
-| 名称 | 说明 |
-|---|---|
-| `EventNameSkillDetected` | EventNameSkillDetected：兼容层把发现的纯 SKILL 条目交给 skillmgr 接管。 |
-| `EventNameToolsReady` | EventNameToolsReady：全部插件加载完、工具注册齐（只读订阅）。 |
-| `EventNameSecurityReady` | EventNameSecurityReady：安全闸门装配完成（只读订阅）。 |
-| `EventNameDeviceReady` | EventNameDeviceReady：工具/设备数据面就绪（只读订阅）。 |
-
 ## FacilityConfig 等
 
 | 名称 | 说明 |
@@ -47,19 +38,14 @@ SDK 里的取值枚举。其中带「仅内置」标注的取值在内核侧会�
 | `FacilitySecurity` | FacilitySecurity 是安全防火墙就绪。 |
 | `FacilityDevice` | FacilityDevice 是设备/工具数据面就绪（工具注册与分发、inputch、outputch）。 |
 
-## ProxyAuthAgent 等
+## EventNameSkillDetected 等
 
 | 名称 | 说明 |
 |---|---|
-| `ProxyAuthAgent` | ProxyAuthAgent 表示由内核统一保护：浏览器走门户会话 |
-| `ProxyAuthNone` | ProxyAuthNone 表示不经内核鉴权，直接把请求转发给上游。 |
-| `ProxyAuthAgentLegacy` | ProxyAuthAgentLegacy 是旧值的字面量，**只用于兼容读取**，不要在新声明里写它。 |
-
-## ProxyAuthHomeAgent
-
-| 名称 | 说明 |
-|---|---|
-| `ProxyAuthHomeAgent` |  |
+| `EventNameSkillDetected` | EventNameSkillDetected：兼容层把发现的纯 SKILL 条目交给 skillmgr 接管。 |
+| `EventNameToolsReady` | EventNameToolsReady：全部插件加载完、工具注册齐（只读订阅）。 |
+| `EventNameSecurityReady` | EventNameSecurityReady：安全闸门装配完成（只读订阅）。 |
+| `EventNameDeviceReady` | EventNameDeviceReady：工具/设备数据面就绪（只读订阅）。 |
 
 ## StageOnInput 等
 
@@ -133,4 +119,18 @@ SDK 里的取值枚举。其中带「仅内置」标注的取值在内核侧会�
 | `CapImage` |  |
 | `CapAudio` |  |
 | `CapStructured` |  |
+
+## ProxyAuthAgent 等
+
+| 名称 | 说明 |
+|---|---|
+| `ProxyAuthAgent` | ProxyAuthAgent 表示由内核统一保护：浏览器走门户会话 |
+| `ProxyAuthNone` | ProxyAuthNone 表示不经内核鉴权，直接把请求转发给上游。 |
+| `ProxyAuthAgentLegacy` | ProxyAuthAgentLegacy 是旧值的字面量，**只用于兼容读取**，不要在新声明里写它。 |
+
+## ProxyAuthHomeAgent
+
+| 名称 | 说明 |
+|---|---|
+| `ProxyAuthHomeAgent` |  |
 

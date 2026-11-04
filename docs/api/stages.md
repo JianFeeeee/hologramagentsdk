@@ -53,7 +53,7 @@ RegisterStage registers a handler for a pipeline stage.
 	scope: StageScopeGlobal (default) — receives all stage events.
 	       StageScopeOwnTools — only before_toolcall/after_toolcall for this plugin's tools.
 
-<small>`plugin.go:802`</small>
+<small>`plugin.go:821`</small>
 
 ### `Stage`
 

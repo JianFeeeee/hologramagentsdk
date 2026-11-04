@@ -236,7 +236,7 @@ func (s *PluginSDK) DocMemory() DocMemoryAPI
 
 DocMemory returns the document memory API (may be nil if not available).
 
-<small>`plugin.go:702`</small>
+<small>`plugin.go:703`</small>
 
 ### `Entity`
 
@@ -266,7 +266,7 @@ func (s *PluginSDK) Knowledge() KnowledgeAPI
 
 Knowledge returns the knowledge store API (may be nil if not available).
 
-<small>`plugin.go:709`</small>
+<small>`plugin.go:710`</small>
 
 ### `MediaAttachment`
 
@@ -296,7 +296,7 @@ func (s *PluginSDK) Memory() MemoryAPI
 
 Memory returns the graph memory API (may be nil if not available).
 
-<small>`plugin.go:688`</small>
+<small>`plugin.go:689`</small>
 
 ### `PersonProfile`
 
@@ -324,7 +324,7 @@ Relation represents a relationship between two entities.
 func (s *PluginSDK) Social() SocialAPI
 ```
 
-<small>`plugin.go:743`</small>
+<small>`plugin.go:762`</small>
 
 ### `SocialRelation`
 
@@ -352,7 +352,7 @@ func (s *PluginSDK) TextMemory() TextMemoryAPI
 
 TextMemory returns the text memory API (may be nil if not available).
 
-<small>`plugin.go:695`</small>
+<small>`plugin.go:696`</small>
 
 ### `Triple`
 

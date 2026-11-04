@@ -1179,6 +1179,113 @@ ListPersons() ([]string, error)
 
 <small>`memory.go:105`</small>
 
+## `SystemPromptAPI`
+
+SystemPromptAPI 是插件**声明**自身系统提示词段的接口。
+
+## 用户模型（2026-11-04）
+
+> 每个插件都可以声明 systemprompt，可运行时更新，内核每轮重建。
+
+于是"某个插件想告诉模型怎么用自己的工具"变成**插件自己声明的一段文本**：
+
+	skillmgr 声明 "skillmgr.skills" → 技能索引 + "调工具前先读同名 skill"
+	qq       声明 "qq.identity"    → 身份绑定规则（哪些操作以谁的身份做）
+	任意插件 声明 "<自己>.<段名>"  → 各自的说明
+
+内核只做两件事：**存**（按段名覆盖）与**渲染**（每轮重建时按 Order 拼进
+system prompt）。内核不认识 skill、不认识 qq，也不判断内容。
+
+## 分工：插件只声明，内核只渲染
+
+	插件：DeclarePromptSection / RemovePromptSection   （只声明）
+	内核：持有注册表 + 每轮重建 system prompt 时渲染     （只渲染）
+
+★ 为什么声明必须由**内核**持有，而不是各 Agent 自己存一份
+
+本仓栽过这个坑：技能索引曾经是内核 Agent 上的一个字段，由启动代码
+手工接线到**根 agent**。于是 rtchild、驻留子各自构造时都要记得再传一遍 ——
+漏传不报错、不崩，只是那个 agent 的提示词里一条技能说明都没有，
+模型只能凭工具名猜用法。
+
+生产症状（真实日志）：A2A 分诊助手（驻留子）手上没有 cmd_run
+（cmd 插件 auto_start=false，需先 plugin_start），而 cmd-tools skill
+正文里写着"先 plugin_start cmd"。它看不到这条 skill，于是把
+terminal_create 当成一次性命令执行器 —— 每条 `cd … && echo … && grep …`
+开一个新终端，命令结束终端就退出，terminal_read 立刻撞
+`read /dev/ptmx: input/output error`，然后为下一条命令再开一个。
+
+结论：**能力归属内核（共享注册表），插件只声明**。这样任何 agent
+（含未来新增类型）读同一份注册表，零接线。
+
+## 幂等语义（"可运行时更新"的正确形态）
+
+同一 Section 重复声明 ⇒ **覆盖**，不是追加。
+
+这不是风格问题：system prompt 每轮重建，一次任务里 stepPrepare 可能
+被重入（上下文裁剪后回到该步）。若声明是追加，索引会越堆越多，
+最终挤掉真正的对话历史。注册表用 map 存段，让"多份"在结构上不可能发生。
+
+## 典型用法（skillmgr）
+
+	// Start：声明一段静态说明 + 当前索引
+	s.SystemPrompt().DeclarePromptSection(sdk.PromptSection{
+	    Section: "skillmgr.skills",
+	    Owner:   "skillmgr",
+	    Order:   100,
+	    Content: skillIndexText(),
+	})
+
+	// 技能增删/启停后：重新声明同一段即可（自动覆盖）
+	s.SystemPrompt().DeclarePromptSection(...)
+
+	// Stop / 停用：移除，避免模型去调已不存在的 skill
+	s.SystemPrompt().RemovePromptSection("skillmgr.skills")
+
+## 名字约束
+
+段名必须是 `<owner>.<名字>`，其中 owner 等于插件名。这条在内核侧强制
+（否则插件 A 能声明 `skillmgr.skills` 并夺走插件 B 的段）。
+
+| 方法 | 说明 |
+|---|---|
+| [`DeclarePromptSection`](#systempromptapideclarepromptsection) | DeclarePromptSection 声明或更新一段系统提示词内容。 |
+| [`RemovePromptSection`](#systempromptapiremovepromptsection) | RemovePromptSection 移除一段声明。 |
+
+### `SystemPromptAPI.DeclarePromptSection`
+
+```go
+DeclarePromptSection(s PromptSection) error
+```
+
+DeclarePromptSection 声明或更新一段系统提示词内容。
+
+同 Section 重复声明会覆盖（同一 owner 只能覆盖自己的段，
+不能覆盖别人的）。Content 为空串等价于移除该段。
+
+返回 error 的情形：
+  · Section 不符合 `<owner>.<名字>` 形式
+  · Owner 与 Section 前缀不一致（试图声明别人的段）
+  · 内核未提供注册表（系统提示词声明面未装配）
+
+<small>`systemprompt.go:78`</small>
+
+### `SystemPromptAPI.RemovePromptSection`
+
+```go
+RemovePromptSection(section string) error
+```
+
+RemovePromptSection 移除一段声明。
+
+单独提供而不是"传空 Content"：插件 Stop / 被停用时这是常见动作，
+写成空串容易漏 —— 漏了就会出现"插件已停用，但它的说明还留在
+提示词里，模型去调一个不存在的工具"，比没有说明更糟。
+
+移除不存在或不属于自己的段是静默成功（幂等，便于无条件收尾）。
+
+<small>`systemprompt.go:87`</small>
+
 ## `TextMemoryAPI`
 
 TextMemoryAPI provides access to chronological text event storage.
@@ -1201,7 +1308,7 @@ Append(evt TextEvent) error
 type AudioURL struct { URL string `json:"url"` }
 ```
 
-<small>`plugin.go:1247`</small>
+<small>`plugin.go:1266`</small>
 
 ### `AutoStartOnDemand`
 
@@ -1237,7 +1344,7 @@ EffectiveProxyAuth 返回生效的鉴权模式（空串与旧值都归一化为 
 （否则每个判断点都要写 `== ProxyAuthAgent || == ProxyAuthAgentLegacy`，
 漏一处就是鉴权绕过）。
 
-<small>`proxy.go:192`</small>
+<small>`proxy.go:209`</small>
 
 ### `ToolError.Error`
 
@@ -1419,7 +1526,7 @@ FacilityTracker 是变更追踪（overlayfs）就绪。
 type ImageURL struct { URL string `json:"url"` Detail string `json:"detail,omitempty"` }
 ```
 
-<small>`plugin.go:1242`</small>
+<small>`plugin.go:1261`</small>
 
 ### `PluginSDK.KernelControl`
 
@@ -1433,7 +1540,7 @@ KernelControl returns the kernel control API (restart / shutdown).
 调用方必须判 nil —— 拿到 nil 时应当如实告知用户"当前环境不支持"，
 而不是假装点了没反应的按钮还能用。
 
-<small>`plugin.go:1038`</small>
+<small>`plugin.go:1057`</small>
 
 ### `KnownFacilities`
 
@@ -1469,7 +1576,7 @@ NormalizeProxyHost 由插件名派生默认 Host 标签。
 下划线转连字符：插件名允许下划线（huawei_smarthome），但 DNS label 不允许，
 直接用会导致该子域名无法解析——这里统一转换，避免每个插件各自碰运气。
 
-<small>`proxy.go:225`</small>
+<small>`proxy.go:242`</small>
 
 ### `OnDemandNeedsSkill`
 
@@ -1502,6 +1609,16 @@ It wraps tool registration, settings, memory, knowledge, LLM, and IO injection.
 
 <small>`plugin.go:611`</small>
 
+### `PromptSection`
+
+```go
+type PromptSection struct { // Section 是段名，必须形如 `<owner>.<名字>`（如 "skillmgr.skills"）。 Section string // Owner 是声明者（插件名），必须与 …
+```
+
+PromptSection 是一段声明的系统提示词内容。
+
+<small>`systemprompt.go:91`</small>
+
 ### `ProxyAuthAgent`
 
 ```go
@@ -1512,7 +1629,7 @@ ProxyAuthAgent 表示由内核统一保护：浏览器走门户会话
 （HologramAgent session cookie），非浏览器客户端走 X-API-Key。
 两者都没有时返回 401，而不是把请求透传给上游。
 
-<small>`proxy.go:149`</small>
+<small>`proxy.go:166`</small>
 
 ### `ProxyAuthAgentLegacy`
 
@@ -1530,7 +1647,7 @@ plugin.json:19 就是 "auth": "homeagent"）。删掉这个分支 ⇒ 那些插�
 这正是 sdkModuleNames 处理 module 路径改名时的同一条教训：**协议值的
 改名必须保留旧值的读取路径**，否则存量数据无声失效。
 
-<small>`proxy.go:167`</small>
+<small>`proxy.go:184`</small>
 
 ### `ProxyAuthHomeAgent`
 
@@ -1543,7 +1660,7 @@ ProxyAuthHomeAgent 是 ProxyAuthAgent 的旧名，仅为**存量源码**保留�
 Deprecated: 用 ProxyAuthAgent。存量插件的 plugin.json 里写的旧值仍被
 ValidProxyAuth/EffectiveProxyAuth 接受（见 ProxyAuthAgentLegacy）。
 
-<small>`proxy.go:174`</small>
+<small>`proxy.go:191`</small>
 
 ### `ProxyAuthNone`
 
@@ -1557,7 +1674,7 @@ ProxyAuthNone 表示不经内核鉴权，直接把请求转发给上游。
 或上游是刻意公开的服务。选用它意味着**信任上游自身的鉴权**，
 且该服务在网络层可达范围内对所有人开放。
 
-<small>`proxy.go:156`</small>
+<small>`proxy.go:173`</small>
 
 ### `ProxyDef`
 
@@ -1581,8 +1698,25 @@ type ProxyDef struct { // Name 是同一插件内多条声明的唯一标识（�
     插件、或旧 HologramAgent 读新插件都不会报错。
 
 与 ToolDef / ChannelDef / ConfigDef 同族：SDK 定义声明契约，内核实现行为。
-声明方式与其它能力一致 —— 在 Start() 里调 RegisterProxy(name, def)，
-或写进 plugin.json 的 proxies 字段（外部插件两种都支持）。
+
+# 两种声明入口，以及各自**谁能用**（重要）
+
+  - **plugin.json 的 proxies 字段**：这是**外部插件唯一的入口**。
+    由 HologramAgent 加载插件时读取 plugin.json 聚合，不经过插件进程的 SDK。
+
+  - **RegisterProxy(name, def)**：**仅对内置插件有效**（编译进内核、
+    没有插件目录与 plugin.json 的那些，如 remotedevice）。
+    外部插件（独立 plugin.bin 子进程）调它**不会生效**，也不会报错。
+
+为什么外部插件不能用运行期注册：插件跑在子进程里，声明要跨 RPC 协议回传
+才可能落地，而 proc 协议目前**没有** proxy 注册方法（grep "proxy" in
+internal/plugin/proc/protocol.go 零命中），生成到插件工程的运行时模板也
+不注入该注册回调（同 grep 零命中）。所以外部插件的 RegisterProxy 是
+一个**空实现**。
+
+历史提醒：本文件早期版本写的是「外部插件两种都支持」，那是错的，
+造成了“声明了却没被反代、排查时只查端口”的真实困境。若将来要让运行期
+声明对外部插件生效，必须先补协议，而不是只把这句话改回去。
 
 安全性：**不声明 = 不被反代**。声明本身就是能力声明，因此不需要在
 capabilities 里另外开一个开关——最小权限默认生效。
@@ -1621,7 +1755,7 @@ ProxyDef 是一个服务的**反代声明体**。
 （ToolDef 也是这么做的 —— 字段供 plugin.json 序列化，参数供运行期调用）。
 Name 只用于展示、日志与冲突提示，**不参与路由**（路由键是 Host 与 Path）。
 
-<small>`proxy.go:64`</small>
+<small>`proxy.go:81`</small>
 
 ### `ProxyRegistrar`
 
@@ -1638,7 +1772,7 @@ ProxyRegistrar 由内核注入（与 ToolRegistrar / InputChannelRegistrar 同�
   - 外部插件 → plugin.json 的 proxies（静态，未启动也可见）
   - 内置插件 → RegisterProxy（运行期，随 Start 注册）
 
-<small>`proxy.go:329`</small>
+<small>`proxy.go:346`</small>
 
 ### `PluginSDK.RawFiles`
 
@@ -1652,7 +1786,7 @@ RawFiles 返回随包分发资源的读取接口（内核装配时注入）。
 未注入时返回 nil —— 那是旧内核或测试环境。插件应判空后**响亮失败**，
 而不是拿一个空实现继续（会表现为"资源读出来是空的"，与"资源不存在"难区分）。
 
-<small>`plugin.go:941`</small>
+<small>`plugin.go:960`</small>
 
 ### `PluginSDK.RegisterProxy`
 
@@ -1672,13 +1806,21 @@ def.Host / def.Path）。
 	    Host: "myapp", Target: "127.0.0.1:12100",
 	})
 
-声明立即生效（反代表在下一次请求时重建）。**不做去重**：同一 Host/Path
+## ⚠ 仅对内置插件有效
+
+插件跑在**子进程**里时（外部插件 / plugin.bin），本方法没有任何效果：
+内核从未向插件进程注入 proxyReg 回调（proc 协议里没有 proxy 注册方法）。
+调用会静默返回，不报错。
+
+**外部插件请写 plugin.json 的 proxies 字段** —— 那是唯一生效的入口。
+详见包注释的「两种声明入口，以及各自谁能用」。
+
+内置插件（编译进内核、无 plugin.json）用本方法声明，立即生效
+（反代表在下一次请求时重建）。**不做去重**：同一 Host/Path
 被两条声明占用时由反代层判定冲突并明确报错，而不是在这里静默吞掉 ——
 插件作者需要看见冲突。
 
-与 plugin.json 的 proxies 字段等价：写哪个都行，两者会合并（同名以本调用为准）。
-
-<small>`proxy.go:358`</small>
+<small>`proxy.go:383`</small>
 
 ### `PluginSDK.RegisterToolCtx`
 
@@ -1691,7 +1833,7 @@ RegisterToolCtx 注册一个**可取消**的工具（可选，长任务推荐）
 宿主不支持时自动降级到 RegisterTool 并包一层 context.Background()：
 功能不丢，只是拿不到取消。插件不必为此写两套代码。
 
-<small>`plugin.go:770`</small>
+<small>`plugin.go:789`</small>
 
 ### `SDKVersion`
 
@@ -1783,7 +1925,7 @@ Secrets returns the kernel secret vault API.
 ★ 内核未启用安全模块时它**不是 nil**，而是 Available() 返回 false 的
 实现 —— 这样插件可以统一地"先问 Available 再决定"，不必到处判空。
 
-<small>`plugin.go:727`</small>
+<small>`plugin.go:728`</small>
 
 ### `PluginSDK.Security`
 
@@ -1796,7 +1938,7 @@ Security 返回**策略声明面**（插件声明安全档位；判定由内核�
 ★ 只声明、不判定：本接口没有 CheckTool 之类的方法 —— 那属于内核。
 插件自判会让策略分散到每个插件、且插件崩溃即策略失效。
 
-<small>`plugin.go:737`</small>
+<small>`plugin.go:738`</small>
 
 ### `SecurityProfile`
 
@@ -1819,7 +1961,7 @@ func (s *PluginSDK) SetProxyRegistrar(r ProxyRegistrar)
 
 SetProxyRegistrar 由内核注入。插件不直接调它（与 SetInputChannelRegistrar 同族）。
 
-<small>`proxy.go:332`</small>
+<small>`proxy.go:349`</small>
 
 ### `PluginSDK.SetToolRegistrarCtx`
 
@@ -1832,7 +1974,21 @@ SetToolRegistrarCtx 由**运行时**注入带 ctx 的注册口。
 插件业务代码不需要调用它：proc 模板在自己的初始化里注入，
 之后插件用 RegisterToolCtx 注册的工具就会进入可取消路径。
 
-<small>`plugin.go:760`</small>
+<small>`plugin.go:779`</small>
+
+### `PluginSDK.SystemPrompt`
+
+```go
+func (s *PluginSDK) SystemPrompt() SystemPromptAPI
+```
+
+SystemPrompt 返回**系统提示词声明面**（插件声明自己的段；渲染由内核做）。
+
+★ 只声明、不渲染：本接口没有"设置整个 system prompt"的方法。
+插件能改的只有自己那段（段名以插件名开头，内核强制），
+否则任一插件都能改写别人的人格/安全说明。
+
+<small>`plugin.go:749`</small>
 
 ### `ToolError`
 
@@ -1900,7 +2056,7 @@ func (s *PluginSDK) UnregisterOutputChannel(name string) error
 
 UnregisterOutputChannel 注销一个输出通道（动态通道随资源生灭时必须调用）。
 
-<small>`plugin.go:874`</small>
+<small>`plugin.go:893`</small>
 
 ### `ValidProxyAuth`
 
@@ -1912,7 +2068,7 @@ ValidProxyAuth 校验 Auth 取值；空串合法（等价 ProxyAuthAgent）。
 
 同时接受旧值 ProxyAuthAgentLegacy —— 存量 plugin.json 里写的仍是它。
 
-<small>`proxy.go:179`</small>
+<small>`proxy.go:196`</small>
 
 ### `ValidProxyHostLabel`
 
@@ -1925,7 +2081,7 @@ ValidProxyHostLabel 校验子域名标签是否合法（DNS label 规则）。
 独立成导出函数：插件作者在写声明时、HologramAgent 在加载时、工具链在打包时
 都要用同一套规则判定，避免三处各写一份而互相不一致。
 
-<small>`proxy.go:203`</small>
+<small>`proxy.go:220`</small>
 
 ### `ValidScenePolicy`
 
@@ -1949,5 +2105,5 @@ ValidateProxyDef 校验一条反代声明，返回人类可读的错误说明（
 原因（而不是静默忽略导致用户以为配好了）；插件作者也需要在本地就能查出
 拼错的 Target/Host。同一套规则两端共用。
 
-<small>`proxy.go:252`</small>
+<small>`proxy.go:269`</small>
 

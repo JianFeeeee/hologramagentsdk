@@ -165,5 +165,5 @@ func (s *PluginSDK) Events() EventSubscriber
 
 Events returns the event subscriber for listening to kernel events (may be nil if not available).
 
-<small>`plugin.go:750`</small>
+<small>`plugin.go:769`</small>
 

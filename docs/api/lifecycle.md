@@ -126,7 +126,7 @@ func (s *PluginSDK) AutoRestart() bool
 
 AutoRestart 返回插件是否允许自动重启。
 
-<small>`plugin.go:1176`</small>
+<small>`plugin.go:1195`</small>
 
 ### `PluginSDK.PluginMgr`
 
@@ -137,7 +137,7 @@ func (s *PluginSDK) PluginMgr() PluginMgrAPI
 PluginMgr returns the plugin manager API (ReloadOne / ReloadPlugins / list).
 May be nil if the host did not wire it.
 
-<small>`plugin.go:1019`</small>
+<small>`plugin.go:1038`</small>
 
 ### `PluginSDK.PluginName`
 
@@ -147,7 +147,7 @@ func (s *PluginSDK) PluginName() string
 
 PluginName returns the name of the plugin.
 
-<small>`plugin.go:681`</small>
+<small>`plugin.go:682`</small>
 
 ### `PluginSDK.RegisterOnRemoveHandler`
 
@@ -160,7 +160,7 @@ RegisterOnRemoveHandler 注册插件被删除（卸载）时的清理回调。
 适用于清理外部资源、删除配置表、下线状态等删除后处理。
 可注册多个；执行后清空（一次删除只执行一次）。
 
-<small>`plugin.go:1211`</small>
+<small>`plugin.go:1230`</small>
 
 ### `PluginSDK.RegisterPluginAPI`
 
@@ -170,7 +170,7 @@ func (s *PluginSDK) RegisterPluginAPI(name string) error
 
 RegisterPluginAPI registers this plugin's API for access by other plugins.
 
-<small>`plugin.go:837`</small>
+<small>`plugin.go:856`</small>
 
 ### `PluginSDK.RegisterStopHandler`
 
@@ -183,7 +183,7 @@ RegisterStopHandler 注册插件停止阶段的清理回调。
 适用于释放资源、落盘状态、关闭子进程等停止时清理操作。
 可注册多个；执行后清空（进程停止前只执行一次）。
 
-<small>`plugin.go:1186`</small>
+<small>`plugin.go:1205`</small>
 
 ### `PluginSDK.RunOnRemoveHandlers`
 
@@ -194,7 +194,7 @@ func (s *PluginSDK) RunOnRemoveHandlers()
 RunOnRemoveHandlers 执行全部已注册的 onRemove handler（后注册先执行，执行后清空，幂等）。
 由内核在卸载插件（registry.RemovePlugin）时、插件 Stop() 之后执行。
 
-<small>`plugin.go:1222`</small>
+<small>`plugin.go:1241`</small>
 
 ### `PluginSDK.RunStopHandlers`
 
@@ -205,7 +205,7 @@ func (s *PluginSDK) RunStopHandlers()
 RunStopHandlers 执行全部已注册的 stop handler（后注册先执行，执行后清空，幂等）。
 由内核（内置插件）或插件桥接层（外部插件 z_bridge 的 StopPlugin）在调用插件 Stop() 前执行。
 
-<small>`plugin.go:1197`</small>
+<small>`plugin.go:1216`</small>
 
 ### `PluginSDK.SetAutoRestart`
 
@@ -226,5 +226,5 @@ SetAutoRestart 设置插件崩溃后内核是否自动重启它。
 |---|---|---|
 | [`feiyu_voice`](../examples/index.md#feiyu_voice) | `example/feiyu_voice/plugin.go:63` | `s.SetAutoRestart(true)` |
 
-<small>`plugin.go:1169`</small>
+<small>`plugin.go:1188`</small>
 
