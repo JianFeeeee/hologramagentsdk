@@ -17,6 +17,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -64,6 +65,10 @@ const (
 	sbOffArenaCap   = 40
 	sbOffArenaUsed  = 44
 )
+
+// arenaVersionWant 是本插件运行时编译期绑定的 arena 协议版本。
+// 与内核不一致时握手会明确拒绝（旧插件按错误地址读写会段错误）。
+const arenaVersionWant = 3
 
 // ---- StageContext 段内部布局（与内核 internal/plugin/proc/shm.go 一致）----
 
@@ -141,20 +146,87 @@ const (
 // ⚠️ 这是**内部实现细节**：插件开发者永远看不到它。公开 SDK 只暴露普通
 // 字符串与 Map；模板运行时在传输层按 payload 大小自动选择内联 JSON 还是
 // 共享槽。直接使用 SharedRef 属于运行时内部行为，不是插件 API。
+// SharedRef 只持**分配表下标 + 块内偏移**，不存真实地址。
+//
+// 真实地址经分配表查询（表在内核共享内存头部，内核写、插件只读）。
+// 块搬动时只改表项里的 offset，下标不变 ⇒ 持有者的 ref 永远有效，
+// 因此碎片整理随时可做（旧实现把绝对偏移放在 ref 里，一搬就失效）。
+//
+//	Handle      —— 分配表下标（稳定）
+//	InnerOffset —— 块内偏移（调用帧里"结果段"位于帧块中间）
 type SharedRef struct {
-	Offset     uint32 `json:"offset"`
-	Length     uint32 `json:"length"`
-	Generation uint32 `json:"generation"`
-	Flags      uint32 `json:"flags"`
+	Handle      uint32 `json:"handle"`
+	InnerOffset uint32 `json:"inner_offset"`
+	Length      uint32 `json:"length"`
+	Flags       uint32 `json:"flags"`
 }
 
-func (r SharedRef) IsZero() bool { return r.Offset == 0 && r.Length == 0 }
-func (r SharedRef) Slice(data []byte) []byte {
-	if r.IsZero() || int(r.Offset)+int(r.Length) > len(data) {
-		return nil
+func (r SharedRef) IsZero() bool { return r.Handle == 0 && r.Length == 0 }
+
+// 分配表布局（相对 arena 段起点，须与内核 arena.go 一致）。
+const (
+	arenaOffTableBase = 20 // 表项数组起点
+	arenaOffTableCap  = 24 // 表项个数
+	tblEntrySize      = 32
+	tblOffOffset      = 0  // 块数据区真实偏移
+	tblOffLength      = 4  // 数据字节数
+	tblOffRefCount    = 8  // 引用计数
+	tblOffCheckID     = 12 // 校验头
+	tblOffFlags       = 16 // JSON / 扩容块
+	tblOffLive        = 20 // 1=占用
+
+	blkOffCheckID = 16 // 块头内的校验头
+	blkHeaderSize = 24
+)
+
+// resolveRef 查分配表把 Handle 换成真实偏移。
+//
+// 每次访问**必走这里**：表项里的 offset 才是权威，插件手上不保存它。
+// 返回 ErrStaleRef 表示查表与访问之间块被搬过 —— 调用方应重查一次，
+// 不得在持有块的状态下自旋等待（搬块需要内核侧写锁）。
+func resolveRef(ref SharedRef) (uint32, error) {
+	if ref.IsZero() {
+		return 0, nil
 	}
-	return data[r.Offset : r.Offset+r.Length]
+	// arena 段在**完整区域** region 内（不是 StageContext 段 shm）。
+	arenaStart := int(shmRegionU32(sbOffArenaOff))
+	tblBase := shmRegionU32(arenaStart + arenaOffTableBase)
+	tblCap := shmRegionU32(arenaStart + arenaOffTableCap)
+	if ref.Handle >= tblCap {
+		return 0, errStaleRef
+	}
+	e := arenaStart + int(tblBase) + int(ref.Handle)*tblEntrySize
+	if shmRegionU32(e+tblOffLive) == 0 {
+		return 0, errReleasedRef
+	}
+	base := shmRegionU32(e + tblOffOffset)
+	wantCheck := shmRegionU32(e + tblOffCheckID)
+	if uint64(ref.InnerOffset)+uint64(ref.Length) > uint64(shmRegionU32(e+tblOffLength)) {
+		return 0, errBadRef
+	}
+	start := base + ref.InnerOffset
+
+	// ★ 校验头比对：表项与块头必须一致，否则说明块被迁移过。
+	blkStart := int(base) - blkHeaderSize
+	if blkStart < 0 || blkStart+blkHeaderSize > len(region) {
+		return 0, errBadRef
+	}
+	if shmRegionU32(blkStart+blkOffCheckID) != wantCheck {
+		return 0, errStaleRef
+	}
+	if uint64(start)+uint64(ref.Length) > uint64(len(region)) {
+		return 0, errBadRef
+	}
+	return start, nil
 }
+
+func shmRegionU32(off int) uint32 { return binary.LittleEndian.Uint32(region[off:]) }
+
+var (
+	errStaleRef    = errors.New("shared-ref: 块已迁移（校验头不一致），需重新查表")
+	errReleasedRef = errors.New("shared-ref: 表项已释放")
+	errBadRef      = errors.New("shared-ref: 引用非法（越界或偏移不合法）")
+)
 
 // SharedRef.Flags 语义位（须与内核 internal/plugin/proc/arena.go 一致）。
 const (
@@ -210,10 +282,17 @@ func arenaFree(ref SharedRef) {
 
 // frameInput 返回帧内的输入段（内核写入的参数/输入文本）。
 func frameInput(frame SharedRef, inputLen uint32) []byte {
-	if frame.IsZero() || int(inputLen) > len(frame.Slice(region)) {
+	if frame.IsZero() {
 		return nil
 	}
-	return frame.Slice(region)[:inputLen]
+	start, err := resolveRef(frame)
+	if err != nil {
+		return nil
+	}
+	if int(inputLen) > int(frame.Length) {
+		return nil
+	}
+	return region[start : start+inputLen]
 }
 
 // frameOutput 尝试把 payload 写进帧的结果区（帧内 [inputLen, frame.Length)）。
@@ -222,16 +301,21 @@ func frameOutput(frame SharedRef, inputLen uint32, payload []byte, jsonFlag bool
 	if frame.IsZero() {
 		return SharedRef{}, fmt.Errorf("无调用帧")
 	}
-	area := frame.Slice(region)
+	off, err := resolveRef(frame)
+	if err != nil {
+		return SharedRef{}, err
+	}
+	area := region[off : off+frame.Length]
 	start := int(inputLen)
 	if start > len(area) || len(payload) > len(area)-start {
 		return SharedRef{}, fmt.Errorf("帧内空间不足（需 %d，剩 %d）", len(payload), len(area)-start)
 	}
-	copy(region[frame.Offset+uint32(start):], payload)
+	// 结果区在帧块内部：复用同一个 Handle，只把 InnerOffset 往后挪。
+	copy(region[off+uint32(start):], payload)
 	ref := SharedRef{
-		Offset:     frame.Offset + uint32(start),
-		Length:     uint32(len(payload)),
-		Generation: frame.Generation,
+		Handle:      frame.Handle,
+		InnerOffset: frame.InnerOffset + uint32(start),
+		Length:      uint32(len(payload)),
 	}
 	if jsonFlag {
 		ref.Flags |= sharedRefFlagJSON
@@ -250,7 +334,12 @@ func arenaPut(payload []byte, jsonFlag bool, callID uint64) (SharedRef, error) {
 		arenaFree(ref)
 		return SharedRef{}, fmt.Errorf("扩容块容量不足（需 %d，得 %d）", len(payload), ref.Length)
 	}
-	copy(region[ref.Offset:ref.Offset+uint32(len(payload))], payload)
+	off, err := resolveRef(ref)
+	if err != nil {
+		arenaFree(ref)
+		return SharedRef{}, err
+	}
+	copy(region[off:off+uint32(len(payload))], payload)
 	ref.Length = uint32(len(payload))
 	ref.Flags |= sharedRefFlagExpand
 	if jsonFlag {
@@ -279,11 +368,16 @@ func putInArena(payload string) (SharedRef, bool) {
 	if err != nil {
 		return SharedRef{}, false
 	}
-	if len(payload) > int(ref.Length) || int(ref.Offset)+len(payload) > len(region) {
+	if len(payload) > int(ref.Length) {
 		arenaFree(ref)
 		return SharedRef{}, false
 	}
-	copy(region[ref.Offset:ref.Offset+uint32(len(payload))], payload)
+	off, err := resolveRef(ref)
+	if err != nil {
+		arenaFree(ref)
+		return SharedRef{}, false
+	}
+	copy(region[off:off+uint32(len(payload))], payload)
 	ref.Length = uint32(len(payload))
 	return ref, true
 }
@@ -1987,7 +2081,8 @@ func handleHandshake(req *rpcRequest) {
 		FieldCount  uint32 `json:"field_count"`
 		ShmSize     int    `json:"shm_size"`
 		PluginName  string `json:"plugin_name"`
-		EvtRingSize int    `json:"evt_ring_size,omitempty"`
+		EvtRingSize  int    `json:"evt_ring_size,omitempty"`
+		ArenaVersion uint32 `json:"arena_version"`
 	}
 	json.Unmarshal(req.Params, &p)
 
@@ -2014,6 +2109,21 @@ func handleHandshake(req *rpcRequest) {
 		m, err := attachUnifiedShm(p.ShmSize)
 		if err != nil {
 			respondErr(req.ID, fmt.Errorf("挂载统一共享区域失败: %w", err))
+			return
+		}
+		// ★ arena 协议版本必须与内核**严格相等**（2026-11-14 破坏性变更）。
+		//
+		// 为什么不能放过 0：旧内核根本不发 arena_version 字段 ⇒ 解出 0。
+		// 若写成 `p.ArenaVersion != 0 && ...` 就会跳过校验，于是 v3 插件被
+		// 旧内核（v2 arena，没有分配表）静默接受 —— 插件随后按 Handle 查表
+		// 读到随机内存，表现为**段错误**（崩在插件进程里，内核只看到
+		// "进程没了"，无从诊断）。宁可握手期明确拒绝，也不留这个窗口。
+		//
+		// 注意 0 != arenaVersionWant(3)，所以"旧内核 + 新插件"和
+		// "新内核 + 旧插件"（旧插件不查这个字段，由内核侧拦）两个方向都堵住。
+		if p.ArenaVersion != arenaVersionWant {
+			respondErr(req.ID, fmt.Errorf("arena 协议版本不匹配（内核 %d，插件 %d）——内核与插件必须同批升级，请用配套 hmapdev 重编插件",
+				p.ArenaVersion, arenaVersionWant))
 			return
 		}
 		if got := binary.LittleEndian.Uint32(m[sbOffMagic:]); got != unifiedMagic {
