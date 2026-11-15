@@ -2158,9 +2158,10 @@ func handleHandshake(req *rpcRequest) {
 	}
 
 	respond(req.ID, map[string]interface{}{
-		"sdk_version": sdk.SDKVersion,
-		"plugin_name": pluginName,
-		"pid":         os.Getpid(),
+		"sdk_version":   sdk.SDKVersion,
+		"plugin_name":   pluginName,
+		"pid":           os.Getpid(),
+		"arena_version": arenaVersionWant,
 	})
 }
 
