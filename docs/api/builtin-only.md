@@ -22,7 +22,17 @@ PriorityL4 仅内核级（内置）插件可用；外部插件声明会被夹到
 ### `PluginSDK.SystemPrompt`
 
 !!! warning "仅内核内置插件可用"
-    桥接模板 `tools/hmapdev/templates/proc_main.go.tmpl` 里 `SetSystemPromptAPI` 出现 **0 次** ⇒ 外部插件的 `sysPrompt` 恒未装配。2026-11-16 起 SDK 的 `SystemPrompt()` **不再返回 nil**，而是返回一个两方法都报「未装配」的桩（`sdk/plugin.go` 的 `unassembledSystemPrompt`）—— 原先返回 nil 会让插件在 nil 接口上调用**直接 panic**，而 `sdk/systemprompt.go` 的文件头写的是「**每个**插件都可以声明」，承诺与实现相反。标 builtin 而非 bridge：连桥接运行时都不注入它。
+    桥接模板 `tools/hmapdev/templates/proc_main.go.tmpl` 里 `SetSystemPromptAPI` 出现 **0 次** ⇒ 外部插件的 `sysPrompt` 恒未装配，`SystemPrompt()` **恒返回 nil**。所以在外部插件里写 `s.SystemPrompt().DeclarePromptSection(...)` 会在 **nil 接口上调用方法 ⇒ panic**，而不是返回一个可处理的错误 —— 而 `sdk/systemprompt.go` 的文件头写的是「**每个**插件都可以声明」，承诺与实现相反。标 builtin 而非 bridge：连桥接运行时都不注入它。
+
+    **外部插件使用前必须先判 nil**：
+
+    ```go
+    if api := s.SystemPrompt(); api != nil {
+        _ = api.DeclarePromptSection(...)
+    }
+    ```
+
+    要让插件声明的段真正进内核提示词，需要给 proc 桥加一条 RPC（尚未实现）。
 
 ```go
 func (s *PluginSDK) SystemPrompt() SystemPromptAPI
