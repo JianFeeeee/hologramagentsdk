@@ -107,6 +107,19 @@ type ToolDef struct {
 	// 缺这个字段，本地 yaegi 调试时写 Timeout 不报错，
 	// 装到内核后却发现声明被忽略（超时仍是一刀切的默认值）。
 	Timeout string `json:"timeout,omitempty"`
+
+	// PathArgs 声明本工具的参数里**哪些是文件系统路径**（参数名列表）。
+	//
+	// 与公共 SDK 逐字对齐：内核据此在执行前做沙箱判定与写前留档。
+	// 缺这个字段的后果与上面 Timeout 完全同类 —— 本地 yaegi 调试时写了
+	// `PathArgs` 不报错，编成 plugin.bin 装进内核后声明被忽略、
+	// 路径判定根本不发生（本次 CI 红就是这个：sdk 加了字段，mock 没跟上）。
+	PathArgs []string `json:"path_args,omitempty"`
+
+	// NetworkArgs 声明本工具的参数里**哪些是网络地址**（参数名列表）。
+	//
+	// 与公共 SDK 逐字对齐：内核据此在执行前判 allow_network。
+	NetworkArgs []string `json:"network_args,omitempty"`
 }
 
 // 上下文策略取值，与公共 SDK 一致。
