@@ -60,9 +60,20 @@ type StageHandler func(ctx *StageContext) error
 type Stage string
 
 const (
-	StageOnInput        Stage = "on_input"
-	StagePreAction      Stage = "pre_action"
-	StagePostAction     Stage = "post_action"
+	StageOnInput    Stage = "on_input"
+	StagePreAction  Stage = "pre_action"
+	StagePostAction Stage = "post_action"
+	// StageOnToolcall 是**内核执行链**驱动的工具阶段：内核在真正执行每个
+	// 工具**之前**触发，把「正在执行的工具调用 + 它的参数」推给注册方。
+	//
+	// ★ 与 before/after_toolcall 的区别：那两个是**围绕执行**的前后钩子
+	//   （可以改写、可以拦下）；本阶段推的是**执行事实**——它已经进了内核
+	//   执行链（路由/授权/超时/清洗都在跑），注册方看到的是正在发生的事。
+	//
+	// ★ 为什么由内核驱动而不是 agentloop：工具执行链在内核里
+	//   （toolroute → security → device → 清洗）。只有那条链知道自己手里
+	//   正握着哪一个工具，agentloop 只提交批请求、拿回结果。
+	StageOnToolcall     Stage = "on_toolcall"
 	StageBeforeToolcall Stage = "before_toolcall"
 	StageAfterToolcall  Stage = "after_toolcall"
 	StageBeforeOutput   Stage = "before_output"
